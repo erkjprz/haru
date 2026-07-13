@@ -3,97 +3,127 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import Navbar from "@/app/components/Navbar"
 
 export default function DashboardPage() {
 
   const router = useRouter()
 
-  const [email, setEmail] = useState("")
+  const [fundTotal, setFundTotal] = useState(0)
   const [members, setMembers] = useState(0)
   const [transactions, setTransactions] = useState(0)
-  const [fundTotal, setFundTotal] = useState(0)
   const [checkingAccess, setCheckingAccess] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
+
 
 
   async function loadDashboard() {
 
-    const {
-      data: { user }
-    } = await supabase.auth.getUser()
 
-    setEmail(user?.email ?? "")
+    const { data: banks } = await supabase
+      .from("bank_accounts")
+      .select("opening_balance")
+
+
+    const openingTotal =
+      banks?.reduce(
+        (sum, bank) =>
+          sum + Number(bank.opening_balance),
+        0
+      ) ?? 0
+
+
+
+    const { data: transactionData } = await supabase
+      .from("transactions")
+      .select("type, amount")
+      .neq("status", "rejected")
+
+
+
+    const transactionTotal =
+      transactionData?.reduce(
+        (sum, transaction) => {
+
+
+          if (transaction.type === "contribution") {
+            return sum + Number(transaction.amount)
+          }
+
+
+          if (transaction.type === "expense") {
+            return sum - Number(transaction.amount)
+          }
+
+
+          return sum
+
+        },
+        0
+      ) ?? 0
+
+
+
+    setFundTotal(openingTotal + transactionTotal)
+
 
 
     const { count: memberCount } = await supabase
       .from("members")
       .select("*", { count: "exact", head: true })
 
+
     setMembers(memberCount ?? 0)
+
 
 
     const { count: transactionCount } = await supabase
       .from("transactions")
       .select("*", { count: "exact", head: true })
 
+
     setTransactions(transactionCount ?? 0)
 
-
-    const { data: transactionData } = await supabase
-      .from("transactions")
-      .select("amount")
-      .eq("status", "approved")
-
-
-    const total =
-      transactionData?.reduce(
-        (sum, transaction) =>
-          sum + Number(transaction.amount),
-        0
-      ) ?? 0
-
-
-    setFundTotal(total)
   }
+
+
 
 
   useEffect(() => {
 
+
     async function checkAccess() {
 
+
       const {
-        data: { user }
+        data:{ user }
       } = await supabase.auth.getUser()
 
 
+
       if (!user) {
+
         router.push("/login")
         return
+
       }
+
 
 
       const { data: member } = await supabase
         .from("members")
-        .select("status, role")
+        .select("status")
         .eq("email", user.email)
         .single()
 
 
-      if (!member) {
-        router.push("/login")
-        return
-      }
 
+      if (!member || member.status !== "approved") {
 
-      if (member.status !== "approved") {
         router.push("/waiting")
         return
+
       }
 
-
-      if (member.role === "admin") {
-        setIsAdmin(true)
-      }
 
 
       await loadDashboard()
@@ -105,88 +135,90 @@ export default function DashboardPage() {
 
     checkAccess()
 
-  }, [router])
+
+  }, [])
+
 
 
   if (checkingAccess) {
+
     return (
       <main className="p-6">
-        Checking access...
+        Loading...
       </main>
     )
+
   }
 
 
+
   return (
-    <main className="min-h-screen p-6">
 
-      <h1 className="text-3xl font-bold">
-        Shared Fund Tracker
-      </h1>
+    <>
 
-
-      <p className="mt-2">
-        Welcome, {email}
-      </p>
+      <Navbar />
 
 
-      <div className="mt-4 flex flex-wrap gap-3">
-
-        <button
-          className="bg-black text-white px-4 py-2 rounded"
-          onClick={() => router.push("/banks")}
-        >
-          Banks
-        </button>
+      <main className="min-h-screen p-6">
 
 
-        <button
-          className="border px-4 py-2 rounded"
-          onClick={() => router.push("/contribute")}
-        >
-          Add Contribution
-        </button>
+        <h1 className="text-3xl font-bold">
+          Dashboard
+        </h1>
 
 
-        {isAdmin && (
-          <button
-            className="border px-4 py-2 rounded"
-            onClick={() => router.push("/admin")}
-          >
-            Admin Panel
-          </button>
-        )}
 
-      </div>
+        <div className="mt-8 grid gap-4">
 
 
-      <div className="mt-8 grid gap-4">
+          <div className="border rounded p-4">
 
-        <div className="rounded border p-4">
-          <h2 className="font-bold">
-            Total Fund
-          </h2>
-          <p>${fundTotal}</p>
+            <h2 className="font-bold">
+              Total Fund
+            </h2>
+
+            <p>
+              ${fundTotal.toFixed(2)}
+            </p>
+
+          </div>
+
+
+
+          <div className="border rounded p-4">
+
+            <h2 className="font-bold">
+              Members
+            </h2>
+
+            <p>
+              {members}
+            </p>
+
+          </div>
+
+
+
+          <div className="border rounded p-4">
+
+            <h2 className="font-bold">
+              Transactions
+            </h2>
+
+            <p>
+              {transactions}
+            </p>
+
+          </div>
+
+
         </div>
 
 
-        <div className="rounded border p-4">
-          <h2 className="font-bold">
-            Members
-          </h2>
-          <p>{members}</p>
-        </div>
+      </main>
 
+    </>
 
-        <div className="rounded border p-4">
-          <h2 className="font-bold">
-            Transactions
-          </h2>
-          <p>{transactions}</p>
-        </div>
-
-      </div>
-
-    </main>
   )
+
 }

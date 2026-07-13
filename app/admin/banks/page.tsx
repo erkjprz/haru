@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import Navbar from "@/app/components/Navbar"
 
 export default function AdminBanksPage() {
 
@@ -17,7 +18,10 @@ export default function AdminBanksPage() {
   const [message, setMessage] = useState("")
 
 
+
+
   async function loadBanks() {
+
 
     const { data } = await supabase
       .from("bank_accounts")
@@ -31,15 +35,20 @@ export default function AdminBanksPage() {
 
 
 
-  useEffect(() => {
+
+
+  useEffect(()=>{
 
     loadBanks()
 
-  }, [])
+  },[])
 
 
 
-  function clearForm() {
+
+
+
+  function clearForm(){
 
     setEditingId(null)
     setBankName("")
@@ -51,21 +60,30 @@ export default function AdminBanksPage() {
 
 
 
-  async function saveBank() {
+
+
+
+
+  async function saveBank(){
 
 
     const bankData = {
 
       bank_name: bankName,
+
       account_name: accountName,
+
       opening_balance: Number(openingBalance),
+
       interest_rate: Number(interestRate)
 
     }
 
 
 
-    if (editingId) {
+
+
+    if(editingId){
 
 
       const { error } = await supabase
@@ -74,16 +92,22 @@ export default function AdminBanksPage() {
         .eq("id", editingId)
 
 
-      if (error) {
+
+      if(error){
+
         setMessage(error.message)
         return
+
       }
+
 
 
       setMessage("Bank updated")
 
 
+
     } else {
+
 
 
       const { error } = await supabase
@@ -91,186 +115,271 @@ export default function AdminBanksPage() {
         .insert(bankData)
 
 
-      if (error) {
+
+      if(error){
+
         setMessage(error.message)
         return
+
       }
 
 
+
       setMessage("Bank added")
+
 
     }
 
 
 
+
+
     clearForm()
+
     loadBanks()
+
 
   }
 
 
 
-  function editBank(bank:any) {
+
+
+
+
+  function editBank(bank:any){
+
 
     setEditingId(bank.id)
 
     setBankName(bank.bank_name ?? "")
+
     setAccountName(bank.account_name ?? "")
-    setOpeningBalance(String(bank.opening_balance ?? ""))
-    setInterestRate(String(bank.interest_rate ?? ""))
+
+    setOpeningBalance(
+      String(bank.opening_balance ?? "")
+    )
+
+    setInterestRate(
+      String(bank.interest_rate ?? "")
+    )
+
 
   }
+
+
+
+
 
 
 
   return (
 
-    <main className="p-6">
+    <>
 
-
-      <h1 className="text-3xl font-bold">
-        Manage Bank Accounts
-      </h1>
+      <Navbar />
 
 
 
-      <div className="mt-6 border rounded p-4 max-w-md space-y-3">
+      <main className="p-6">
 
 
-        <h2 className="font-bold">
-          {editingId ? "Edit Bank Account" : "Add Bank Account"}
-        </h2>
-
-
-
-        <input
-          className="border p-3 rounded w-full"
-          placeholder="Bank name"
-          value={bankName}
-          onChange={(e)=>setBankName(e.target.value)}
-        />
+        <h1 className="text-3xl font-bold">
+          Manage Bank Accounts
+        </h1>
 
 
 
-        <input
-          className="border p-3 rounded w-full"
-          placeholder="Account name"
-          value={accountName}
-          onChange={(e)=>setAccountName(e.target.value)}
-        />
+
+
+        <div className="mt-6 border rounded p-4 max-w-md space-y-3">
 
 
 
-        <input
-          className="border p-3 rounded w-full"
-          placeholder="Opening balance"
-          type="number"
-          value={openingBalance}
-          onChange={(e)=>setOpeningBalance(e.target.value)}
-        />
+          <h2 className="font-bold">
+
+            {editingId
+              ? "Edit Bank Account"
+              : "Add Bank Account"}
+
+          </h2>
 
 
 
-        <input
-          className="border p-3 rounded w-full"
-          placeholder="Interest rate %"
-          type="number"
-          value={interestRate}
-          onChange={(e)=>setInterestRate(e.target.value)}
-        />
+
+
+          <input
+            className="border p-3 rounded w-full"
+            placeholder="Bank name"
+            value={bankName}
+            onChange={(e)=>setBankName(e.target.value)}
+          />
 
 
 
-        <button
-          className="bg-black text-white px-4 py-2 rounded"
-          onClick={saveBank}
-        >
-          {editingId ? "Save Changes" : "Add Bank"}
-        </button>
+
+
+          <input
+            className="border p-3 rounded w-full"
+            placeholder="Account name"
+            value={accountName}
+            onChange={(e)=>setAccountName(e.target.value)}
+          />
 
 
 
-        {editingId && (
+
+
+          <input
+            className="border p-3 rounded w-full"
+            placeholder="Opening balance"
+            type="number"
+            value={openingBalance}
+            onChange={(e)=>setOpeningBalance(e.target.value)}
+          />
+
+
+
+
+
+          <input
+            className="border p-3 rounded w-full"
+            placeholder="Interest rate %"
+            type="number"
+            value={interestRate}
+            onChange={(e)=>setInterestRate(e.target.value)}
+          />
+
+
+
+
 
           <button
-            className="border px-4 py-2 rounded w-full"
-            onClick={clearForm}
+            className="bg-black text-white px-4 py-2 rounded w-full"
+            onClick={saveBank}
           >
-            Cancel Edit
+
+            {editingId
+              ? "Save Changes"
+              : "Add Bank"}
+
           </button>
 
-        )}
-
-
-
-        <p>
-          {message}
-        </p>
-
-
-      </div>
 
 
 
 
-
-      <div className="mt-8 space-y-4">
-
-
-        <h2 className="text-xl font-bold">
-          Existing Bank Accounts
-        </h2>
-
-
-
-        {banks.map((bank)=>(
-
-
-          <div
-            key={bank.id}
-            className="border rounded p-4"
-          >
-
-
-            <h3 className="font-bold">
-              {bank.account_name || bank.bank_name}
-            </h3>
-
-
-            <p>
-              Bank: {bank.bank_name}
-            </p>
-
-
-            <p>
-              Opening Balance: ${bank.opening_balance}
-            </p>
-
-
-            <p>
-              Interest Rate: {bank.interest_rate}%
-            </p>
-
-
+          {editingId && (
 
             <button
-              className="mt-3 border px-4 py-2 rounded"
-              onClick={() => editBank(bank)}
+              className="border px-4 py-2 rounded w-full"
+              onClick={clearForm}
             >
-              Edit
+              Cancel
             </button>
 
-
-          </div>
-
-
-        ))}
+          )}
 
 
-      </div>
 
 
-    </main>
+
+
+          <p>
+            {message}
+          </p>
+
+
+
+        </div>
+
+
+
+
+
+
+
+
+        <div className="mt-8 space-y-4">
+
+
+
+          <h2 className="text-xl font-bold">
+            Existing Banks
+          </h2>
+
+
+
+
+
+          {banks.map((bank)=>(
+
+
+            <div
+              key={bank.id}
+              className="border rounded p-4"
+            >
+
+
+
+              <h3 className="font-bold">
+                {bank.account_name || bank.bank_name}
+              </h3>
+
+
+
+
+              <p>
+                Bank: {bank.bank_name}
+              </p>
+
+
+
+
+              <p>
+                Opening Balance:
+                {" "}
+                ${bank.opening_balance}
+              </p>
+
+
+
+
+              <p>
+                Interest:
+                {" "}
+                {bank.interest_rate}%
+              </p>
+
+
+
+
+
+              <button
+                className="mt-3 border px-4 py-2 rounded"
+                onClick={()=>editBank(bank)}
+              >
+                Edit
+              </button>
+
+
+
+
+            </div>
+
+
+          ))}
+
+
+
+        </div>
+
+
+
+      </main>
+
+
+    </>
 
   )
 
