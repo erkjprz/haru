@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
@@ -8,9 +8,30 @@ export default function ContributePage() {
 
   const router = useRouter()
 
+  const [banks, setBanks] = useState<any[]>([])
+  const [bankAccountId, setBankAccountId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
   const [message, setMessage] = useState("")
+
+
+  useEffect(() => {
+
+    async function loadBanks() {
+
+      const { data } = await supabase
+        .from("bank_accounts")
+        .select("*")
+
+
+      setBanks(data ?? [])
+
+    }
+
+
+    loadBanks()
+
+  }, [])
 
 
   async function submitContribution() {
@@ -29,15 +50,15 @@ export default function ContributePage() {
     }
 
 
-    const { data: member, error: memberError } = await supabase
+    const { data: member } = await supabase
       .from("members")
       .select("id")
       .eq("email", user.email)
       .single()
 
 
-    if (memberError || !member) {
-      setMessage("Member record not found")
+    if (!member) {
+      setMessage("Member not found")
       return
     }
 
@@ -46,6 +67,7 @@ export default function ContributePage() {
       .from("transactions")
       .insert({
         member_id: member.id,
+        bank_account_id: bankAccountId,
         type: "contribution",
         amount: Number(amount),
         description,
@@ -77,7 +99,33 @@ export default function ContributePage() {
       </h1>
 
 
-      <div className="mt-6 space-y-4 max-w-md">
+      <div className="mt-6 max-w-md space-y-4">
+
+
+        <select
+          className="w-full border p-3 rounded"
+          value={bankAccountId}
+          onChange={(e) => setBankAccountId(e.target.value)}
+        >
+
+          <option value="">
+            Select Bank Account
+          </option>
+
+
+          {banks.map((bank) => (
+
+            <option
+              key={bank.id}
+              value={bank.id}
+            >
+              {bank.account_name || bank.bank_name}
+            </option>
+
+          ))}
+
+        </select>
+
 
         <input
           className="w-full border p-3 rounded"
