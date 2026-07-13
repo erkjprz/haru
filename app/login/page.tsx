@@ -53,6 +53,12 @@ export default function LoginPage() {
         </button>
 
         <p>{message}</p>
+        <a
+            href="/signup"
+            className="text-blue-600"
+        >
+            Create an account
+        </a>
       </div>
     </main>
   )
