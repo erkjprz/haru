@@ -110,7 +110,7 @@ export default function DashboardPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen p-6">
+      <main className="p-6">
         Checking access...
       </main>
     )
@@ -130,10 +130,18 @@ export default function DashboardPage() {
       </p>
 
 
-      <div className="mt-4 flex gap-3 flex-wrap">
+      <div className="mt-4 flex flex-wrap gap-3">
 
         <button
           className="bg-black text-white px-4 py-2 rounded"
+          onClick={() => router.push("/banks")}
+        >
+          Banks
+        </button>
+
+
+        <button
+          className="border px-4 py-2 rounded"
           onClick={() => router.push("/contribute")}
         >
           Add Contribution
@@ -158,10 +166,7 @@ export default function DashboardPage() {
           <h2 className="font-bold">
             Total Fund
           </h2>
-
-          <p>
-            ${fundTotal}
-          </p>
+          <p>${fundTotal}</p>
         </div>
 
 
@@ -169,10 +174,7 @@ export default function DashboardPage() {
           <h2 className="font-bold">
             Members
           </h2>
-
-          <p>
-            {members}
-          </p>
+          <p>{members}</p>
         </div>
 
 
@@ -180,10 +182,7 @@ export default function DashboardPage() {
           <h2 className="font-bold">
             Transactions
           </h2>
-
-          <p>
-            {transactions}
-          </p>
+          <p>{transactions}</p>
         </div>
 
       </div>
