@@ -37,7 +37,9 @@ export default function AdminPage() {
 
 
     setPendingTransactions(transactions ?? [])
+
   }
+
 
 
   async function approveMember(id: string) {
@@ -51,7 +53,9 @@ export default function AdminPage() {
 
 
     loadData()
+
   }
+
 
 
   async function approveTransaction(id: string) {
@@ -65,7 +69,9 @@ export default function AdminPage() {
 
 
     loadData()
+
   }
+
 
 
   async function checkAdmin() {
@@ -97,32 +103,53 @@ export default function AdminPage() {
     await loadData()
 
     setCheckingAccess(false)
+
   }
 
 
+
   useEffect(() => {
+
     checkAdmin()
+
   }, [])
 
 
+
   if (checkingAccess) {
+
     return (
       <main className="p-6">
         Checking admin access...
       </main>
     )
+
   }
 
 
+
   return (
+
     <main className="p-6">
+
 
       <h1 className="text-3xl font-bold">
         Admin Panel
       </h1>
 
 
-      <section className="mt-8">
+
+      <button
+        className="mt-4 bg-black text-white px-4 py-2 rounded"
+        onClick={() => router.push("/admin/banks")}
+      >
+        Bank Accounts
+      </button>
+
+
+
+
+      <section className="mt-10">
 
         <h2 className="text-xl font-bold">
           Pending Members
@@ -131,16 +158,18 @@ export default function AdminPage() {
 
         <div className="mt-4 space-y-3">
 
+
           {pendingMembers.map((member) => (
 
             <div
               key={member.id}
-              className="border p-4 rounded"
+              className="border rounded p-4"
             >
 
               <p className="font-bold">
                 {member.name}
               </p>
+
 
               <p>
                 {member.email}
@@ -154,35 +183,47 @@ export default function AdminPage() {
                 Approve
               </button>
 
+
             </div>
 
           ))}
 
 
           {pendingMembers.length === 0 && (
-            <p>No pending members</p>
+            <p>
+              No pending members
+            </p>
           )}
+
 
         </div>
 
       </section>
 
 
+
+
+
       <section className="mt-10">
+
 
         <h2 className="text-xl font-bold">
           Pending Transactions
         </h2>
 
 
+
         <div className="mt-4 space-y-3">
+
 
           {pendingTransactions.map((transaction) => (
 
+
             <div
               key={transaction.id}
-              className="border p-4 rounded"
+              className="border rounded p-4"
             >
+
 
               <p className="font-bold">
                 {transaction.members?.name}
@@ -199,6 +240,7 @@ export default function AdminPage() {
               </p>
 
 
+
               <button
                 className="mt-3 bg-black text-white px-4 py-2 rounded"
                 onClick={() => approveTransaction(transaction.id)}
@@ -206,19 +248,30 @@ export default function AdminPage() {
                 Approve
               </button>
 
+
             </div>
+
 
           ))}
 
 
+
           {pendingTransactions.length === 0 && (
-            <p>No pending transactions</p>
+            <p>
+              No pending transactions
+            </p>
           )}
+
+
 
         </div>
 
+
       </section>
 
+
     </main>
+
   )
+
 }
