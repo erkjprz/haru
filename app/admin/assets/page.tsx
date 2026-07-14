@@ -174,7 +174,7 @@ export default function AdminAssetsPage() {
                 Type: {asset.type}
               </p>
               <p>
-                Amount: ${asset.amount}
+                Amount: ₱{asset.amount}
               </p>
               <p>
                 Status: {asset.status}
