@@ -5,13 +5,18 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 
+
 export default function AdminPage() {
 
+
   const router = useRouter()
+
 
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([])
   const [checkingAccess, setCheckingAccess] = useState(true)
+
+
 
 
 
@@ -24,7 +29,9 @@ export default function AdminPage() {
       .eq("status", "pending")
 
 
+
     setPendingMembers(members ?? [])
+
 
 
 
@@ -55,6 +62,8 @@ export default function AdminPage() {
 
 
 
+
+
   async function approveMember(id:string) {
 
 
@@ -74,6 +83,8 @@ export default function AdminPage() {
 
 
 
+
+
   async function approveTransaction(id:string) {
 
 
@@ -88,6 +99,8 @@ export default function AdminPage() {
     loadData()
 
   }
+
+
 
 
 
@@ -113,6 +126,7 @@ export default function AdminPage() {
 
 
 
+
   async function checkAdmin() {
 
 
@@ -128,6 +142,7 @@ export default function AdminPage() {
       return
 
     }
+
 
 
 
@@ -161,11 +176,13 @@ export default function AdminPage() {
 
 
 
+
   useEffect(()=>{
 
     checkAdmin()
 
   },[])
+
 
 
 
@@ -195,6 +212,7 @@ export default function AdminPage() {
 
 
 
+
   return (
 
     <>
@@ -202,12 +220,15 @@ export default function AdminPage() {
       <Navbar />
 
 
+
       <main className="p-6">
+
 
 
         <h1 className="text-3xl font-bold">
           Admin Panel
         </h1>
+
 
 
 
@@ -223,12 +244,16 @@ export default function AdminPage() {
 
 
 
+
+
+
         <section className="mt-10">
 
 
           <h2 className="text-xl font-bold">
             Pending Members
           </h2>
+
 
 
 
@@ -249,9 +274,12 @@ export default function AdminPage() {
                 </p>
 
 
+
                 <p>
                   {member.email}
                 </p>
+
+
 
 
 
@@ -270,17 +298,25 @@ export default function AdminPage() {
 
 
 
-            {pendingMembers.length===0 && (
+
+            {pendingMembers.length === 0 && (
+
               <p>
                 No pending members
               </p>
+
             )}
+
 
 
           </div>
 
 
         </section>
+
+
+
+
 
 
 
@@ -297,6 +333,7 @@ export default function AdminPage() {
 
 
 
+
           <div className="mt-4 space-y-3">
 
 
@@ -309,9 +346,11 @@ export default function AdminPage() {
               >
 
 
+
                 <p className="font-bold">
-                  {transaction.members?.name}
+                  {transaction.members?.name || "Unknown"}
                 </p>
+
 
 
 
@@ -321,20 +360,24 @@ export default function AdminPage() {
 
 
 
+
                 <p>
                   Type: {transaction.type}
                 </p>
 
 
 
+
                 <p>
-                  Bank:{" "}
+                  Bank:
+                  {" "}
                   {
                     transaction.bank_accounts?.account_name ||
                     transaction.bank_accounts?.bank_name ||
                     "Unknown"
                   }
                 </p>
+
 
 
 
@@ -345,7 +388,38 @@ export default function AdminPage() {
 
 
 
-                <div className="mt-3 flex gap-2">
+
+
+                {transaction.receipt_url && (
+
+                  <div className="mt-4">
+
+
+                    <a
+                      href={transaction.receipt_url}
+                      target="_blank"
+                    >
+
+                      <img
+                        src={transaction.receipt_url}
+                        alt="Receipt"
+                        className="w-32 rounded border cursor-pointer"
+                      />
+
+                    </a>
+
+
+                  </div>
+
+                )}
+
+
+
+
+
+
+
+                <div className="mt-4 flex gap-2">
 
 
                   <button
@@ -354,6 +428,7 @@ export default function AdminPage() {
                   >
                     Approve
                   </button>
+
 
 
 
@@ -377,7 +452,8 @@ export default function AdminPage() {
 
 
 
-            {pendingTransactions.length===0 && (
+
+            {pendingTransactions.length === 0 && (
 
               <p>
                 No pending transactions
@@ -387,10 +463,12 @@ export default function AdminPage() {
 
 
 
+
           </div>
 
 
         </section>
+
 
 
 

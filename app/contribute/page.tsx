@@ -14,13 +14,15 @@ export default function ContributePage() {
   const [bankId, setBankId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
+  const [receipt, setReceipt] = useState<File | null>(null)
+
   const [message, setMessage] = useState("")
 
 
 
 
-  async function loadBanks() {
 
+  async function loadBanks() {
 
     const { data } = await supabase
       .from("bank_accounts")
@@ -28,10 +30,10 @@ export default function ContributePage() {
       .order("created_at")
 
 
-
     setBanks(data ?? [])
 
   }
+
 
 
 
@@ -46,11 +48,68 @@ export default function ContributePage() {
 
 
 
+
+
+  async function uploadReceipt() {
+
+    if (!receipt) {
+      return null
+    }
+
+
+
+    const fileName =
+      `${Date.now()}-${receipt.name}`
+
+
+
+
+    const { error } =
+      await supabase.storage
+        .from("Receipts")
+        .upload(
+          fileName,
+          receipt,
+          {
+            contentType: receipt.type,
+            upsert: false
+          }
+        )
+
+
+
+    if (error) {
+
+      throw error
+
+    }
+
+
+
+
+
+    const { data } =
+      supabase.storage
+        .from("Receipts")
+        .getPublicUrl(fileName)
+
+
+
+    return data.publicUrl
+
+  }
+
+
+
+
+
+
+
   async function submitContribution() {
 
 
     const {
-      data: { user }
+      data:{ user }
     } = await supabase.auth.getUser()
 
 
@@ -65,11 +124,14 @@ export default function ContributePage() {
 
 
 
+
     const { data: member } = await supabase
       .from("members")
       .select("id, status")
       .eq("email", user.email)
       .single()
+
+
 
 
 
@@ -79,6 +141,29 @@ export default function ContributePage() {
       return
 
     }
+
+
+
+
+
+
+
+    let receiptUrl = null
+
+
+
+    try {
+
+      receiptUrl = await uploadReceipt()
+
+    } catch(error:any) {
+
+      setMessage(error.message)
+      return
+
+    }
+
+
 
 
 
@@ -98,9 +183,12 @@ export default function ContributePage() {
 
         description,
 
+        receipt_url: receiptUrl,
+
         status: "pending"
 
       })
+
 
 
 
@@ -114,6 +202,8 @@ export default function ContributePage() {
 
 
 
+
+
     setMessage(
       "Contribution submitted. Waiting for approval."
     )
@@ -121,8 +211,13 @@ export default function ContributePage() {
 
     setAmount("")
     setDescription("")
+    setReceipt(null)
+    setBankId("")
 
   }
+
+
+
 
 
 
@@ -144,7 +239,11 @@ export default function ContributePage() {
 
 
 
+
         <div className="mt-6 max-w-md space-y-4">
+
+
+
 
 
           <select
@@ -156,6 +255,7 @@ export default function ContributePage() {
             <option value="">
               Select Bank
             </option>
+
 
 
             {banks.map((bank)=>(
@@ -175,6 +275,8 @@ export default function ContributePage() {
 
 
 
+
+
           <input
             className="border p-3 rounded w-full"
             placeholder="Amount"
@@ -182,6 +284,8 @@ export default function ContributePage() {
             value={amount}
             onChange={(e)=>setAmount(e.target.value)}
           />
+
+
 
 
 
@@ -196,6 +300,32 @@ export default function ContributePage() {
 
 
 
+
+
+          <div>
+
+            <label className="block mb-2 font-medium">
+              Receipt Screenshot (optional)
+            </label>
+
+
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e)=>
+                setReceipt(
+                  e.target.files?.[0] || null
+                )
+              }
+            />
+
+          </div>
+
+
+
+
+
+
           <button
             className="bg-black text-white px-4 py-3 rounded w-full"
             onClick={submitContribution}
@@ -205,9 +335,11 @@ export default function ContributePage() {
 
 
 
+
           <p>
             {message}
           </p>
+
 
 
         </div>

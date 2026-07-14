@@ -1,48 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
+
 export default function Navbar() {
 
+
   const router = useRouter()
-  const [isAdmin, setIsAdmin] = useState(false)
-
-
-  useEffect(() => {
-
-    async function checkAdmin() {
-
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-
-      if (!user) return
-
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("role")
-        .eq("email", user.email)
-        .single()
-
-
-      if (member?.role === "admin") {
-        setIsAdmin(true)
-      }
-
-    }
-
-
-    checkAdmin()
-
-  }, [])
 
 
 
-  async function logout() {
+  async function logout(){
 
     await supabase.auth.signOut()
 
@@ -52,22 +21,14 @@ export default function Navbar() {
 
 
 
+
   return (
 
-    <nav className="border-b p-4 flex flex-wrap gap-3 items-center">
+    <nav className="border-b p-4 flex flex-wrap gap-3">
 
 
       <button
-        className="font-bold mr-4"
-        onClick={() => router.push("/dashboard")}
-      >
-        Shared Fund
-      </button>
-
-
-
-      <button
-        className="border px-3 py-1 rounded"
+        className="border px-3 py-2 rounded"
         onClick={() => router.push("/dashboard")}
       >
         Dashboard
@@ -76,11 +37,31 @@ export default function Navbar() {
 
 
       <button
-        className="border px-3 py-1 rounded"
+        className="border px-3 py-2 rounded"
         onClick={() => router.push("/banks")}
       >
         Banks
       </button>
+
+
+
+      <button
+        className="border px-3 py-2 rounded"
+        onClick={() => router.push("/contribute")}
+      >
+        Contribute
+      </button>
+
+
+
+      <button
+        className="border px-3 py-2 rounded"
+        onClick={() => router.push("/admin/members")}
+      >
+        Members
+      </button>
+
+
 
       <button
         className="border px-3 py-2 rounded"
@@ -89,30 +70,28 @@ export default function Navbar() {
         Transactions
       </button>
 
+
+
       <button
-        className="border px-3 py-1 rounded"
-        onClick={() => router.push("/contribute")}
+        className="border px-3 py-2 rounded"
+        onClick={() => router.push("/fund-breakdown")}
       >
-        Contribution
+        Fund Breakdown
       </button>
 
 
 
-      {isAdmin && (
-
-        <button
-          className="border px-3 py-1 rounded"
-          onClick={() => router.push("/admin")}
-        >
-          Admin
-        </button>
-
-      )}
+      <button
+        className="border px-3 py-2 rounded"
+        onClick={() => router.push("/admin")}
+      >
+        Admin
+      </button>
 
 
 
       <button
-        className="ml-auto border px-3 py-1 rounded"
+        className="bg-black text-white px-3 py-2 rounded"
         onClick={logout}
       >
         Logout
