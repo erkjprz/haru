@@ -4,9 +4,7 @@ import { useEffect, useState } from "react"
 import Navbar from "@/app/components/Navbar"
 import { supabase } from "@/lib/supabase"
 
-
 export default function AdminMembersPage() {
-
 
   const [members, setMembers] = useState<any[]>([])
 
@@ -21,69 +19,46 @@ export default function AdminMembersPage() {
   const [message, setMessage] = useState("")
 
 
-
-
-  async function loadMembers(){
+  async function loadMembers() {
 
     const { data } = await supabase
       .from("members")
       .select("*")
       .order("created_at", {
-        ascending:false
+        ascending: false
       })
-
 
     setMembers(data ?? [])
 
   }
 
 
-
-
-
-  useEffect(()=>{
-
+  useEffect(() => {
     loadMembers()
-
-  },[])
-
+  }, [])
 
 
 
-
-
-
-  async function addMember(){
-
+  async function addMember() {
 
     const { error } = await supabase
       .from("members")
       .insert({
-
         name,
-
         email: email || null,
-
-        role:"member",
-
-        status:"approved"
-
+        role: "member",
+        status: "approved"
       })
 
 
-
-    if(error){
-
+    if (error) {
       setMessage(error.message)
       return
-
     }
-
 
 
     setName("")
     setEmail("")
-
     setMessage("Member added")
 
     loadMembers()
@@ -93,17 +68,11 @@ export default function AdminMembersPage() {
 
 
 
+  async function addAdjustment() {
 
-
-
-  async function addAdjustment(){
-
-
-    if(!selectedMember || !amount){
+    if (!selectedMember || !amount) {
       return
     }
-
-
 
 
     const { error } = await supabase
@@ -112,32 +81,28 @@ export default function AdminMembersPage() {
 
         member_id: selectedMember.id,
 
-        bank_account_id:null,
+        bank_account_id: null,
 
         type: adjustmentType,
 
-        amount:Number(amount),
+        amount: Number(amount),
 
         description:
           `Initial ${adjustmentType}`,
 
-        status:"approved",
+        status: "approved",
 
-        allocation_type:"member"
+        allocation_type: "member"
 
       })
 
 
-
-
-    if(error){
+    if (error) {
 
       setMessage(error.message)
       return
 
     }
-
-
 
 
     setAmount("")
@@ -151,195 +116,169 @@ export default function AdminMembersPage() {
 
 
 
-
-
-
   return (
-
     <>
+      <Navbar />
 
-    <Navbar />
+      <main className="min-h-screen bg-paper text-ink font-sans">
 
-    <main className="p-6">
-
-
-      <h1 className="text-3xl font-bold">
-        Members
-      </h1>
+        <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
 
 
+          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
+            Administration
+          </div>
 
 
-
-      <div className="mt-6 border rounded p-4 max-w-md space-y-3">
-
-
-        <h2 className="font-bold">
-          Add Member
-        </h2>
+          <h1 className="font-display text-4xl font-semibold">
+            Members
+          </h1>
 
 
 
-        <input
-          className="border p-3 rounded w-full"
-          placeholder="Name"
-          value={name}
-          onChange={(e)=>setName(e.target.value)}
-        />
+          <div className="mt-6 bg-paper-2 border border-hairline rounded-md p-5 space-y-3">
+
+
+            <h2 className="font-display text-xl">
+              Add Member
+            </h2>
+
+
+            <input
+              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+              placeholder="Name"
+              value={name}
+              onChange={(e)=>setName(e.target.value)}
+            />
+
+
+            <input
+              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+              placeholder="Email (optional)"
+              value={email}
+              onChange={(e)=>setEmail(e.target.value)}
+            />
+
+
+            <button
+              className="bg-ink text-paper px-4 py-2 rounded-md w-full"
+              onClick={addMember}
+            >
+              Add Member
+            </button>
+
+
+          </div>
 
 
 
-        <input
-          className="border p-3 rounded w-full"
-          placeholder="Email (optional)"
-          value={email}
-          onChange={(e)=>setEmail(e.target.value)}
-        />
+          {selectedMember && (
+
+            <div className="mt-6 bg-paper-2 border border-hairline rounded-md p-5 space-y-3">
+
+
+              <h2 className="font-display text-xl">
+                Add Adjustment
+              </h2>
+
+
+              <p>
+                {selectedMember.name}
+              </p>
+
+
+              <select
+                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+                value={adjustmentType}
+                onChange={(e)=>setAdjustmentType(e.target.value)}
+              >
+
+                <option value="contribution">
+                  Contribution
+                </option>
+
+                <option value="gain">
+                  Gain
+                </option>
+
+                <option value="loss">
+                  Loss
+                </option>
+
+              </select>
+
+
+              <input
+                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+                placeholder="Amount"
+                type="number"
+                value={amount}
+                onChange={(e)=>setAmount(e.target.value)}
+              />
+
+
+              <button
+                className="bg-ink text-paper px-4 py-2 rounded-md w-full"
+                onClick={addAdjustment}
+              >
+                Save
+              </button>
+
+
+            </div>
+
+          )}
 
 
 
-        <button
-          className="bg-black text-white px-4 py-2 rounded w-full"
-          onClick={addMember}
-        >
-          Add Member
-        </button>
-
-
-      </div>
-
-
-
-
-
-
-      {selectedMember && (
-
-        <div className="mt-6 border rounded p-4 max-w-md space-y-3">
-
-
-          <h2 className="font-bold">
-            Add Member Adjustment
-          </h2>
-
-
-
-          <p>
-            {selectedMember.name}
-          </p>
-
-
-
-
-          <select
-            className="border p-3 rounded w-full"
-            value={adjustmentType}
-            onChange={(e)=>setAdjustmentType(e.target.value)}
-          >
-
-            <option value="contribution">
-              Contribution
-            </option>
-
-            <option value="gain">
-              Gain
-            </option>
-
-            <option value="loss">
-              Loss
-            </option>
-
-          </select>
-
-
-
-
-
-          <input
-            className="border p-3 rounded w-full"
-            placeholder="Amount"
-            type="number"
-            value={amount}
-            onChange={(e)=>setAmount(e.target.value)}
-          />
+          {message && (
+            <p className="mt-4 text-sm text-ink-soft">
+              {message}
+            </p>
+          )}
 
 
 
 
-          <button
-            className="bg-black text-white px-4 py-2 rounded w-full"
-            onClick={addAdjustment}
-          >
-            Save
-          </button>
+          <div className="mt-8 space-y-3">
+
+
+            {members.map((member)=>(
+
+              <div
+                key={member.id}
+                className="bg-paper-2 border border-hairline rounded-md p-5"
+              >
+
+                <div className="font-display text-lg">
+                  {member.name}
+                </div>
+
+
+                <div className="text-sm text-ink-soft">
+                  {member.email || "No email"}
+                </div>
+
+
+                <button
+                  className="mt-4 border border-hairline px-4 py-2 rounded-md text-sm"
+                  onClick={() => setSelectedMember(member)}
+                >
+                  Add Contribution / Gain / Loss
+                </button>
+
+
+              </div>
+
+            ))}
+
+
+          </div>
 
 
         </div>
 
-      )}
-
-
-
-
-
-
-      <p className="mt-4">
-        {message}
-      </p>
-
-
-
-
-
-
-
-      <div className="mt-8 space-y-3">
-
-
-      {members.map((member)=>(
-
-
-        <div
-          key={member.id}
-          className="border rounded p-4"
-        >
-
-
-          <p className="font-bold">
-            {member.name}
-          </p>
-
-
-          <p>
-            {member.email || "No email"}
-          </p>
-
-
-
-          <button
-            className="mt-3 border px-4 py-2 rounded"
-            onClick={()=>
-              setSelectedMember(member)
-            }
-          >
-            Add Contribution / Gain / Loss
-          </button>
-
-
-
-        </div>
-
-
-      ))}
-
-
-      </div>
-
-
-    </main>
-
+      </main>
     </>
-
   )
-
 }
