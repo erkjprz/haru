@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 
@@ -10,7 +11,8 @@ const typeLabels: Record<string, string> = {
   expense: "Expense",
   loan_disbursement: "Loan Disbursement",
   loan_repayment: "Loan Repayment",
-  investment_allocation: "Investment Allocation"
+  investment_allocation: "Investment Allocation",
+  bank_interest: "Bank Interest"
 }
 
 const typeColor: Record<string, string> = {
@@ -19,23 +21,20 @@ const typeColor: Record<string, string> = {
   expense: "text-rust border-rust",
   loan_disbursement: "text-gold border-gold",
   loan_repayment: "text-gold border-gold",
-  investment_allocation: "text-ink-soft border-ink-soft"
+  investment_allocation: "text-ink-soft border-ink-soft",
+  bank_interest: "text-sage border-sage"
 }
 
 export default function TransactionsPage() {
-
+  const router = useRouter()
   const [transactions, setTransactions] = useState<any[]>([])
   const [members, setMembers] = useState<any[]>([])
-
   const [selectedMemberId, setSelectedMemberId] = useState("")
   const [selectedType, setSelectedType] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
-
   const [showFilters, setShowFilters] = useState(false)
 
-
   async function loadTransactions() {
-
     const { data } = await supabase
       .from("transactions")
       .select(`
@@ -52,33 +51,25 @@ export default function TransactionsPage() {
       .order("created_at", { ascending: false })
 
     setTransactions(data ?? [])
-
   }
 
-
   async function loadMembers() {
-
     const { data } = await supabase
       .from("members")
       .select("id, name")
       .order("name")
 
     setMembers(data ?? [])
-
   }
-
 
   useEffect(() => {
     loadTransactions()
     loadMembers()
   }, [])
 
-
-
   function closeFilters() {
     setShowFilters(false)
   }
-
 
   function clearFilters() {
     setSelectedYear("")
@@ -86,11 +77,7 @@ export default function TransactionsPage() {
     setSelectedType("")
   }
 
-
-
   const typeOptions = Object.keys(typeLabels)
-
-
 
   const yearOptions = Array.from(
     new Set(
@@ -101,31 +88,24 @@ export default function TransactionsPage() {
       )
     )
   )
-  .sort((a,b)=>Number(b)-Number(a))
-
-
+    .sort((a,b)=>Number(b)-Number(a))
 
   const selectedMember =
     members.find(
       (m)=>m.id === selectedMemberId
     )
 
-
-
   const filteredTransactions =
     transactions.filter((t)=>{
-
       const memberMatch =
         selectedMemberId
           ? t.member_id === selectedMemberId
           : true
 
-
       const typeMatch =
         selectedType
           ? t.type === selectedType
           : true
-
 
       const yearMatch =
         selectedYear
@@ -134,16 +114,12 @@ export default function TransactionsPage() {
               .toString() === selectedYear
           : true
 
-
       return (
         memberMatch &&
         typeMatch &&
         yearMatch
       )
-
     })
-
-
 
   const fmt = (n:number)=>
     Number(n).toLocaleString(undefined,{
@@ -151,26 +127,42 @@ export default function TransactionsPage() {
       maximumFractionDigits:2
     })
 
-
   return (
     <>
       <Navbar />
-
       <main className="min-h-screen bg-paper text-ink font-sans">
-
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
-
-
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Full History
           </div>
 
-
-          <h1 className="font-display text-4xl font-semibold text-ink">
-            Transactions
-          </h1>
-
-
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="font-display text-4xl font-semibold text-ink">
+              Transactions
+            </h1>
+            <button
+              className="
+                shrink-0
+                bg-gold
+                text-ink
+                px-5
+                py-3
+                rounded-sm
+                text-sm
+                font-semibold
+                shadow-sm
+                hover:opacity-90
+                transition-opacity
+                flex
+                items-center
+                gap-1.5
+              "
+              onClick={() => router.push("/transactions/new")}
+            >
+              <span className="text-lg leading-none">+</span>
+              New Transaction
+            </button>
+          </div>
 
           <button
             className="
@@ -191,30 +183,25 @@ export default function TransactionsPage() {
             }
           >
             Filters
-
             <span className="float-right">
               {showFilters ? "−" : "+"}
             </span>
-
           </button>
 
-                <div
+          <div
             className={`
               mt-3
               gap-3
-
               ${
                 showFilters
                   ? "flex flex-col"
                   : "hidden"
               }
-
               md:flex
               md:flex-row
               md:flex-wrap
             `}
           >
-
             <select
               className="
                 border border-hairline
@@ -233,7 +220,6 @@ export default function TransactionsPage() {
               <option value="">
                 All years
               </option>
-
               {yearOptions.map((year)=>(
                 <option
                   key={year}
@@ -242,10 +228,7 @@ export default function TransactionsPage() {
                   {year}
                 </option>
               ))}
-
             </select>
-
-
 
             <select
               className="
@@ -262,11 +245,9 @@ export default function TransactionsPage() {
                 closeFilters()
               }}
             >
-
               <option value="">
                 All members
               </option>
-
               {members.map((member)=>(
                 <option
                   key={member.id}
@@ -275,10 +256,7 @@ export default function TransactionsPage() {
                   {member.name}
                 </option>
               ))}
-
             </select>
-
-
 
             <select
               className="
@@ -295,11 +273,9 @@ export default function TransactionsPage() {
                 closeFilters()
               }}
             >
-
               <option value="">
                 All types
               </option>
-
               {typeOptions.map((type)=>(
                 <option
                   key={type}
@@ -308,9 +284,7 @@ export default function TransactionsPage() {
                   {typeLabels[type]}
                 </option>
               ))}
-
             </select>
-
 
             <button
               className="
@@ -323,25 +297,18 @@ export default function TransactionsPage() {
             >
               Clear Filters
             </button>
-
-
           </div>
-
-
 
           {(selectedYear ||
             selectedMemberId ||
             selectedType) && (
-
             <div className="
               mt-4
               flex
               flex-wrap
               gap-2
             ">
-
               {selectedYear && (
-
                 <button
                   className="
                     border
@@ -358,13 +325,8 @@ export default function TransactionsPage() {
                 >
                   Year: {selectedYear} ×
                 </button>
-
               )}
-
-
-
               {selectedMemberId && (
-
                 <button
                   className="
                     border
@@ -381,13 +343,8 @@ export default function TransactionsPage() {
                 >
                   Member: {selectedMember?.name} ×
                 </button>
-
               )}
-
-
-
               {selectedType && (
-
                 <button
                   className="
                     border
@@ -404,14 +361,9 @@ export default function TransactionsPage() {
                 >
                   Type: {typeLabels[selectedType]} ×
                 </button>
-
               )}
-
             </div>
-
           )}
-
-
 
           <div className="
             mt-4
@@ -422,13 +374,8 @@ export default function TransactionsPage() {
             Showing {filteredTransactions.length} of {transactions.length}
           </div>
 
-
-
           <div className="mt-6 space-y-3">
-
-
             {filteredTransactions.map((transaction)=>(
-
               <div
                 key={transaction.id}
                 className="
@@ -438,23 +385,19 @@ export default function TransactionsPage() {
                   p-4
                 "
               >
-
                 <div className="
                   flex
                   justify-between
                   items-start
                   gap-3
                 ">
-
                   <div className="min-w-0">
-
                     <div className="
                       flex
                       items-center
                       gap-2
                       flex-wrap
                     ">
-
                       <span
                         className={`
                           text-[9px]
@@ -464,7 +407,6 @@ export default function TransactionsPage() {
                           border
                           rounded-full
                           px-2 py-0.5
-
                           ${
                             typeColor[transaction.type]
                             ??
@@ -478,8 +420,6 @@ export default function TransactionsPage() {
                           transaction.type
                         }
                       </span>
-
-
                       <span className="
                         text-xs
                         text-ink-soft
@@ -489,14 +429,10 @@ export default function TransactionsPage() {
                           new Date(
                             transaction.created_at
                           )
-                          .toLocaleDateString()
+                            .toLocaleDateString()
                         }
                       </span>
-
                     </div>
-
-
-
                     <div className="
                       font-display
                       text-lg
@@ -506,12 +442,9 @@ export default function TransactionsPage() {
                       {
                         transaction.members?.name
                         ||
-                        "Unknown"
+                        "Fund"
                       }
                     </div>
-
-
-
                     {transaction.description && (
                       <p className="
                         text-xs
@@ -521,9 +454,6 @@ export default function TransactionsPage() {
                         {transaction.description}
                       </p>
                     )}
-
-
-
                     {transaction.bank_accounts && (
                       <p className="
                         text-xs
@@ -538,16 +468,12 @@ export default function TransactionsPage() {
                         }
                       </p>
                     )}
-
                   </div>
-
-
 
                   <div className="
                     text-right
                     shrink-0
                   ">
-
                     <div className="
                       font-mono
                       text-xl
@@ -555,8 +481,6 @@ export default function TransactionsPage() {
                     ">
                       ₱{fmt(transaction.amount)}
                     </div>
-
-
                     <div className="
                       text-[10px]
                       uppercase
@@ -566,22 +490,15 @@ export default function TransactionsPage() {
                     ">
                       {transaction.status}
                     </div>
-
                   </div>
-
-
                 </div>
 
-
-
                 {transaction.receipt_url && (
-
                   <a
                     href={transaction.receipt_url}
                     target="_blank"
                     className="inline-block mt-3"
                   >
-
                     <img
                       src={transaction.receipt_url}
                       alt="Receipt"
@@ -591,19 +508,12 @@ export default function TransactionsPage() {
                         border border-hairline
                       "
                     />
-
                   </a>
-
                 )}
-
               </div>
-
             ))}
 
-
-
             {filteredTransactions.length === 0 && (
-
               <p className="
                 py-8
                 text-sm
@@ -612,15 +522,9 @@ export default function TransactionsPage() {
               ">
                 No transactions found.
               </p>
-
             )}
-
-
           </div>
-
-
         </div>
-
       </main>
     </>
   )

@@ -28,20 +28,20 @@ export default function Navbar() {
       path: "/transactions"
     },
     {
-      label: "Contribute",
-      path: "/contribute"
-    },
-    {
       label: "Admin",
       path: "/admin"
     }
   ]
 
   function isActive(path: string) {
-    return (
-      pathname === path ||
-      pathname.startsWith(path + "/")
+    const matches = links.filter(
+      (l) => pathname === l.path || pathname.startsWith(l.path + "/")
     )
+    if (matches.length === 0) return false
+    const best = matches.reduce((a, b) =>
+      a.path.length >= b.path.length ? a : b
+    )
+    return best.path === path
   }
 
   return (
@@ -55,7 +55,6 @@ export default function Navbar() {
         p-4
       "
     >
-
       <div
         className="
           flex
@@ -63,8 +62,6 @@ export default function Navbar() {
           gap-3
         "
       >
-
-        {/* Navigation Tabs */}
         <div
           className="
             flex
@@ -75,9 +72,7 @@ export default function Navbar() {
             scrollbar-hide
           "
         >
-
           {links.map((link) => (
-
             <button
               key={link.path}
               onClick={() => router.push(link.path)}
@@ -89,7 +84,6 @@ export default function Navbar() {
                 rounded
                 text-sm
                 border
-
                 ${
                   isActive(link.path)
                     ? `
@@ -110,13 +104,9 @@ export default function Navbar() {
             >
               {link.label}
             </button>
-
           ))}
-
         </div>
 
-
-        {/* Actions */}
         <div
           className="
             flex
@@ -124,8 +114,6 @@ export default function Navbar() {
             shrink-0
           "
         >
-
-          {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
             title="Toggle theme"
@@ -147,8 +135,6 @@ export default function Navbar() {
             {theme === "light" ? "🌙" : "☀️"}
           </button>
 
-
-          {/* Logout */}
           <button
             onClick={logout}
             title="Logout"
@@ -168,12 +154,8 @@ export default function Navbar() {
           >
             ⏻
           </button>
-
-
         </div>
-
       </div>
-
     </nav>
   )
 }
