@@ -22,15 +22,9 @@ export default function FundBreakdownPage() {
 
     const cashTotal =
       transactions?.reduce((sum, t) => {
-        if (t.type === "contribution") {
-          return sum + Number(t.amount)
-        }
-        if (t.type === "expense") {
-          return sum - Number(t.amount)
-        }
-        if (t.type === "withdrawal") {
-          return sum - Number(t.amount)
-        }
+        if (t.type === "contribution") return sum + Number(t.amount)
+        if (t.type === "expense") return sum - Number(t.amount)
+        if (t.type === "withdrawal") return sum - Number(t.amount)
         return sum
       }, 0) ?? 0
 
@@ -45,12 +39,8 @@ export default function FundBreakdownPage() {
 
     const netContributionTotal =
       transactions?.reduce((sum, t) => {
-        if (t.type === "contribution") {
-          return sum + Number(t.amount)
-        }
-        if (t.type === "withdrawal") {
-          return sum - Number(t.amount)
-        }
+        if (t.type === "contribution") return sum + Number(t.amount)
+        if (t.type === "withdrawal") return sum - Number(t.amount)
         return sum
       }, 0) ?? 0
 
@@ -68,11 +58,13 @@ export default function FundBreakdownPage() {
         ?.filter((a) => a.category === "loan_interest")
         .reduce((sum, a) => sum + Number(a.amount), 0) ?? 0
     )
+
     setPerfumeBizTotal(
       allocations
         ?.filter((a) => a.category === "perfume_biz")
         .reduce((sum, a) => sum + Number(a.amount), 0) ?? 0
     )
+
     setFarmOnTotal(
       allocations
         ?.filter((a) => a.category === "farmon_writeoff")
@@ -84,48 +76,52 @@ export default function FundBreakdownPage() {
       .select("id, name")
 
     const breakdown =
-      (memberList ?? []).map((member) => {
-        const memberContributed =
-          transactions
-            ?.filter(
-              (t) =>
-                t.member_id === member.id &&
-                t.type === "contribution"
-            )
-            .reduce((sum, t) => sum + Number(t.amount), 0) ?? 0
+      (memberList ?? [])
+        .map((member) => {
+          const memberContributed =
+            transactions
+              ?.filter(
+                (t) =>
+                  t.member_id === member.id &&
+                  t.type === "contribution"
+              )
+              .reduce((sum, t) => sum + Number(t.amount), 0) ?? 0
 
-        const memberWithdrawn =
-          transactions
-            ?.filter(
-              (t) =>
-                t.member_id === member.id &&
-                t.type === "withdrawal"
-            )
-            .reduce((sum, t) => sum + Number(t.amount), 0) ?? 0
+          const memberWithdrawn =
+            transactions
+              ?.filter(
+                (t) =>
+                  t.member_id === member.id &&
+                  t.type === "withdrawal"
+              )
+              .reduce((sum, t) => sum + Number(t.amount), 0) ?? 0
 
-        const netContributed = memberContributed - memberWithdrawn
+          const netContributed =
+            memberContributed - memberWithdrawn
 
-        const memberInvestmentResult =
-          allocations
-            ?.filter((a) => a.member_id === member.id)
-            .reduce((sum, a) => sum + Number(a.amount), 0) ?? 0
+          const memberInvestmentResult =
+            allocations
+              ?.filter((a) => a.member_id === member.id)
+              .reduce((sum, a) => sum + Number(a.amount), 0) ?? 0
 
-        const ownershipPercent =
-          netContributionTotal > 0
-            ? (netContributed / netContributionTotal) * 100
-            : 0
+          const ownershipPercent =
+            netContributionTotal > 0
+              ? (netContributed / netContributionTotal) * 100
+              : 0
 
-        const ownershipValue = netContributed + memberInvestmentResult
+          const ownershipValue =
+            netContributed + memberInvestmentResult
 
-        return {
-          name: member.name,
-          contributed: memberContributed,
-          netContributed,
-          investmentResult: memberInvestmentResult,
-          ownershipPercent,
-          ownershipValue
-        }
-      })
+          return {
+            name: member.name,
+            contributed: memberContributed,
+            netContributed,
+            investmentResult: memberInvestmentResult,
+            ownershipPercent,
+            ownershipValue
+          }
+        })
+        .sort((a, b) => b.ownershipValue - a.ownershipValue)
 
     setMembers(breakdown)
     setLoading(false)
@@ -137,11 +133,17 @@ export default function FundBreakdownPage() {
 
   const totalAccountedFunds = cashInBanks + netAssets
 
-  if (loading) {
+  const fmt = (n: number) =>
+    n.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+
+    if (loading) {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-white dark:bg-gray-950 min-h-screen text-gray-900 dark:text-gray-100">
+        <main className="p-6 bg-paper min-h-screen text-ink font-sans">
           Loading...
         </main>
       </>
@@ -151,97 +153,182 @@ export default function FundBreakdownPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen p-6 bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-          Fund Breakdown
-        </h1>
-        <p className="text-sm text-gray-700 dark:text-gray-400 mt-1">
-          Total Accounted Funds = Cash in Banks + Net Assets — everything the fund currently owns.
-        </p>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="border border-gray-300 dark:border-gray-700 rounded p-4 bg-white dark:bg-gray-900">
-            <h2 className="font-bold text-sm text-gray-700 dark:text-gray-300">
-              Total Contributions
-            </h2>
-            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              ${totalContributions.toFixed(2)}
-            </p>
+      <main className="min-h-screen bg-paper text-ink font-sans">
+        <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+
+          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
+            Ledger Summary
           </div>
 
-          <div className="border border-gray-300 dark:border-gray-700 rounded p-4 bg-white dark:bg-gray-900">
-            <h2 className="font-bold text-sm text-gray-700 dark:text-gray-300">
-              Cash in Banks
-            </h2>
-            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              ${cashInBanks.toFixed(2)}
-            </p>
-          </div>
+          <h1 className="font-display text-4xl font-semibold text-ink">
+            Fund Breakdown
+          </h1>
 
-          <div className="border border-gray-300 dark:border-gray-700 rounded p-4 bg-white dark:bg-gray-900">
-            <h2 className="font-bold text-sm text-gray-700 dark:text-gray-300">
-              Net Assets
-            </h2>
-            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              ${netAssets.toFixed(2)}
-            </p>
-            <p className="text-xs text-gray-700 dark:text-gray-400 mt-2 leading-relaxed">
-              Loan interest:{" "}
-              <span className="font-medium text-gray-900 dark:text-gray-200">
-                ${loanInterestTotal.toFixed(2)}
-              </span>
-              {" · "}
-              Perfume Biz:{" "}
-              <span className="font-medium text-gray-900 dark:text-gray-200">
-                ${perfumeBizTotal.toFixed(2)}
-              </span>
-              {" · "}
-              FarmOn write-off:{" "}
-              <span className="font-medium text-gray-900 dark:text-gray-200">
-                ${farmOnTotal.toFixed(2)}
-              </span>
-            </p>
-          </div>
 
-          <div className="border border-gray-300 dark:border-gray-700 rounded p-4 bg-blue-50 dark:bg-blue-950">
-            <h2 className="font-bold text-sm text-gray-700 dark:text-gray-300">
+          <div className="mt-8 bg-paper-2 border border-hairline rounded-md p-5">
+
+            <div className="text-xs uppercase tracking-widest text-ink-soft font-mono">
               Total Accounted Funds
-            </h2>
-            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              ${totalAccountedFunds.toFixed(2)}
-            </p>
-          </div>
-        </div>
-
-        <h2 className="text-xl font-bold mt-10 text-gray-900 dark:text-gray-100">
-          Member Ownership
-        </h2>
-
-        <div className="mt-4 space-y-3">
-          {members.map((member) => (
-            <div
-              key={member.name}
-              className="border border-gray-300 dark:border-gray-700 rounded p-4 bg-white dark:bg-gray-900"
-            >
-              <div className="flex justify-between items-baseline">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                  {member.name}
-                </h3>
-                <span className="text-sm text-gray-700 dark:text-gray-400">
-                  {member.ownershipPercent.toFixed(1)}% of contributions
-                </span>
-              </div>
-              <p className="text-gray-800 dark:text-gray-300">
-                Contributed: ${member.contributed.toFixed(2)}
-              </p>
-              <p className="text-gray-800 dark:text-gray-300">
-                Investment gain/loss: ${member.investmentResult.toFixed(2)}
-              </p>
-              <p className="font-bold mt-1 text-gray-900 dark:text-gray-100">
-                Ownership Value: ${member.ownershipValue.toFixed(2)}
-              </p>
             </div>
-          ))}
+
+            <div className="font-display text-3xl font-semibold text-ink mt-2">
+              ₱{fmt(totalAccountedFunds)}
+            </div>
+
+          </div>
+
+
+
+          <div className="mt-6 bg-paper-2 border border-hairline rounded-md p-5">
+
+            <div className="flex justify-between items-center py-3 border-b border-hairline">
+              <span className="text-sm text-ink-soft">
+                Total Contributions
+              </span>
+
+              <span className="font-mono text-lg">
+                ₱{fmt(totalContributions)}
+              </span>
+            </div>
+
+
+            <div className="flex justify-between items-center py-3 border-b border-hairline">
+
+              <span className="text-sm text-ink-soft">
+                Cash in Banks
+              </span>
+
+              <span className="font-mono text-lg">
+                ₱{fmt(cashInBanks)}
+              </span>
+
+            </div>
+
+
+            <div className="py-3">
+
+              <div className="flex justify-between items-center">
+
+                <span className="text-sm text-ink-soft">
+                  Net Assets
+                </span>
+
+                <span
+                  className={`font-mono text-lg ${
+                    netAssets >= 0 ? "text-sage" : "text-rust"
+                  }`}
+                >
+                  {netAssets >= 0 ? "+" : "-"}
+                  ₱{fmt(Math.abs(netAssets))}
+                </span>
+
+              </div>
+
+
+              <div className="text-xs text-ink-soft font-mono mt-2 leading-relaxed">
+                loan interest +₱{fmt(loanInterestTotal)}
+                {" · "}
+                perfume biz +₱{fmt(perfumeBizTotal)}
+                {" · "}
+                farmon -₱{fmt(Math.abs(farmOnTotal))}
+              </div>
+
+            </div>
+
+          </div>
+
+
+
+          <div className="mt-12 flex justify-between items-baseline">
+
+            <h2 className="font-display text-2xl font-semibold text-ink">
+              Member Ownership
+            </h2>
+
+            <span className="text-xs text-ink-soft font-mono">
+              {members.length} members
+            </span>
+
+          </div>
+
+
+
+          <div className="mt-4 space-y-3">
+
+            {members.map((member) => (
+
+              <div
+                key={member.name}
+                className="bg-paper-2 border border-hairline rounded-md p-4"
+              >
+
+                <div className="flex justify-between items-baseline">
+
+                  <span className="font-display text-lg font-medium text-ink">
+                    {member.name}
+                  </span>
+
+                  <span className="text-xs text-ink-soft font-mono">
+                    {member.ownershipPercent.toFixed(1)}%
+                  </span>
+
+                </div>
+
+
+                <div className="mt-3 space-y-2">
+
+                  <div className="flex justify-between text-xs font-mono">
+                    <span className="text-ink-soft">
+                      Contributed
+                    </span>
+
+                    <span>
+                      ₱{fmt(member.contributed)}
+                    </span>
+                  </div>
+
+
+                  <div className="flex justify-between text-xs font-mono">
+
+                    <span className="text-ink-soft">
+                      Investment Result
+                    </span>
+
+                    <span
+                      className={
+                        member.investmentResult >= 0
+                          ? "text-sage"
+                          : "text-rust"
+                      }
+                    >
+                      {member.investmentResult >= 0 ? "+" : "-"}
+                      ₱{fmt(Math.abs(member.investmentResult))}
+                    </span>
+
+                  </div>
+
+
+                  <div className="flex justify-between items-center pt-2 border-t border-hairline">
+
+                    <span className="text-sm font-semibold text-ink">
+                      Value
+                    </span>
+
+                    <span className="font-mono text-lg font-semibold text-ink">
+                      ₱{fmt(member.ownershipValue)}
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            ))}
+
+          </div>
+
         </div>
       </main>
     </>
