@@ -23,13 +23,19 @@ const typeColor: Record<string, string> = {
 }
 
 export default function TransactionsPage() {
+
   const [transactions, setTransactions] = useState<any[]>([])
   const [members, setMembers] = useState<any[]>([])
+
   const [selectedMemberId, setSelectedMemberId] = useState("")
   const [selectedType, setSelectedType] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
 
+  const [showFilters, setShowFilters] = useState(false)
+
+
   async function loadTransactions() {
+
     const { data } = await supabase
       .from("transactions")
       .select(`
@@ -46,199 +52,548 @@ export default function TransactionsPage() {
       .order("created_at", { ascending: false })
 
     setTransactions(data ?? [])
+
   }
 
+
   async function loadMembers() {
+
     const { data } = await supabase
       .from("members")
       .select("id, name")
       .order("name")
 
     setMembers(data ?? [])
+
   }
+
 
   useEffect(() => {
     loadTransactions()
     loadMembers()
   }, [])
 
+
+
+  function closeFilters() {
+    setShowFilters(false)
+  }
+
+
+  function clearFilters() {
+    setSelectedYear("")
+    setSelectedMemberId("")
+    setSelectedType("")
+  }
+
+
+
   const typeOptions = Object.keys(typeLabels)
+
+
 
   const yearOptions = Array.from(
     new Set(
       transactions.map((t) =>
-        new Date(t.created_at).getFullYear().toString()
+        new Date(t.created_at)
+          .getFullYear()
+          .toString()
       )
     )
-  ).sort((a, b) => Number(b) - Number(a))
+  )
+  .sort((a,b)=>Number(b)-Number(a))
 
-  const filteredTransactions = transactions.filter((t) => {
-    const memberMatch = selectedMemberId
-      ? t.member_id === selectedMemberId
-      : true
 
-    const typeMatch = selectedType
-      ? t.type === selectedType
-      : true
 
-    const yearMatch = selectedYear
-      ? new Date(t.created_at).getFullYear().toString() === selectedYear
-      : true
+  const selectedMember =
+    members.find(
+      (m)=>m.id === selectedMemberId
+    )
 
-    return memberMatch && typeMatch && yearMatch
-  })
 
-  const fmt = (n: number) =>
-    Number(n).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+
+  const filteredTransactions =
+    transactions.filter((t)=>{
+
+      const memberMatch =
+        selectedMemberId
+          ? t.member_id === selectedMemberId
+          : true
+
+
+      const typeMatch =
+        selectedType
+          ? t.type === selectedType
+          : true
+
+
+      const yearMatch =
+        selectedYear
+          ? new Date(t.created_at)
+              .getFullYear()
+              .toString() === selectedYear
+          : true
+
+
+      return (
+        memberMatch &&
+        typeMatch &&
+        yearMatch
+      )
+
     })
+
+
+
+  const fmt = (n:number)=>
+    Number(n).toLocaleString(undefined,{
+      minimumFractionDigits:2,
+      maximumFractionDigits:2
+    })
+
 
   return (
     <>
       <Navbar />
 
       <main className="min-h-screen bg-paper text-ink font-sans">
+
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+
 
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Full History
           </div>
 
+
           <h1 className="font-display text-4xl font-semibold text-ink">
             Transactions
           </h1>
 
-          <div className="mt-6 flex flex-wrap gap-3">
+
+
+          <button
+            className="
+              mt-6
+              md:hidden
+              w-full
+              border
+              border-hairline
+              bg-paper-2
+              rounded-sm
+              px-4
+              py-3
+              text-sm
+              text-left
+            "
+            onClick={() =>
+              setShowFilters(!showFilters)
+            }
+          >
+            Filters
+
+            <span className="float-right">
+              {showFilters ? "−" : "+"}
+            </span>
+
+          </button>
+
+                <div
+            className={`
+              mt-3
+              gap-3
+
+              ${
+                showFilters
+                  ? "flex flex-col"
+                  : "hidden"
+              }
+
+              md:flex
+              md:flex-row
+              md:flex-wrap
+            `}
+          >
 
             <select
-              className="border border-hairline bg-paper-2 text-ink text-sm rounded-sm px-3 py-2"
+              className="
+                border border-hairline
+                bg-paper-2
+                text-ink
+                text-sm
+                rounded-sm
+                px-3 py-3
+              "
               value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
+              onChange={(e)=>{
+                setSelectedYear(e.target.value)
+                closeFilters()
+              }}
             >
-              <option value="">All years</option>
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
+              <option value="">
+                All years
+              </option>
+
+              {yearOptions.map((year)=>(
+                <option
+                  key={year}
+                  value={year}
+                >
                   {year}
                 </option>
               ))}
+
             </select>
 
-            <select
-              className="border border-hairline bg-paper-2 text-ink text-sm rounded-sm px-3 py-2"
-              value={selectedMemberId}
-              onChange={(e) => setSelectedMemberId(e.target.value)}
-            >
-              <option value="">All members</option>
 
-              {members.map((member) => (
-                <option key={member.id} value={member.id}>
+
+            <select
+              className="
+                border border-hairline
+                bg-paper-2
+                text-ink
+                text-sm
+                rounded-sm
+                px-3 py-3
+              "
+              value={selectedMemberId}
+              onChange={(e)=>{
+                setSelectedMemberId(e.target.value)
+                closeFilters()
+              }}
+            >
+
+              <option value="">
+                All members
+              </option>
+
+              {members.map((member)=>(
+                <option
+                  key={member.id}
+                  value={member.id}
+                >
                   {member.name}
                 </option>
               ))}
+
             </select>
 
-            <select
-              className="border border-hairline bg-paper-2 text-ink text-sm rounded-sm px-3 py-2"
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-            >
-              <option value="">All types</option>
 
-              {typeOptions.map((type) => (
-                <option key={type} value={type}>
+
+            <select
+              className="
+                border border-hairline
+                bg-paper-2
+                text-ink
+                text-sm
+                rounded-sm
+                px-3 py-3
+              "
+              value={selectedType}
+              onChange={(e)=>{
+                setSelectedType(e.target.value)
+                closeFilters()
+              }}
+            >
+
+              <option value="">
+                All types
+              </option>
+
+              {typeOptions.map((type)=>(
+                <option
+                  key={type}
+                  value={type}
+                >
                   {typeLabels[type]}
                 </option>
               ))}
+
             </select>
 
-            <span className="text-xs text-ink-soft font-mono self-center ml-auto">
-              {filteredTransactions.length} of {transactions.length}
-            </span>
+
+            <button
+              className="
+                border border-hairline
+                rounded-sm
+                px-3 py-3
+                text-sm
+              "
+              onClick={clearFilters}
+            >
+              Clear Filters
+            </button>
+
 
           </div>
 
 
+
+          {(selectedYear ||
+            selectedMemberId ||
+            selectedType) && (
+
+            <div className="
+              mt-4
+              flex
+              flex-wrap
+              gap-2
+            ">
+
+              {selectedYear && (
+
+                <button
+                  className="
+                    border
+                    border-hairline
+                    bg-paper-2
+                    rounded-full
+                    px-3 py-1
+                    text-xs
+                    font-mono
+                  "
+                  onClick={()=>{
+                    setSelectedYear("")
+                  }}
+                >
+                  Year: {selectedYear} ×
+                </button>
+
+              )}
+
+
+
+              {selectedMemberId && (
+
+                <button
+                  className="
+                    border
+                    border-hairline
+                    bg-paper-2
+                    rounded-full
+                    px-3 py-1
+                    text-xs
+                    font-mono
+                  "
+                  onClick={()=>{
+                    setSelectedMemberId("")
+                  }}
+                >
+                  Member: {selectedMember?.name} ×
+                </button>
+
+              )}
+
+
+
+              {selectedType && (
+
+                <button
+                  className="
+                    border
+                    border-hairline
+                    bg-paper-2
+                    rounded-full
+                    px-3 py-1
+                    text-xs
+                    font-mono
+                  "
+                  onClick={()=>{
+                    setSelectedType("")
+                  }}
+                >
+                  Type: {typeLabels[selectedType]} ×
+                </button>
+
+              )}
+
+            </div>
+
+          )}
+
+
+
+          <div className="
+            mt-4
+            text-xs
+            text-ink-soft
+            font-mono
+          ">
+            Showing {filteredTransactions.length} of {transactions.length}
+          </div>
+
+
+
           <div className="mt-6 space-y-3">
 
-            {filteredTransactions.map((transaction) => (
+
+            {filteredTransactions.map((transaction)=>(
 
               <div
                 key={transaction.id}
-                className="bg-paper-2 border border-hairline rounded-md p-4"
+                className="
+                  bg-paper-2
+                  border border-hairline
+                  rounded-md
+                  p-4
+                "
               >
 
-                <div className="flex justify-between items-start gap-3">
+                <div className="
+                  flex
+                  justify-between
+                  items-start
+                  gap-3
+                ">
 
                   <div className="min-w-0">
 
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="
+                      flex
+                      items-center
+                      gap-2
+                      flex-wrap
+                    ">
 
                       <span
-                        className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
-                          typeColor[transaction.type] ??
-                          "text-ink-soft border-hairline"
-                        }`}
+                        className={`
+                          text-[9px]
+                          uppercase
+                          tracking-widest
+                          font-mono
+                          border
+                          rounded-full
+                          px-2 py-0.5
+
+                          ${
+                            typeColor[transaction.type]
+                            ??
+                            "text-ink-soft border-hairline"
+                          }
+                        `}
                       >
-                        {typeLabels[transaction.type] || transaction.type}
+                        {
+                          typeLabels[transaction.type]
+                          ||
+                          transaction.type
+                        }
                       </span>
 
-                      <span className="text-xs text-ink-soft font-mono">
-                        {new Date(transaction.created_at).toLocaleDateString()}
+
+                      <span className="
+                        text-xs
+                        text-ink-soft
+                        font-mono
+                      ">
+                        {
+                          new Date(
+                            transaction.created_at
+                          )
+                          .toLocaleDateString()
+                        }
                       </span>
 
                     </div>
 
 
-                    <div className="font-display text-lg font-medium text-ink mt-2">
-                      {transaction.members?.name || "Unknown"}
+
+                    <div className="
+                      font-display
+                      text-lg
+                      font-medium
+                      mt-2
+                    ">
+                      {
+                        transaction.members?.name
+                        ||
+                        "Unknown"
+                      }
                     </div>
+
 
 
                     {transaction.description && (
-                      <p className="text-xs text-ink-soft mt-1 max-w-md leading-relaxed">
+                      <p className="
+                        text-xs
+                        text-ink-soft
+                        mt-1
+                      ">
                         {transaction.description}
                       </p>
                     )}
 
 
+
                     {transaction.bank_accounts && (
-                      <p className="text-xs text-ink-soft mt-1 font-mono">
-                        {transaction.bank_accounts.account_name ||
-                          transaction.bank_accounts.bank_name}
+                      <p className="
+                        text-xs
+                        text-ink-soft
+                        mt-1
+                        font-mono
+                      ">
+                        {
+                          transaction.bank_accounts.account_name
+                          ||
+                          transaction.bank_accounts.bank_name
+                        }
                       </p>
                     )}
 
                   </div>
 
 
-                  <div className="text-right shrink-0">
 
-                    <div className="font-mono text-xl font-semibold text-ink">
+                  <div className="
+                    text-right
+                    shrink-0
+                  ">
+
+                    <div className="
+                      font-mono
+                      text-xl
+                      font-semibold
+                    ">
                       ₱{fmt(transaction.amount)}
                     </div>
 
-                    <div className="text-[10px] uppercase text-ink-soft font-mono mt-1">
+
+                    <div className="
+                      text-[10px]
+                      uppercase
+                      text-ink-soft
+                      font-mono
+                      mt-1
+                    ">
                       {transaction.status}
                     </div>
 
                   </div>
 
+
                 </div>
 
 
+
                 {transaction.receipt_url && (
+
                   <a
                     href={transaction.receipt_url}
                     target="_blank"
                     className="inline-block mt-3"
                   >
+
                     <img
                       src={transaction.receipt_url}
                       alt="Receipt"
-                      className="w-24 rounded-sm border border-hairline"
+                      className="
+                        w-24
+                        rounded-sm
+                        border border-hairline
+                      "
                     />
+
                   </a>
+
                 )}
 
               </div>
@@ -246,15 +601,26 @@ export default function TransactionsPage() {
             ))}
 
 
+
             {filteredTransactions.length === 0 && (
-              <p className="py-8 text-sm text-ink-soft text-center">
+
+              <p className="
+                py-8
+                text-sm
+                text-ink-soft
+                text-center
+              ">
                 No transactions found.
               </p>
+
             )}
+
 
           </div>
 
+
         </div>
+
       </main>
     </>
   )
