@@ -17,64 +17,73 @@ export default function Navbar() {
   const links = [
     {
       label: "Dashboard",
-      mobileLabel: "Home",
       path: "/dashboard"
     },
     {
       label: "Fund Breakdown",
-      mobileLabel: "Funds",
       path: "/fund-breakdown"
     },
     {
       label: "Transactions",
-      mobileLabel: "Txns",
       path: "/transactions"
     },
     {
       label: "Contribute",
-      mobileLabel: "Add",
       path: "/contribute"
     },
     {
       label: "Admin",
-      mobileLabel: "Admin",
       path: "/admin"
     }
   ]
 
-  const active = (path: string) =>
-    pathname === path ||
-    pathname.startsWith(path + "/")
+  function isActive(path: string) {
+    return (
+      pathname === path ||
+      pathname.startsWith(path + "/")
+    )
+  }
 
   return (
-    <>
+    <nav
+      className="
+        border-b
+        border-gray-300
+        dark:border-gray-700
+        bg-white
+        dark:bg-gray-900
+        p-4
+      "
+    >
 
-      {/* iPad / Desktop */}
-      <nav
+      <div
         className="
-          hidden
-          md:block
-          border-b
-          border-gray-300
-          dark:border-gray-700
-          bg-white
-          dark:bg-gray-900
-          p-4
+          flex
+          items-center
+          gap-3
         "
       >
+
+        {/* Navigation Tabs */}
         <div
           className="
             flex
-            items-center
             gap-3
+            overflow-x-auto
+            flex-1
+            pb-2
+            scrollbar-hide
           "
         >
 
           {links.map((link) => (
+
             <button
               key={link.path}
               onClick={() => router.push(link.path)}
               className={`
+                shrink-0
+                whitespace-nowrap
                 px-3
                 py-2
                 rounded
@@ -82,7 +91,7 @@ export default function Navbar() {
                 border
 
                 ${
-                  active(link.path)
+                  isActive(link.path)
                     ? `
                       bg-black
                       text-white
@@ -101,101 +110,70 @@ export default function Navbar() {
             >
               {link.label}
             </button>
+
           ))}
 
-
-          <div className="ml-auto flex gap-2">
-
-            <button
-              onClick={toggleTheme}
-              className="
-                border
-                border-gray-300
-                dark:border-gray-600
-                px-3
-                py-2
-                rounded
-                text-sm
-                text-gray-900
-                dark:text-gray-100
-              "
-            >
-              {theme === "light" ? "Dark" : "Light"}
-            </button>
-
-
-            <button
-              onClick={logout}
-              className="
-                bg-black
-                dark:bg-white
-                text-white
-                dark:text-black
-                px-3
-                py-2
-                rounded
-                text-sm
-              "
-            >
-              Logout
-            </button>
-
-          </div>
-
         </div>
-      </nav>
 
 
-
-      {/* iPhone Bottom Navigation */}
-      <nav
-        className="
-          fixed
-          bottom-0
-          left-0
-          right-0
-          z-50
-          md:hidden
-          border-t
-          border-gray-300
-          dark:border-gray-700
-          bg-white
-          dark:bg-gray-900
-        "
-      >
-
+        {/* Actions */}
         <div
           className="
             flex
-            justify-around
-            py-3
+            gap-2
+            shrink-0
           "
         >
 
-          {links.map((link) => (
-            <button
-              key={link.path}
-              onClick={() => router.push(link.path)}
-              className={`
-                flex-1
-                text-xs
-                font-medium
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            title="Toggle theme"
+            className="
+              border
+              border-gray-300
+              dark:border-gray-600
+              w-10
+              h-10
+              rounded-full
+              flex
+              items-center
+              justify-center
+              text-sm
+              text-gray-900
+              dark:text-gray-100
+            "
+          >
+            {theme === "light" ? "🌙" : "☀️"}
+          </button>
 
-                ${
-                  active(link.path)
-                    ? "text-black dark:text-white"
-                    : "text-gray-500 dark:text-gray-400"
-                }
-              `}
-            >
-              {link.mobileLabel}
-            </button>
-          ))}
+
+          {/* Logout */}
+          <button
+            onClick={logout}
+            title="Logout"
+            className="
+              bg-black
+              dark:bg-white
+              text-white
+              dark:text-black
+              w-10
+              h-10
+              rounded-full
+              flex
+              items-center
+              justify-center
+              text-lg
+            "
+          >
+            ⏻
+          </button>
+
 
         </div>
 
-      </nav>
+      </div>
 
-    </>
+    </nav>
   )
 }
