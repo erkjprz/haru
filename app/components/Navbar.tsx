@@ -17,141 +17,185 @@ export default function Navbar() {
   const links = [
     {
       label: "Dashboard",
+      mobileLabel: "Home",
       path: "/dashboard"
     },
     {
       label: "Fund Breakdown",
+      mobileLabel: "Funds",
       path: "/fund-breakdown"
     },
     {
       label: "Transactions",
+      mobileLabel: "Txns",
       path: "/transactions"
     },
     {
       label: "Contribute",
+      mobileLabel: "Add",
       path: "/contribute"
     },
     {
       label: "Admin",
+      mobileLabel: "Admin",
       path: "/admin"
     }
   ]
 
-  return (
-    <nav
-      className="
-        border-b border-gray-300 dark:border-gray-700
-        p-4
-        bg-white
-        dark:bg-gray-900
-      "
-    >
+  const active = (path: string) =>
+    pathname === path ||
+    pathname.startsWith(path + "/")
 
-      <div className="
-        flex
-        items-center
-        gap-3
-      ">
+  return (
+    <>
+
+      {/* iPad / Desktop */}
+      <nav
+        className="
+          hidden
+          md:block
+          border-b
+          border-gray-300
+          dark:border-gray-700
+          bg-white
+          dark:bg-gray-900
+          p-4
+        "
+      >
+        <div
+          className="
+            flex
+            items-center
+            gap-3
+          "
+        >
+
+          {links.map((link) => (
+            <button
+              key={link.path}
+              onClick={() => router.push(link.path)}
+              className={`
+                px-3
+                py-2
+                rounded
+                text-sm
+                border
+
+                ${
+                  active(link.path)
+                    ? `
+                      bg-black
+                      text-white
+                      border-black
+                      dark:bg-white
+                      dark:text-black
+                    `
+                    : `
+                      border-gray-300
+                      dark:border-gray-600
+                      text-gray-900
+                      dark:text-gray-100
+                    `
+                }
+              `}
+            >
+              {link.label}
+            </button>
+          ))}
+
+
+          <div className="ml-auto flex gap-2">
+
+            <button
+              onClick={toggleTheme}
+              className="
+                border
+                border-gray-300
+                dark:border-gray-600
+                px-3
+                py-2
+                rounded
+                text-sm
+                text-gray-900
+                dark:text-gray-100
+              "
+            >
+              {theme === "light" ? "Dark" : "Light"}
+            </button>
+
+
+            <button
+              onClick={logout}
+              className="
+                bg-black
+                dark:bg-white
+                text-white
+                dark:text-black
+                px-3
+                py-2
+                rounded
+                text-sm
+              "
+            >
+              Logout
+            </button>
+
+          </div>
+
+        </div>
+      </nav>
+
+
+
+      {/* iPhone Bottom Navigation */}
+      <nav
+        className="
+          fixed
+          bottom-0
+          left-0
+          right-0
+          z-50
+          md:hidden
+          border-t
+          border-gray-300
+          dark:border-gray-700
+          bg-white
+          dark:bg-gray-900
+        "
+      >
 
         <div
           className="
             flex
-            gap-3
-            overflow-x-auto
-            flex-1
+            justify-around
+            py-3
           "
         >
 
-          {links.map((link) => {
+          {links.map((link) => (
+            <button
+              key={link.path}
+              onClick={() => router.push(link.path)}
+              className={`
+                flex-1
+                text-xs
+                font-medium
 
-            const active =
-              pathname === link.path ||
-              pathname.startsWith(link.path + "/")
-
-            return (
-              <button
-                key={link.path}
-                className={`
-                  whitespace-nowrap
-                  px-3
-                  py-2
-                  rounded
-                  text-sm
-                  border
-
-                  ${
-                    active
-                      ? `
-                        bg-black
-                        text-white
-                        border-black
-                        dark:bg-white
-                        dark:text-black
-                        dark:border-white
-                      `
-                      : `
-                        border-gray-300
-                        dark:border-gray-600
-                        text-gray-900
-                        dark:text-gray-100
-                      `
-                  }
-                `}
-                onClick={() => router.push(link.path)}
-              >
-                {link.label}
-              </button>
-            )
-
-          })}
+                ${
+                  active(link.path)
+                    ? "text-black dark:text-white"
+                    : "text-gray-500 dark:text-gray-400"
+                }
+              `}
+            >
+              {link.mobileLabel}
+            </button>
+          ))}
 
         </div>
 
+      </nav>
 
-        <div className="
-          flex
-          gap-2
-          shrink-0
-        ">
-
-          <button
-            className="
-              border
-              border-gray-300
-              dark:border-gray-600
-              px-3
-              py-2
-              rounded
-              text-sm
-              text-gray-900
-              dark:text-gray-100
-            "
-            onClick={toggleTheme}
-          >
-            {theme === "light" ? "🌙" : "☀️"}
-          </button>
-
-
-          <button
-            className="
-              bg-black
-              dark:bg-white
-              text-white
-              dark:text-black
-              px-3
-              py-2
-              rounded
-              text-sm
-            "
-            onClick={logout}
-          >
-            Logout
-          </button>
-
-        </div>
-
-      </div>
-
-    </nav>
+    </>
   )
 }
