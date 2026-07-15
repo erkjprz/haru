@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 
 const typeLabels: Record<string, string> = {
   contribution: "Contribution",
@@ -394,6 +395,12 @@ export default function NewTransactionPage() {
     if (error) {
       setMessage(error.message)
       return
+    }
+
+    // If an admin just instant-approved a repayment on someone's behalf and
+    // it fully covers the loan, close it and distribute gain automatically.
+    if (isLoanPayment && status === "approved" && selectedLoanId) {
+      await autoCloseLoanIfFullyRepaid(selectedLoanId)
     }
 
     router.push("/transactions")

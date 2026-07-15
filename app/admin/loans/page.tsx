@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { closeLoanAndDistributeGain } from "@/lib/closeLoan"
 
 export default function AdminLoansPage() {
   const router = useRouter()
@@ -41,8 +42,6 @@ export default function AdminLoansPage() {
     const withProgress = (loanList ?? []).map((loan) => {
       const related = (allTransactions ?? []).filter((t) => t.loan_id === loan.id)
 
-      // Pending-inclusive numbers: shown on the card so the admin can see
-      // the "current state" the same way members see it elsewhere.
       const disbursed = related
         .filter((t) => t.type === "loan_disbursement")
         .reduce((sum, t) => sum + Number(t.amount), 0)
@@ -51,9 +50,6 @@ export default function AdminLoansPage() {
         .filter((t) => t.type === "loan_repayment")
         .reduce((sum, t) => sum + Number(t.amount), 0)
 
-      // Approved-only numbers: used to gate and compute the actual close/
-      // distribute action, since that write is permanent and can't just be
-      // recomputed away if a pending transaction later gets rejected.
       const repaidApproved = related
         .filter((t) => t.type === "loan_repayment" && t.status === "approved")
         .reduce((sum, t) => sum + Number(t.amount), 0)
@@ -110,91 +106,16 @@ export default function AdminLoansPage() {
     loadLoans()
   }
 
-  async function closeLoanAndDistributeGain(loan: any) {
+  async function handleClose(loan: any) {
     setClosingId(loan.id)
 
-    // Approved-only repaid amount vs principal. Can be negative — that's a
-    // loss (member defaulted / stopped paying before covering principal).
-    const gain = loan.repaidApproved - Number(loan.principal)
-
-    const { data: allMembers } = await supabase
-      .from("members")
-      .select("id, name")
-
-    const eligibleMembers = (allMembers ?? []).filter(
-      (m) => m.id !== loan.member_id
-    )
-
-    const { data: allTransactions } = await supabase
-      .from("transactions")
-      .select("member_id, type, amount, status")
-      .eq("status", "approved")
-
-    const { data: priorAllocations } = await supabase
-      .from("investment_allocations")
-      .select("member_id, amount")
-
-    const balances = eligibleMembers.map((member) => {
-      const contributed = (allTransactions ?? [])
-        .filter((t) => t.member_id === member.id && t.type === "contribution")
-        .reduce((sum, t) => sum + Number(t.amount), 0)
-
-      const withdrawn = (allTransactions ?? [])
-        .filter((t) => t.member_id === member.id && t.type === "withdrawal")
-        .reduce((sum, t) => sum + Number(t.amount), 0)
-
-      const priorNet = (priorAllocations ?? [])
-        .filter((a) => a.member_id === member.id)
-        .reduce((sum, a) => sum + Number(a.amount), 0)
-
-      // "Current Value" — same basis as /fund-breakdown — so this loan's
-      // gain or loss is split by what each member actually has in the fund
-      // today (including past gains/losses), not just raw contributions.
-      return {
-        member,
-        balance: contributed - withdrawn + priorNet
-      }
+    await closeLoanAndDistributeGain({
+      id: loan.id,
+      member_id: loan.member_id,
+      principal: loan.principal,
+      repaidApproved: loan.repaidApproved,
+      borrowerName: loan.members?.name
     })
-
-    const totalBalance = balances.reduce((sum, b) => sum + b.balance, 0)
-
-    if (gain !== 0 && totalBalance > 0) {
-      const currentYear = new Date().getFullYear()
-      const category = gain > 0 ? "loan_interest" : "loan_writeoff"
-      const label = gain > 0 ? "gain" : "loss"
-
-      const allocationRows = balances.map((b) => ({
-        member_id: b.member.id,
-        loan_id: loan.id,
-        year: currentYear,
-        category,
-        amount: Number(((b.balance / totalBalance) * gain).toFixed(2)),
-        notes: `${b.member.name} balance ₱${b.balance.toFixed(2)} / total ₱${totalBalance.toFixed(2)} of ₱${Math.abs(gain).toFixed(2)} ${label} from loan closed ${new Date().toISOString().slice(0,10)}`
-      }))
-
-      await supabase
-        .from("investment_allocations")
-        .insert(allocationRows)
-
-      const transactionRows = allocationRows.map((row) => ({
-        member_id: row.member_id,
-        bank_account_id: null,
-        loan_id: loan.id,
-        type: "investment_allocation",
-        amount: row.amount,
-        description: `Share of ${currentYear} loan ${label} (from ${loan.members?.name || "a member"}'s loan)`,
-        status: "approved"
-      }))
-
-      await supabase
-        .from("transactions")
-        .insert(transactionRows)
-    }
-
-    await supabase
-      .from("loans")
-      .update({ status: "closed" })
-      .eq("id", loan.id)
 
     setClosingId(null)
     loadLoans()
@@ -203,9 +124,6 @@ export default function AdminLoansPage() {
   async function reopenLoan(loan: any) {
     setReopeningId(loan.id)
 
-    // Only removes allocation rows traceable to this loan (loan_id set).
-    // Loans closed before the loan_id column existed won't have any —
-    // those need manual cleanup in Supabase if they need reopening.
     await supabase.from("investment_allocations").delete().eq("loan_id", loan.id)
     await supabase.from("transactions").delete().eq("loan_id", loan.id).eq("type", "investment_allocation")
     await supabase.from("loans").update({ status: "active" }).eq("id", loan.id)
@@ -237,8 +155,6 @@ export default function AdminLoansPage() {
       notes: editNotes
     }
 
-    // Principal is only editable before disbursement is approved — after
-    // that it must match the money that's actually already gone out.
     if (loan.status === "requested") {
       updates.principal = Number(editPrincipal)
     }
@@ -314,6 +230,9 @@ export default function AdminLoansPage() {
           <h1 className="font-display text-4xl font-semibold text-ink">
             Loans
           </h1>
+          <p className="text-xs text-ink-soft mt-2 max-w-md">
+            Loans now close and distribute gain automatically once fully repaid — this page is for approving requests, editing terms, and manual overrides.
+          </p>
 
           <div className="mt-8 space-y-4">
             {loans.map((loan) => {
@@ -485,7 +404,7 @@ export default function AdminLoansPage() {
                         {loan.status === "active" && loan.remainingApproved <= 0 && (
                           <button
                             className="mt-4 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold disabled:opacity-50"
-                            onClick={() => closeLoanAndDistributeGain(loan)}
+                            onClick={() => handleClose(loan)}
                             disabled={closingId === loan.id}
                           >
                             {closingId === loan.id
@@ -496,7 +415,7 @@ export default function AdminLoansPage() {
 
                         {loan.status === "active" && loan.remainingApproved > 0 && loan.remaining <= 0 && (
                           <p className="mt-4 text-xs text-gold font-mono">
-                            Fully repaid, but ₱{fmt(loan.pendingRepayment)} of that is still pending approval — approve it in Transactions before this loan can be closed.
+                            Fully repaid, but ₱{fmt(loan.pendingRepayment)} of that is still pending approval — approve it in Transactions and this loan will close automatically.
                           </p>
                         )}
 
@@ -510,7 +429,7 @@ export default function AdminLoansPage() {
                                   ? `Close this loan now and record a ₱${fmt(loss)} loss, split across other members? This can't be undone from the app.`
                                   : `Close this loan now even though it's not fully repaid? This will distribute a ₱${fmt(netResult)} gain based on what's been repaid so far. This can't be undone from the app.`
                               if (confirm(confirmMsg)) {
-                                closeLoanAndDistributeGain(loan)
+                                handleClose(loan)
                               }
                             }}
                             disabled={closingId === loan.id}

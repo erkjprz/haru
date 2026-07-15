@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
+import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 
 const typeLabels: Record<string, string> = {
   contribution: "Contribution",
@@ -94,10 +95,18 @@ export default function AdminPage() {
   }
 
   async function approveTransaction(id: string) {
+    const transaction = pendingTransactions.find((t) => t.id === id)
+
     await supabase
       .from("transactions")
       .update({ status: "approved" })
       .eq("id", id)
+
+    // If this was a loan repayment and it just fully covers the loan,
+    // this closes it and distributes gain automatically.
+    if (transaction?.type === "loan_repayment" && transaction.loan_id) {
+      await autoCloseLoanIfFullyRepaid(transaction.loan_id)
+    }
 
     loadData()
   }
@@ -125,10 +134,22 @@ export default function AdminPage() {
   async function bulkApproveTransactions() {
     if (selectedTransactionIds.size === 0) return
 
+    const ids = Array.from(selectedTransactionIds)
+
+    const affectedLoanIds = new Set(
+      pendingTransactions
+        .filter((t) => ids.includes(t.id) && t.type === "loan_repayment" && t.loan_id)
+        .map((t) => t.loan_id)
+    )
+
     await supabase
       .from("transactions")
       .update({ status: "approved" })
-      .in("id", Array.from(selectedTransactionIds))
+      .in("id", ids)
+
+    for (const loanId of affectedLoanIds) {
+      await autoCloseLoanIfFullyRepaid(loanId)
+    }
 
     loadData()
   }
