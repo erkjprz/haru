@@ -379,7 +379,7 @@ export default function DashboardPage() {
                       {
                         transaction.members?.name
                         ||
-                        "Unknown"
+                        "Fund"
                       }
                     </div>
                     <div className="text-xs text-ink-soft font-mono">

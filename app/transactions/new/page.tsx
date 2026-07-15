@@ -26,16 +26,20 @@ const ENTRY_TYPES = [
   { key: "bank_transfer", label: "Bank Transfer", adminOnly: true }
 ]
 
+const MEMBER_LINKED_TYPES = ["contribution", "withdrawal", "loan_request", "loan_payment"]
+
 export default function NewTransactionPage() {
   const router = useRouter()
   const [checkingAccess, setCheckingAccess] = useState(true)
   const [memberId, setMemberId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [banks, setBanks] = useState<any[]>([])
+  const [allMembers, setAllMembers] = useState<any[]>([])
   const [recent, setRecent] = useState<any[]>([])
   const [myLoans, setMyLoans] = useState<any[]>([])
 
   const [selectedType, setSelectedType] = useState("contribution")
+  const [onBehalfOfId, setOnBehalfOfId] = useState("")
   const [bankId, setBankId] = useState("")
   const [toBankId, setToBankId] = useState("")
   const [amount, setAmount] = useState("")
@@ -62,7 +66,7 @@ export default function NewTransactionPage() {
     setRecent(data ?? [])
   }
 
-  async function loadMyLoans(id: string) {
+  async function loadLoansFor(id: string) {
     const { data } = await supabase
       .from("loans")
       .select("id, principal, interest_rate, term_months, status, start_date")
@@ -104,8 +108,18 @@ export default function NewTransactionPage() {
         .order("bank_name")
 
       setBanks(bankList ?? [])
+
+      if (member.role === "admin") {
+        const { data: memberList } = await supabase
+          .from("members")
+          .select("id, name")
+          .order("name")
+
+        setAllMembers(memberList ?? [])
+      }
+
       await loadRecent(member.id)
-      await loadMyLoans(member.id)
+      await loadLoansFor(member.id)
       setCheckingAccess(false)
     }
 
@@ -113,6 +127,9 @@ export default function NewTransactionPage() {
   }, [])
 
   const visibleTypes = ENTRY_TYPES.filter((t) => !t.adminOnly || isAdmin)
+  const isMemberLinkedType = MEMBER_LINKED_TYPES.includes(selectedType)
+  const effectiveMemberId =
+    isAdmin && isMemberLinkedType && onBehalfOfId ? onBehalfOfId : memberId
 
   const isBankTransfer = selectedType === "bank_transfer"
   const isAdminEntry =
@@ -162,7 +179,8 @@ export default function NewTransactionPage() {
     if (file) setReceiptFile(file)
   }
 
-  function resetTypeFields() {
+  async function handleTypeChange(newType: string) {
+    setSelectedType(newType)
     setReceiptFile(null)
     setBankId("")
     setToBankId("")
@@ -170,6 +188,20 @@ export default function NewTransactionPage() {
     setTermMonths("")
     setRepaymentFrequency("monthly")
     setSelectedLoanId("")
+    setOnBehalfOfId("")
+
+    if (newType === "loan_payment" && memberId) {
+      await loadLoansFor(memberId)
+    }
+  }
+
+  async function handleOnBehalfChange(id: string) {
+    setOnBehalfOfId(id)
+    setSelectedLoanId("")
+
+    if (selectedType === "loan_payment") {
+      await loadLoansFor(id || memberId || "")
+    }
   }
 
   async function handleSubmit() {
@@ -215,7 +247,7 @@ export default function NewTransactionPage() {
     let receiptUrl = null
 
     if (receipt) {
-      const fileName = `${memberId}-${Date.now()}-${receipt.name}`
+      const fileName = `${effectiveMemberId}-${Date.now()}-${receipt.name}`
 
       const { error: uploadError } = await supabase.storage
         .from("Receipts")
@@ -240,7 +272,7 @@ export default function NewTransactionPage() {
       const { data: newLoan, error: loanError } = await supabase
         .from("loans")
         .insert({
-          member_id: memberId,
+          member_id: effectiveMemberId,
           principal: Number(amount),
           interest_rate: Number(interestRate),
           term_months: Number(termMonths),
@@ -261,7 +293,7 @@ export default function NewTransactionPage() {
       const { error } = await supabase
         .from("transactions")
         .insert({
-          member_id: memberId,
+          member_id: effectiveMemberId,
           bank_account_id: null,
           loan_id: newLoan.id,
           type: "loan_disbursement",
@@ -334,17 +366,20 @@ export default function NewTransactionPage() {
     const dbType =
       selectedType === "loan_payment" ? "loan_repayment" : selectedType
 
+    const status =
+      isAdmin && isMemberLinkedType && onBehalfOfId ? "approved" : "pending"
+
     const { error } = await supabase
       .from("transactions")
       .insert({
-        member_id: memberId,
+        member_id: effectiveMemberId,
         bank_account_id: bankId || null,
         loan_id: isLoanPayment ? selectedLoanId : null,
         type: dbType,
         amount: Number(amount),
         description,
         receipt_url: receiptUrl,
-        status: "pending"
+        status
       })
 
     setSubmitting(false)
@@ -393,10 +428,7 @@ export default function NewTransactionPage() {
                 <select
                   className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                   value={selectedType}
-                  onChange={(e) => {
-                    setSelectedType(e.target.value)
-                    resetTypeFields()
-                  }}
+                  onChange={(e) => handleTypeChange(e.target.value)}
                 >
                   {visibleTypes.map((t) => (
                     <option key={t.key} value={t.key}>
@@ -409,6 +441,33 @@ export default function NewTransactionPage() {
                 </p>
               </div>
 
+              {isAdmin && isMemberLinkedType && (
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    On behalf of
+                  </label>
+                  <select
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    value={onBehalfOfId}
+                    onChange={(e) => handleOnBehalfChange(e.target.value)}
+                  >
+                    <option value="">Myself</option>
+                    {allMembers
+                      .filter((m) => m.id !== memberId)
+                      .map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                  </select>
+                  {onBehalfOfId && (
+                    <p className="text-xs text-gold mt-2">
+                      This will be recorded as approved immediately for {allMembers.find((m) => m.id === onBehalfOfId)?.name}.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {isLoanPayment && (
                 <div>
                   <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
@@ -416,7 +475,7 @@ export default function NewTransactionPage() {
                   </label>
                   {myLoans.filter((l) => l.status === "active").length === 0 ? (
                     <p className="text-xs text-rust">
-                      You have no active loans to pay against.
+                      No active loans to pay against.
                     </p>
                   ) : (
                     <select
@@ -439,7 +498,7 @@ export default function NewTransactionPage() {
 
               <div>
                 <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                  {isLoanRequest ? "Amount you want to borrow" : "Amount"}
+                  {isLoanRequest ? "Amount to borrow" : "Amount"}
                 </label>
                 <input
                   className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
