@@ -13,6 +13,15 @@ export default function AdminLoansPage() {
   const [approveBankChoice, setApproveBankChoice] = useState<Record<string, string>>({})
   const [closingId, setClosingId] = useState<string | null>(null)
   const [approvingId, setApprovingId] = useState<string | null>(null)
+  const [reopeningId, setReopeningId] = useState<string | null>(null)
+
+  const [editingLoanId, setEditingLoanId] = useState<string | null>(null)
+  const [editPrincipal, setEditPrincipal] = useState("")
+  const [editInterestRate, setEditInterestRate] = useState("")
+  const [editTermMonths, setEditTermMonths] = useState("")
+  const [editRepaymentFrequency, setEditRepaymentFrequency] = useState("monthly")
+  const [editNotes, setEditNotes] = useState("")
+  const [savingEdit, setSavingEdit] = useState(false)
 
   async function loadLoans() {
     const { data: loanList } = await supabase
@@ -156,6 +165,7 @@ export default function AdminLoansPage() {
 
       const allocationRows = balances.map((b) => ({
         member_id: b.member.id,
+        loan_id: loan.id,
         year: currentYear,
         category,
         amount: Number(((b.balance / totalBalance) * gain).toFixed(2)),
@@ -187,6 +197,65 @@ export default function AdminLoansPage() {
       .eq("id", loan.id)
 
     setClosingId(null)
+    loadLoans()
+  }
+
+  async function reopenLoan(loan: any) {
+    setReopeningId(loan.id)
+
+    // Only removes allocation rows traceable to this loan (loan_id set).
+    // Loans closed before the loan_id column existed won't have any —
+    // those need manual cleanup in Supabase if they need reopening.
+    await supabase.from("investment_allocations").delete().eq("loan_id", loan.id)
+    await supabase.from("transactions").delete().eq("loan_id", loan.id).eq("type", "investment_allocation")
+    await supabase.from("loans").update({ status: "active" }).eq("id", loan.id)
+
+    setReopeningId(null)
+    loadLoans()
+  }
+
+  function startEditLoan(loan: any) {
+    setEditingLoanId(loan.id)
+    setEditPrincipal(String(loan.principal ?? ""))
+    setEditInterestRate(String(loan.interest_rate ?? ""))
+    setEditTermMonths(String(loan.term_months ?? ""))
+    setEditRepaymentFrequency(loan.repayment_frequency ?? "monthly")
+    setEditNotes(loan.notes ?? "")
+  }
+
+  function cancelEditLoan() {
+    setEditingLoanId(null)
+  }
+
+  async function saveLoanEdit(loan: any) {
+    setSavingEdit(true)
+
+    const updates: any = {
+      interest_rate: Number(editInterestRate),
+      term_months: Number(editTermMonths),
+      repayment_frequency: editRepaymentFrequency,
+      notes: editNotes
+    }
+
+    // Principal is only editable before disbursement is approved — after
+    // that it must match the money that's actually already gone out.
+    if (loan.status === "requested") {
+      updates.principal = Number(editPrincipal)
+    }
+
+    await supabase.from("loans").update(updates).eq("id", loan.id)
+
+    if (loan.status === "requested") {
+      await supabase
+        .from("transactions")
+        .update({ amount: Number(editPrincipal) })
+        .eq("loan_id", loan.id)
+        .eq("type", "loan_disbursement")
+        .eq("status", "pending")
+    }
+
+    setSavingEdit(false)
+    setEditingLoanId(null)
     loadLoans()
   }
 
@@ -249,6 +318,7 @@ export default function AdminLoansPage() {
           <div className="mt-8 space-y-4">
             {loans.map((loan) => {
               const netResult = loan.repaidApproved - Number(loan.principal)
+              const isEditing = editingLoanId === loan.id
 
               return (
                 <div
@@ -266,97 +336,205 @@ export default function AdminLoansPage() {
                           {loan.start_date} · {loan.interest_rate}% · {loan.term_months}mo · {loan.repayment_frequency}
                         </p>
                       </div>
-                      <span
-                        className={`text-[10px] uppercase tracking-wide font-mono border rounded-full px-2 py-0.5 ${
-                          loan.status === "active"
-                            ? "text-sage border-sage"
-                            : loan.status === "requested"
-                            ? "text-gold border-gold"
-                            : "text-ink-soft border-hairline"
-                        }`}
-                      >
-                        {loan.status}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-mono text-ink-soft">
-                      <div>Principal: ₱{fmt(loan.principal)}</div>
-                      <div>Total repayable: ₱{fmt(loan.totalRepayable)}</div>
-                      <div>
-                        Repaid: ₱{fmt(loan.repaid)}
-                        {loan.pendingRepayment > 0 && (
-                          <span className="text-gold"> (₱{fmt(loan.pendingRepayment)} pending)</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className={`text-[10px] uppercase tracking-wide font-mono border rounded-full px-2 py-0.5 ${
+                            loan.status === "active"
+                              ? "text-sage border-sage"
+                              : loan.status === "requested"
+                              ? "text-gold border-gold"
+                              : "text-ink-soft border-hairline"
+                          }`}
+                        >
+                          {loan.status}
+                        </span>
+                        {loan.status !== "closed" && !isEditing && (
+                          <button
+                            className="text-xs text-ink-soft border border-hairline rounded-sm px-2 py-1"
+                            onClick={() => startEditLoan(loan)}
+                          >
+                            Edit
+                          </button>
                         )}
                       </div>
-                      <div className={loan.remaining <= 0 ? "text-sage" : ""}>
-                        {loan.remaining <= 0 ? "Fully repaid" : `Remaining: ₱${fmt(loan.remaining)}`}
-                      </div>
                     </div>
 
-                    {loan.status === "requested" && (
-                      <div className="mt-4 space-y-2">
-                        <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
-                          Disburse from bank
-                        </label>
-                        <select
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
-                          value={approveBankChoice[loan.id] || ""}
-                          onChange={(e) =>
-                            setApproveBankChoice((prev) => ({ ...prev, [loan.id]: e.target.value }))
-                          }
-                        >
-                          <option value="">Select a bank</option>
-                          {banks.map((bank) => (
-                            <option key={bank.id} value={bank.id}>
-                              {bank.account_name || bank.bank_name}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50"
-                          onClick={() => approveLoan(loan)}
-                          disabled={!approveBankChoice[loan.id] || approvingId === loan.id}
-                        >
-                          {approvingId === loan.id ? "Approving..." : "Approve & Activate"}
-                        </button>
+                    {isEditing ? (
+                      <div className="mt-4 space-y-3">
+                        {loan.status === "requested" && (
+                          <div>
+                            <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Principal
+                            </label>
+                            <input
+                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full font-mono"
+                              type="number"
+                              value={editPrincipal}
+                              onChange={(e) => setEditPrincipal(e.target.value)}
+                            />
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Interest rate (%)
+                            </label>
+                            <input
+                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full font-mono"
+                              type="number"
+                              value={editInterestRate}
+                              onChange={(e) => setEditInterestRate(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Term (months)
+                            </label>
+                            <input
+                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full font-mono"
+                              type="number"
+                              value={editTermMonths}
+                              onChange={(e) => setEditTermMonths(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                            Repayment mode
+                          </label>
+                          <select
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
+                            value={editRepaymentFrequency}
+                            onChange={(e) => setEditRepaymentFrequency(e.target.value)}
+                          >
+                            <option value="monthly">Monthly installments</option>
+                            <option value="lump_sum">One lump sum at end of term</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                            Notes
+                          </label>
+                          <input
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
+                            value={editNotes}
+                            onChange={(e) => setEditNotes(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            className="bg-ink text-paper px-4 py-2 rounded-sm text-sm flex-1 disabled:opacity-50"
+                            onClick={() => saveLoanEdit(loan)}
+                            disabled={savingEdit}
+                          >
+                            {savingEdit ? "Saving..." : "Save Changes"}
+                          </button>
+                          <button
+                            className="border border-hairline rounded-sm px-4 py-2 text-sm"
+                            onClick={cancelEditLoan}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                    )}
+                    ) : (
+                      <>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-mono text-ink-soft">
+                          <div>Principal: ₱{fmt(loan.principal)}</div>
+                          <div>Total repayable: ₱{fmt(loan.totalRepayable)}</div>
+                          <div>
+                            Repaid: ₱{fmt(loan.repaid)}
+                            {loan.pendingRepayment > 0 && (
+                              <span className="text-gold"> (₱{fmt(loan.pendingRepayment)} pending)</span>
+                            )}
+                          </div>
+                          <div className={loan.remaining <= 0 ? "text-sage" : ""}>
+                            {loan.remaining <= 0 ? "Fully repaid" : `Remaining: ₱${fmt(loan.remaining)}`}
+                          </div>
+                        </div>
 
-                    {loan.status === "active" && loan.remainingApproved <= 0 && (
-                      <button
-                        className="mt-4 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold disabled:opacity-50"
-                        onClick={() => closeLoanAndDistributeGain(loan)}
-                        disabled={closingId === loan.id}
-                      >
-                        {closingId === loan.id
-                          ? "Closing & distributing..."
-                          : `Close Loan & Distribute ₱${fmt(netResult)} Gain`}
-                      </button>
-                    )}
+                        {loan.status === "requested" && (
+                          <div className="mt-4 space-y-2">
+                            <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Disburse from bank
+                            </label>
+                            <select
+                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
+                              value={approveBankChoice[loan.id] || ""}
+                              onChange={(e) =>
+                                setApproveBankChoice((prev) => ({ ...prev, [loan.id]: e.target.value }))
+                              }
+                            >
+                              <option value="">Select a bank</option>
+                              {banks.map((bank) => (
+                                <option key={bank.id} value={bank.id}>
+                                  {bank.account_name || bank.bank_name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50"
+                              onClick={() => approveLoan(loan)}
+                              disabled={!approveBankChoice[loan.id] || approvingId === loan.id}
+                            >
+                              {approvingId === loan.id ? "Approving..." : "Approve & Activate"}
+                            </button>
+                          </div>
+                        )}
 
-                    {loan.status === "active" && loan.remainingApproved > 0 && loan.remaining <= 0 && (
-                      <p className="mt-4 text-xs text-gold font-mono">
-                        Fully repaid, but ₱{fmt(loan.pendingRepayment)} of that is still pending approval — approve it in Transactions before this loan can be closed.
-                      </p>
-                    )}
+                        {loan.status === "active" && loan.remainingApproved <= 0 && (
+                          <button
+                            className="mt-4 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold disabled:opacity-50"
+                            onClick={() => closeLoanAndDistributeGain(loan)}
+                            disabled={closingId === loan.id}
+                          >
+                            {closingId === loan.id
+                              ? "Closing & distributing..."
+                              : `Close Loan & Distribute ₱${fmt(netResult)} Gain`}
+                          </button>
+                        )}
 
-                    {loan.status === "active" && loan.remainingApproved > 0 && (
-                      <button
-                        className="mt-2 text-xs text-rust border border-rust rounded-sm px-3 py-2 disabled:opacity-50"
-                        onClick={() => {
-                          const loss = Math.abs(Math.min(0, netResult))
-                          const confirmMsg =
-                            netResult < 0
-                              ? `Close this loan now and record a ₱${fmt(loss)} loss, split across other members? This can't be undone from the app.`
-                              : `Close this loan now even though it's not fully repaid? This will distribute a ₱${fmt(netResult)} gain based on what's been repaid so far. This can't be undone from the app.`
-                          if (confirm(confirmMsg)) {
-                            closeLoanAndDistributeGain(loan)
-                          }
-                        }}
-                        disabled={closingId === loan.id}
-                      >
-                        {closingId === loan.id ? "Closing..." : "Close Early (Write Off)"}
-                      </button>
+                        {loan.status === "active" && loan.remainingApproved > 0 && loan.remaining <= 0 && (
+                          <p className="mt-4 text-xs text-gold font-mono">
+                            Fully repaid, but ₱{fmt(loan.pendingRepayment)} of that is still pending approval — approve it in Transactions before this loan can be closed.
+                          </p>
+                        )}
+
+                        {loan.status === "active" && loan.remainingApproved > 0 && (
+                          <button
+                            className="mt-2 text-xs text-rust border border-rust rounded-sm px-3 py-2 disabled:opacity-50"
+                            onClick={() => {
+                              const loss = Math.abs(Math.min(0, netResult))
+                              const confirmMsg =
+                                netResult < 0
+                                  ? `Close this loan now and record a ₱${fmt(loss)} loss, split across other members? This can't be undone from the app.`
+                                  : `Close this loan now even though it's not fully repaid? This will distribute a ₱${fmt(netResult)} gain based on what's been repaid so far. This can't be undone from the app.`
+                              if (confirm(confirmMsg)) {
+                                closeLoanAndDistributeGain(loan)
+                              }
+                            }}
+                            disabled={closingId === loan.id}
+                          >
+                            {closingId === loan.id ? "Closing..." : "Close Early (Write Off)"}
+                          </button>
+                        )}
+
+                        {loan.status === "closed" && (
+                          <button
+                            className="mt-4 text-xs text-ink-soft border border-hairline rounded-sm px-3 py-2 disabled:opacity-50"
+                            onClick={() => {
+                              const confirmMsg =
+                                "Reopen this loan? This will set it back to active and delete any gain/loss allocations recorded when it was closed (only if it was closed after loan reopening support was added — older closures may need manual cleanup in Supabase)."
+                              if (confirm(confirmMsg)) {
+                                reopenLoan(loan)
+                              }
+                            }}
+                            disabled={reopeningId === loan.id}
+                          >
+                            {reopeningId === loan.id ? "Reopening..." : "Reopen Loan"}
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

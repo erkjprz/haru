@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import ReceiptModal from "@/app/components/ReceiptModal"
 
 const typeLabels: Record<string, string> = {
   contribution: "Contribution",
@@ -33,23 +34,40 @@ export default function TransactionsPage() {
   const [selectedType, setSelectedType] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
   const [showFilters, setShowFilters] = useState(false)
+  const [loadError, setLoadError] = useState("")
+  const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
   async function loadTransactions() {
-    const { data } = await supabase
+    // Both members and bank_accounts need explicit FK hints:
+    // - transactions has two FKs into members (member_id, submitted_by)
+    // - transactions has two FKs into bank_accounts (bank_account_id, to_bank_account_id)
+    // A bare `members(...)` or `bank_accounts(...)` embed is ambiguous and
+    // PostgREST errors on it.
+    const { data, error } = await supabase
       .from("transactions")
       .select(`
         *,
-        members (
+        members!transactions_member_id_fkey (
           name,
           email
         ),
-        bank_accounts (
+        submitted_by_member:members!transactions_submitted_by_fkey (
+          name
+        ),
+        bank_accounts!transactions_bank_account_id_fkey (
           bank_name,
           account_name
         )
       `)
       .order("created_at", { ascending: false })
 
+    if (error) {
+      setLoadError(error.message)
+      setTransactions([])
+      return
+    }
+
+    setLoadError("")
     setTransactions(data ?? [])
   }
 
@@ -163,6 +181,12 @@ export default function TransactionsPage() {
               New Transaction
             </button>
           </div>
+
+          {loadError && (
+            <p className="mt-4 text-sm text-rust">
+              Couldn't load transactions: {loadError}
+            </p>
+          )}
 
           <button
             className="
@@ -445,6 +469,11 @@ export default function TransactionsPage() {
                         "Fund"
                       }
                     </div>
+                    {transaction.submitted_by_member && (
+                      <p className="text-[11px] text-gold font-mono mt-0.5">
+                        Recorded by {transaction.submitted_by_member.name}
+                      </p>
+                    )}
                     {transaction.description && (
                       <p className="
                         text-xs
@@ -494,26 +523,18 @@ export default function TransactionsPage() {
                 </div>
 
                 {transaction.receipt_url && (
-                  <a
-                    href={transaction.receipt_url}
-                    target="_blank"
-                    className="inline-block mt-3"
+                  <button
+                    type="button"
+                    onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
                   >
-                    <img
-                      src={transaction.receipt_url}
-                      alt="Receipt"
-                      className="
-                        w-24
-                        rounded-sm
-                        border border-hairline
-                      "
-                    />
-                  </a>
+                    🧾 View Receipt
+                  </button>
                 )}
               </div>
             ))}
 
-            {filteredTransactions.length === 0 && (
+            {filteredTransactions.length === 0 && !loadError && (
               <p className="
                 py-8
                 text-sm
@@ -526,6 +547,13 @@ export default function TransactionsPage() {
           </div>
         </div>
       </main>
+
+      {openReceiptUrl && (
+        <ReceiptModal
+          url={openReceiptUrl}
+          onClose={() => setOpenReceiptUrl(null)}
+        />
+      )}
     </>
   )
 }

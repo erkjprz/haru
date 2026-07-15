@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import ReceiptModal from "@/app/components/ReceiptModal"
 
 const typeLabels: Record<string, string> = {
   contribution: "Contribution",
@@ -23,6 +24,8 @@ export default function AdminPage() {
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([])
   const [checkingAccess, setCheckingAccess] = useState(true)
+  const [loadError, setLoadError] = useState("")
+  const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
   const [memberSearch, setMemberSearch] = useState("")
   const [transactionSearch, setTransactionSearch] = useState("")
@@ -45,15 +48,23 @@ export default function AdminPage() {
 
     setPendingMembers(members ?? [])
 
-    const { data: transactions } = await supabase
+    // Both members and bank_accounts need explicit FK hints:
+    // - transactions has two FKs into members (member_id, submitted_by)
+    // - transactions has two FKs into bank_accounts (bank_account_id, to_bank_account_id)
+    // A bare `members(...)` or `bank_accounts(...)` embed is ambiguous and
+    // PostgREST errors on it.
+    const { data: transactions, error: txError } = await supabase
       .from("transactions")
       .select(`
         *,
-        members (
+        members!transactions_member_id_fkey (
           name,
           email
         ),
-        bank_accounts (
+        submitted_by_member:members!transactions_submitted_by_fkey (
+          name
+        ),
+        bank_accounts!transactions_bank_account_id_fkey (
           bank_name,
           account_name
         )
@@ -61,7 +72,14 @@ export default function AdminPage() {
       .eq("status", "pending")
       .order("created_at", { ascending: false })
 
-    setPendingTransactions(transactions ?? [])
+    if (txError) {
+      setLoadError(txError.message)
+      setPendingTransactions([])
+    } else {
+      setLoadError("")
+      setPendingTransactions(transactions ?? [])
+    }
+
     setSelectedMemberIds(new Set())
     setSelectedTransactionIds(new Set())
   }
@@ -260,6 +278,12 @@ export default function AdminPage() {
           <h1 className="font-display text-4xl font-semibold">
             Admin Panel
           </h1>
+
+          {loadError && (
+            <p className="mt-4 text-sm text-rust">
+              Couldn't load pending transactions: {loadError}
+            </p>
+          )}
 
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-paper-2 border border-hairline rounded-md p-4">
@@ -477,6 +501,11 @@ export default function AdminPage() {
                     <p className="font-display font-medium">
                       {transaction.members?.name || "Fund"}
                     </p>
+                    {transaction.submitted_by_member && (
+                      <p className="text-[11px] text-gold font-mono">
+                        Recorded by {transaction.submitted_by_member.name}
+                      </p>
+                    )}
                     <p className="text-sm font-mono">
                       ₱{fmt(transaction.amount)}
                     </p>
@@ -498,15 +527,13 @@ export default function AdminPage() {
                     )}
 
                     {transaction.receipt_url && (
-                      <div className="mt-3">
-                        <a href={transaction.receipt_url} target="_blank">
-                          <img
-                            src={transaction.receipt_url}
-                            alt="Receipt"
-                            className="w-24 rounded-sm border border-hairline"
-                          />
-                        </a>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
+                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
+                      >
+                        🧾 View Receipt
+                      </button>
                     )}
 
                     <div className="mt-4 flex gap-2">
@@ -527,7 +554,7 @@ export default function AdminPage() {
                 </div>
               ))}
 
-              {pendingTransactions.length === 0 && (
+              {pendingTransactions.length === 0 && !loadError && (
                 <p className="text-sm text-ink-soft">
                   No pending transactions
                 </p>
@@ -542,6 +569,13 @@ export default function AdminPage() {
           </section>
         </div>
       </main>
+
+      {openReceiptUrl && (
+        <ReceiptModal
+          url={openReceiptUrl}
+          onClose={() => setOpenReceiptUrl(null)}
+        />
+      )}
     </>
   )
 }

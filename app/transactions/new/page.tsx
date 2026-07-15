@@ -131,6 +131,11 @@ export default function NewTransactionPage() {
   const effectiveMemberId =
     isAdmin && isMemberLinkedType && onBehalfOfId ? onBehalfOfId : memberId
 
+  // Who actually clicked submit, when it's not the same person the
+  // transaction is recorded for. Null for normal self-submissions.
+  const submittedByForOnBehalf =
+    isAdmin && isMemberLinkedType && onBehalfOfId ? memberId : null
+
   const isBankTransfer = selectedType === "bank_transfer"
   const isAdminEntry =
     selectedType === "bank_interest" ||
@@ -300,7 +305,8 @@ export default function NewTransactionPage() {
           amount: Number(amount),
           description,
           receipt_url: null,
-          status: "pending"
+          status: "pending",
+          submitted_by: submittedByForOnBehalf
         })
 
       setSubmitting(false)
@@ -379,7 +385,8 @@ export default function NewTransactionPage() {
         amount: Number(amount),
         description,
         receipt_url: receiptUrl,
-        status
+        status,
+        submitted_by: submittedByForOnBehalf
       })
 
     setSubmitting(false)

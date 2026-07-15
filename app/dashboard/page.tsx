@@ -40,11 +40,14 @@ export default function DashboardPage() {
   const [checkingAccess, setCheckingAccess] = useState(true)
 
   async function loadDashboard() {
+    // members is hinted explicitly (!transactions_member_id_fkey) because
+    // transactions now has two FKs into members (member_id, submitted_by).
+    // A bare `members(...)` embed is ambiguous and PostgREST errors on it.
     const { data: transactions } = await supabase
       .from("transactions")
       .select(`
         *,
-        members (
+        members!transactions_member_id_fkey (
           name
         )
       `)
