@@ -11,26 +11,33 @@ const typeLabels: Record<string, string> = {
   expense: "Expense",
   loan_disbursement: "Loan Disbursement",
   loan_repayment: "Loan Repayment",
-  investment_allocation: "Investment Allocation"
+  investment_allocation: "Investment Allocation",
+  bank_interest: "Bank Interest",
+  bank_transfer: "Bank Transfer"
 }
 
 const ENTRY_TYPES = [
-  { key: "contribution", label: "Contribution" },
-  { key: "withdrawal", label: "Withdrawal Request" },
-  { key: "loan_request", label: "Loan Request" },
-  { key: "loan_payment", label: "Loan Payment" }
+  { key: "contribution", label: "Contribution", adminOnly: false },
+  { key: "withdrawal", label: "Withdrawal Request", adminOnly: false },
+  { key: "loan_request", label: "Loan Request", adminOnly: false },
+  { key: "loan_payment", label: "Loan Payment", adminOnly: false },
+  { key: "bank_interest", label: "Bank Interest", adminOnly: true },
+  { key: "expense", label: "Expense", adminOnly: true },
+  { key: "bank_transfer", label: "Bank Transfer", adminOnly: true }
 ]
 
 export default function NewTransactionPage() {
   const router = useRouter()
   const [checkingAccess, setCheckingAccess] = useState(true)
   const [memberId, setMemberId] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [banks, setBanks] = useState<any[]>([])
   const [recent, setRecent] = useState<any[]>([])
   const [myLoans, setMyLoans] = useState<any[]>([])
 
   const [selectedType, setSelectedType] = useState("contribution")
   const [bankId, setBankId] = useState("")
+  const [toBankId, setToBankId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
   const [receipt, setReceipt] = useState<File | null>(null)
@@ -79,7 +86,7 @@ export default function NewTransactionPage() {
 
       const { data: member } = await supabase
         .from("members")
-        .select("id, status")
+        .select("id, status, role")
         .eq("email", user.email)
         .single()
 
@@ -89,6 +96,7 @@ export default function NewTransactionPage() {
       }
 
       setMemberId(member.id)
+      setIsAdmin(member.role === "admin")
 
       const { data: bankList } = await supabase
         .from("bank_accounts")
@@ -104,8 +112,21 @@ export default function NewTransactionPage() {
     checkAccess()
   }, [])
 
-  const needsReceipt = selectedType === "contribution" || selectedType === "loan_payment"
-  const needsBank = selectedType === "contribution" || selectedType === "loan_payment"
+  const visibleTypes = ENTRY_TYPES.filter((t) => !t.adminOnly || isAdmin)
+
+  const isBankTransfer = selectedType === "bank_transfer"
+  const isAdminEntry =
+    selectedType === "bank_interest" ||
+    selectedType === "expense" ||
+    selectedType === "bank_transfer"
+  const needsReceipt =
+    (selectedType === "contribution" || selectedType === "loan_payment") && !isAdminEntry
+  const needsBank =
+    selectedType === "contribution" ||
+    selectedType === "loan_payment" ||
+    selectedType === "bank_interest" ||
+    selectedType === "expense" ||
+    isBankTransfer
   const isLoanRequest = selectedType === "loan_request"
   const isLoanPayment = selectedType === "loan_payment"
 
@@ -113,7 +134,10 @@ export default function NewTransactionPage() {
     contribution: "You've already sent this money. Attach proof of deposit.",
     withdrawal: "You're requesting money to be sent to you. No receipt needed yet.",
     loan_request: "You're requesting to borrow from the fund. No receipt needed yet.",
-    loan_payment: "You've already sent this repayment. Attach proof of deposit."
+    loan_payment: "You've already sent this repayment. Attach proof of deposit.",
+    bank_interest: "Recording interest earned by a bank account. Goes straight in as approved.",
+    expense: "Recording money spent out of the fund. Goes straight in as approved.",
+    bank_transfer: "Moving money between two of the fund's own banks. Doesn't affect total contributions or cash — it's just internal."
   }
 
   const previewTotalRepayable =
@@ -141,6 +165,7 @@ export default function NewTransactionPage() {
   function resetTypeFields() {
     setReceiptFile(null)
     setBankId("")
+    setToBankId("")
     setInterestRate("")
     setTermMonths("")
     setRepaymentFrequency("monthly")
@@ -156,7 +181,17 @@ export default function NewTransactionPage() {
     }
 
     if (needsBank && !bankId) {
-      setMessage("Select a bank.")
+      setMessage(isBankTransfer ? "Select a source bank." : "Select a bank.")
+      return
+    }
+
+    if (isBankTransfer && !toBankId) {
+      setMessage("Select a destination bank.")
+      return
+    }
+
+    if (isBankTransfer && bankId === toBankId) {
+      setMessage("Source and destination banks must be different.")
       return
     }
 
@@ -247,6 +282,55 @@ export default function NewTransactionPage() {
       return
     }
 
+    if (isBankTransfer) {
+      const { error } = await supabase
+        .from("transactions")
+        .insert({
+          member_id: null,
+          bank_account_id: bankId,
+          to_bank_account_id: toBankId,
+          type: "bank_transfer",
+          amount: Number(amount),
+          description,
+          receipt_url: null,
+          status: "approved"
+        })
+
+      setSubmitting(false)
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      router.push("/transactions")
+      return
+    }
+
+    if (isAdminEntry) {
+      const { error } = await supabase
+        .from("transactions")
+        .insert({
+          member_id: null,
+          bank_account_id: bankId || null,
+          type: selectedType,
+          amount: Number(amount),
+          description,
+          receipt_url: null,
+          status: "approved"
+        })
+
+      setSubmitting(false)
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      router.push("/transactions")
+      return
+    }
+
     const dbType =
       selectedType === "loan_payment" ? "loan_repayment" : selectedType
 
@@ -314,7 +398,7 @@ export default function NewTransactionPage() {
                     resetTypeFields()
                   }}
                 >
-                  {ENTRY_TYPES.map((t) => (
+                  {visibleTypes.map((t) => (
                     <option key={t.key} value={t.key}>
                       {t.label}
                     </option>
@@ -435,12 +519,32 @@ export default function NewTransactionPage() {
               {needsBank && (
                 <div>
                   <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Bank
+                    {isBankTransfer ? "From bank" : "Bank"}
                   </label>
                   <select
                     className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                     value={bankId}
                     onChange={(e) => setBankId(e.target.value)}
+                  >
+                    <option value="">Select a bank</option>
+                    {banks.map((bank) => (
+                      <option key={bank.id} value={bank.id}>
+                        {bank.account_name || bank.bank_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {isBankTransfer && (
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    To bank
+                  </label>
+                  <select
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    value={toBankId}
+                    onChange={(e) => setToBankId(e.target.value)}
                   >
                     <option value="">Select a bank</option>
                     {banks.map((bank) => (
