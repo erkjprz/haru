@@ -32,6 +32,7 @@ export default function DashboardPage() {
   const [totalContributions, setTotalContributions] = useState(0)
   const [totalWithdrawals, setTotalWithdrawals] = useState(0)
   const [bankInterestTotal, setBankInterestTotal] = useState(0)
+  const [bankInterestAllocatedTotal, setBankInterestAllocatedTotal] = useState(0)
   const [loanInterestTotal, setLoanInterestTotal] = useState(0)
   const [perfumeBizTotal, setPerfumeBizTotal] = useState(0)
   const [farmOnTotal, setFarmOnTotal] = useState(0)
@@ -138,6 +139,15 @@ export default function DashboardPage() {
     setFarmOnTotal(
       allocations
         ?.filter(a => a.category === "farmon_writeoff")
+        .reduce(
+          (sum,a) => sum + Number(a.amount),
+          0
+        ) ?? 0
+    )
+
+    setBankInterestAllocatedTotal(
+      allocations
+        ?.filter(a => a.category === "bank_interest")
         .reduce(
           (sum,a) => sum + Number(a.amount),
           0
@@ -308,6 +318,14 @@ export default function DashboardPage() {
                     </span>
                     <span>
                       -₱{fmt(Math.abs(farmOnTotal))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>
+                      Bank Interest (distributed)
+                    </span>
+                    <span>
+                      +₱{fmt(bankInterestAllocatedTotal)}
                     </span>
                   </div>
                 </div>

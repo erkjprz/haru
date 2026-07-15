@@ -24,6 +24,8 @@ export default function AdminPage() {
   const [totalMembers, setTotalMembers] = useState(0)
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([])
+  const [banks, setBanks] = useState<any[]>([])
+  const [withdrawalBankChoice, setWithdrawalBankChoice] = useState<Record<string, string>>({})
   const [checkingAccess, setCheckingAccess] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
@@ -48,6 +50,13 @@ export default function AdminPage() {
       .eq("status", "pending")
 
     setPendingMembers(members ?? [])
+
+    const { data: bankList } = await supabase
+      .from("bank_accounts")
+      .select("id, bank_name, account_name")
+      .order("bank_name")
+
+    setBanks(bankList ?? [])
 
     // Both members and bank_accounts need explicit FK hints:
     // - transactions has two FKs into members (member_id, submitted_by)
@@ -97,9 +106,17 @@ export default function AdminPage() {
   async function approveTransaction(id: string) {
     const transaction = pendingTransactions.find((t) => t.id === id)
 
+    const updates: any = { status: "approved" }
+
+    if (transaction?.type === "withdrawal") {
+      const bankId = withdrawalBankChoice[id]
+      if (!bankId) return
+      updates.bank_account_id = bankId
+    }
+
     await supabase
       .from("transactions")
-      .update({ status: "approved" })
+      .update(updates)
       .eq("id", id)
 
     // If this was a loan repayment and it just fully covers the loan,
@@ -250,9 +267,11 @@ export default function AdminPage() {
     filteredMembers.length > 0 &&
     filteredMembers.every((m) => selectedMemberIds.has(m.id))
 
+  const bulkSelectableTransactions = filteredTransactions.filter((t) => t.type !== "withdrawal")
+
   const allTransactionsSelected =
-    filteredTransactions.length > 0 &&
-    filteredTransactions.every((t) => selectedTransactionIds.has(t.id))
+    bulkSelectableTransactions.length > 0 &&
+    bulkSelectableTransactions.every((t) => selectedTransactionIds.has(t.id))
 
   function toggleSelectAllMembers() {
     if (allMembersSelected) {
@@ -266,7 +285,7 @@ export default function AdminPage() {
     if (allTransactionsSelected) {
       setSelectedTransactionIds(new Set())
     } else {
-      setSelectedTransactionIds(new Set(filteredTransactions.map((t) => t.id)))
+      setSelectedTransactionIds(new Set(bulkSelectableTransactions.map((t) => t.id)))
     }
   }
 
@@ -512,12 +531,14 @@ export default function AdminPage() {
                   key={transaction.id}
                   className="bg-paper-2 border border-hairline rounded-md p-4 flex items-start gap-3"
                 >
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={selectedTransactionIds.has(transaction.id)}
-                    onChange={() => toggleTransactionSelection(transaction.id)}
-                  />
+                  {transaction.type !== "withdrawal" && (
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={selectedTransactionIds.has(transaction.id)}
+                      onChange={() => toggleTransactionSelection(transaction.id)}
+                    />
+                  )}
                   <div className="flex-1">
                     <p className="font-display font-medium">
                       {transaction.members?.name || "Fund"}
@@ -557,10 +578,39 @@ export default function AdminPage() {
                       </button>
                     )}
 
+                    {transaction.type === "withdrawal" && (
+                      <div className="mt-3">
+                        <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Withdraw from bank
+                        </label>
+                        <select
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
+                          value={withdrawalBankChoice[transaction.id] || ""}
+                          onChange={(e) =>
+                            setWithdrawalBankChoice((prev) => ({
+                              ...prev,
+                              [transaction.id]: e.target.value
+                            }))
+                          }
+                        >
+                          <option value="">Select a bank</option>
+                          {banks.map((bank) => (
+                            <option key={bank.id} value={bank.id}>
+                              {bank.account_name || bank.bank_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div className="mt-4 flex gap-2">
                       <button
-                        className="bg-ink text-paper px-4 py-2 rounded-sm text-sm"
+                        className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50"
                         onClick={() => approveTransaction(transaction.id)}
+                        disabled={
+                          transaction.type === "withdrawal" &&
+                          !withdrawalBankChoice[transaction.id]
+                        }
                       >
                         Approve
                       </button>

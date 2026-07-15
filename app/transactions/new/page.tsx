@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
+import { distributeBankInterest } from "@/lib/bankInterest"
 
 const typeLabels: Record<string, string> = {
   contribution: "Contribution",
@@ -347,7 +348,7 @@ export default function NewTransactionPage() {
     }
 
     if (isAdminEntry) {
-      const { error } = await supabase
+      const { data: newTransaction, error } = await supabase
         .from("transactions")
         .insert({
           member_id: null,
@@ -358,12 +359,20 @@ export default function NewTransactionPage() {
           receipt_url: null,
           status: "approved"
         })
+        .select()
+        .single()
 
       setSubmitting(false)
 
       if (error) {
         setMessage(error.message)
         return
+      }
+
+      // Bank interest gets split across members immediately, proportional
+      // to their balance right now — no manual step needed.
+      if (selectedType === "bank_interest" && newTransaction) {
+        await distributeBankInterest(newTransaction.id)
       }
 
       router.push("/transactions")

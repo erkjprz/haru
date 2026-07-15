@@ -24,6 +24,15 @@ export default function AdminLoansPage() {
   const [editNotes, setEditNotes] = useState("")
   const [savingEdit, setSavingEdit] = useState(false)
 
+  // Formats a start_date (YYYY-MM-DD string) as "Loan - Mon YYYY", matching
+  // the convention used for existing loans (see 2026-07-16 migration).
+  function defaultLoanName(startDate: string | null | undefined) {
+    if (!startDate) return "Loan"
+    const d = new Date(startDate + "T00:00:00")
+    if (isNaN(d.getTime())) return "Loan"
+    return `Loan - ${d.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
+  }
+
   async function loadLoans() {
     const { data: loanList } = await supabase
       .from("loans")
@@ -238,6 +247,7 @@ export default function AdminLoansPage() {
             {loans.map((loan) => {
               const netResult = loan.repaidApproved - Number(loan.principal)
               const isEditing = editingLoanId === loan.id
+              const displayName = loan.loan_name || defaultLoanName(loan.start_date)
 
               return (
                 <div
@@ -249,9 +259,12 @@ export default function AdminLoansPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-display text-lg font-medium">
-                          {loan.members?.name || "Unknown"}
+                          {displayName}
                         </p>
                         <p className="text-xs text-ink-soft font-mono mt-1">
+                          Borrower: {loan.members?.name || "Unknown"}
+                        </p>
+                        <p className="text-xs text-ink-soft font-mono mt-0.5">
                           {loan.start_date} · {loan.interest_rate}% · {loan.term_months}mo · {loan.repayment_frequency}
                         </p>
                       </div>

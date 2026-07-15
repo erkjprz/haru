@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 
-const CUTOVER_DATE = "2026-01-01"
+const CUTOVER_DATE = "2026-07-16"
 
 export default function AdminBanksPage() {
   const router = useRouter()
@@ -133,8 +133,8 @@ export default function AdminBanksPage() {
     setSaving(true)
 
     if (editingId) {
-      // Opening balance is the reconciled Dec 31, 2025 cutover value —
-      // intentionally not part of this update, so it can't drift by accident.
+      // Opening balance is the reconciled cutover value — intentionally not
+      // part of this update, so it can't drift by accident.
       const { error } = await supabase
         .from("bank_accounts")
         .update({
@@ -249,7 +249,7 @@ export default function AdminBanksPage() {
                       ₱{fmt(Number(openingBalance))}
                     </p>
                     <p className="text-xs text-ink-soft mt-1">
-                      Locked — this is the reconciled Dec 31, 2025 cutover balance and can't be edited here.
+                      Locked — this is the reconciled cutover balance (as of {CUTOVER_DATE}) and can't be edited here.
                     </p>
                   </div>
                 ) : (
@@ -338,7 +338,7 @@ export default function AdminBanksPage() {
                     </span>
                   </div>
                   <div className="flex justify-between text-xs font-mono text-ink-soft mt-1">
-                    <span>Opening balance (Dec 31, 2025)</span>
+                    <span>Opening balance (as of {CUTOVER_DATE})</span>
                     <span>₱{fmt(bank.opening_balance)}</span>
                   </div>
                 </div>
