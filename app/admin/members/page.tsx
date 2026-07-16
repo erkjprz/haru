@@ -65,7 +65,7 @@ export default function AdminMembersPage() {
   }
 
   function startEditing(member: any) {
-    setEditingId(member.id)
+    setEditingId(member.member_id)
     setEditName(member.name ?? "")
     setEditEmail(member.email ?? "")
     setEditRole(member.role ?? "member")
@@ -86,7 +86,7 @@ export default function AdminMembersPage() {
         role: editRole,
         status: editStatus
       })
-      .eq("id", id)
+      .eq("member_id", id)
 
     if (error) {
       setMessage(error.message)
@@ -102,7 +102,7 @@ export default function AdminMembersPage() {
     await supabase
       .from("members")
       .update({ status: "inactive" })
-      .eq("id", id)
+      .eq("member_id", id)
 
     loadMembers()
   }
@@ -111,7 +111,7 @@ export default function AdminMembersPage() {
     await supabase
       .from("members")
       .update({ status: "approved" })
-      .eq("id", id)
+      .eq("member_id", id)
 
     loadMembers()
   }
@@ -226,10 +226,10 @@ export default function AdminMembersPage() {
           <div className="mt-4 space-y-3">
             {filteredMembers.map((member) => (
               <div
-                key={member.id}
+                key={member.member_id}
                 className="bg-paper-2 border border-hairline rounded-md p-5"
               >
-                {editingId === member.id ? (
+                {editingId === member.member_id ? (
                   <div className="space-y-3">
                     <input
                       className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
@@ -263,7 +263,7 @@ export default function AdminMembersPage() {
                     <div className="flex gap-2">
                       <button
                         className="bg-ink text-paper px-4 py-2 rounded-md text-sm flex-1"
-                        onClick={() => saveEdit(member.id)}
+                        onClick={() => saveEdit(member.member_id)}
                       >
                         Save
                       </button>
@@ -310,14 +310,14 @@ export default function AdminMembersPage() {
                       {member.status === "inactive" ? (
                         <button
                           className="border border-sage text-sage px-4 py-2 rounded-md text-sm"
-                          onClick={() => reactivateMember(member.id)}
+                          onClick={() => reactivateMember(member.member_id)}
                         >
                           Reactivate
                         </button>
                       ) : (
                         <button
                           className="border border-rust text-rust px-4 py-2 rounded-md text-sm"
-                          onClick={() => deactivateMember(member.id)}
+                          onClick={() => deactivateMember(member.member_id)}
                         >
                           Deactivate
                         </button>

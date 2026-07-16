@@ -26,12 +26,8 @@ export default function FundBreakdownPage() {
       .select("member_id, amount, allocation_type")
 
 
-    console.log("Investment allocations:", allocations)
-    console.log("Allocation error:", allocationError)
-
-
-    if (memberError || ledgerError) {
-      console.error(memberError || ledgerError)
+    if (memberError || ledgerError || allocationError) {
+      console.error(memberError || ledgerError || allocationError)
     }
 
 
@@ -63,13 +59,11 @@ export default function FundBreakdownPage() {
     const breakdown =
       (memberList ?? []).map((member: any) => {
 
-
         const memberLedger =
           ledger?.find(
             (item: any) =>
               item.member === member.name
           )
-
 
         const contribution =
           Number(memberLedger?.contribution ?? 0)

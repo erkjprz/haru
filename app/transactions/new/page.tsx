@@ -8,14 +8,14 @@ import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 import { distributeBankInterest } from "@/lib/bankInterest"
 
 const typeLabels: Record<string, string> = {
-  contribution: "Contribution",
-  withdrawal: "Withdrawal",
-  expense: "Expense",
-  loan_disbursement: "Loan Disbursement",
-  loan_repayment: "Loan Repayment",
-  investment_allocation: "Investment Allocation",
-  bank_interest: "Bank Interest",
-  bank_transfer: "Bank Transfer"
+  "Member Contribution": "Contribution",
+  "Member Withdrawal": "Withdrawal",
+  "Expense": "Expense",
+  "Loan Release": "Loan Disbursement",
+  "Loan Repayment": "Loan Repayment",
+  "Gain Allocation": "Investment Allocation",
+  "Bank Interest": "Bank Interest",
+  "Internal Transfer": "Bank Transfer"
 }
 
 const ENTRY_TYPES = [
@@ -60,7 +60,7 @@ export default function NewTransactionPage() {
   async function loadRecent(id: string) {
     const { data } = await supabase
       .from("transactions")
-      .select("id, type, amount, description, status, created_at")
+      .select("transaction_id, classification, amount, description, status, created_at")
       .eq("member_id", id)
       .order("created_at", { ascending: false })
       .limit(5)
@@ -71,7 +71,7 @@ export default function NewTransactionPage() {
   async function loadLoansFor(id: string) {
     const { data } = await supabase
       .from("loans")
-      .select("id, principal, interest_rate, term_months, status, start_date")
+      .select("loan_id, principal, interest_rate, term_months, status, start_date")
       .eq("member_id", id)
       .in("status", ["active", "requested"])
       .order("start_date", { ascending: false })
@@ -92,7 +92,7 @@ export default function NewTransactionPage() {
 
       const { data: member } = await supabase
         .from("members")
-        .select("id, status, role")
+        .select("member_id, status, role")
         .eq("email", user.email)
         .single()
 
@@ -101,7 +101,7 @@ export default function NewTransactionPage() {
         return
       }
 
-      setMemberId(member.id)
+      setMemberId(member.member_id)
       setIsAdmin(member.role === "admin")
 
       const { data: bankList } = await supabase
@@ -114,14 +114,14 @@ export default function NewTransactionPage() {
       if (member.role === "admin") {
         const { data: memberList } = await supabase
           .from("members")
-          .select("id, name")
+          .select("member_id, name")
           .order("name")
 
         setAllMembers(memberList ?? [])
       }
 
-      await loadRecent(member.id)
-      await loadLoansFor(member.id)
+      await loadRecent(member.member_id)
+      await loadLoansFor(member.member_id)
       setCheckingAccess(false)
     }
 
@@ -297,14 +297,15 @@ export default function NewTransactionPage() {
         return
       }
 
+      // Loan releases are cash going out, so the ledger stores them negative.
       const { error } = await supabase
         .from("transactions")
         .insert({
           member_id: effectiveMemberId,
           bank_account_id: null,
-          loan_id: newLoan.id,
-          type: "loan_disbursement",
-          amount: Number(amount),
+          loan_id: newLoan.loan_id,
+          classification: "Loan Release",
+          amount: -Number(amount),
           description,
           receipt_url: null,
           status: "pending",
@@ -323,13 +324,16 @@ export default function NewTransactionPage() {
     }
 
     if (isBankTransfer) {
+      // Cash-neutral: affects_cash 0 keeps it out of the cash ledger; the
+      // per-bank balances use bank_account_id / to_bank_account_id instead.
       const { error } = await supabase
         .from("transactions")
         .insert({
           member_id: null,
           bank_account_id: bankId,
           to_bank_account_id: toBankId,
-          type: "bank_transfer",
+          classification: "Internal Transfer",
+          affects_cash: 0,
           amount: Number(amount),
           description,
           receipt_url: null,
@@ -348,13 +352,14 @@ export default function NewTransactionPage() {
     }
 
     if (isAdminEntry) {
+      // Expenses are cash going out, so the ledger stores them negative.
       const { data: newTransaction, error } = await supabase
         .from("transactions")
         .insert({
           member_id: null,
           bank_account_id: bankId || null,
-          type: selectedType,
-          amount: Number(amount),
+          classification: selectedType === "bank_interest" ? "Bank Interest" : "Expense",
+          amount: selectedType === "expense" ? -Number(amount) : Number(amount),
           description,
           receipt_url: null,
           status: "approved"
@@ -372,27 +377,32 @@ export default function NewTransactionPage() {
       // Bank interest gets split across members immediately, proportional
       // to their balance right now — no manual step needed.
       if (selectedType === "bank_interest" && newTransaction) {
-        await distributeBankInterest(newTransaction.id)
+        await distributeBankInterest(newTransaction.transaction_id)
       }
 
       router.push("/transactions")
       return
     }
 
-    const dbType =
-      selectedType === "loan_payment" ? "loan_repayment" : selectedType
+    const classification =
+      selectedType === "loan_payment"
+        ? "Loan Repayment"
+        : selectedType === "withdrawal"
+        ? "Member Withdrawal"
+        : "Member Contribution"
 
     const status =
       isAdmin && isMemberLinkedType && onBehalfOfId ? "approved" : "pending"
 
+    // Withdrawals are cash going out, so the ledger stores them negative.
     const { error } = await supabase
       .from("transactions")
       .insert({
         member_id: effectiveMemberId,
         bank_account_id: bankId || null,
         loan_id: isLoanPayment ? selectedLoanId : null,
-        type: dbType,
-        amount: Number(amount),
+        classification,
+        amount: selectedType === "withdrawal" ? -Number(amount) : Number(amount),
         description,
         receipt_url: receiptUrl,
         status,
@@ -476,16 +486,16 @@ export default function NewTransactionPage() {
                   >
                     <option value="">Myself</option>
                     {allMembers
-                      .filter((m) => m.id !== memberId)
+                      .filter((m) => m.member_id !== memberId)
                       .map((m) => (
-                        <option key={m.id} value={m.id}>
+                        <option key={m.member_id} value={m.member_id}>
                           {m.name}
                         </option>
                       ))}
                   </select>
                   {onBehalfOfId && (
                     <p className="text-xs text-gold mt-2">
-                      This will be recorded as approved immediately for {allMembers.find((m) => m.id === onBehalfOfId)?.name}.
+                      This will be recorded as approved immediately for {allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.
                     </p>
                   )}
                 </div>
@@ -510,7 +520,7 @@ export default function NewTransactionPage() {
                       {myLoans
                         .filter((l) => l.status === "active")
                         .map((loan) => (
-                          <option key={loan.id} value={loan.id}>
+                          <option key={loan.loan_id} value={loan.loan_id}>
                             ₱{fmt(loan.principal)} from {loan.start_date}
                           </option>
                         ))}
@@ -738,14 +748,14 @@ export default function NewTransactionPage() {
                 <div className="pl-6 pr-5">
                   {recent.map((t, i) => (
                     <div
-                      key={t.id}
+                      key={t.transaction_id}
                       className={`py-3 flex justify-between items-center gap-3 ${
                         i !== recent.length - 1 ? "border-b border-dashed border-hairline" : ""
                       }`}
                     >
                       <div className="min-w-0">
                         <p className="text-sm text-ink">
-                          {typeLabels[t.type] || t.type}
+                          {typeLabels[t.classification] || t.classification}
                           <span className="text-ink-soft font-mono text-xs ml-2">
                             {new Date(t.created_at).toLocaleDateString()}
                           </span>
@@ -758,7 +768,7 @@ export default function NewTransactionPage() {
                       </div>
                       <div className="text-right shrink-0">
                         <p className="font-mono text-sm text-ink">
-                          ₱{fmt(t.amount)}
+                          ₱{fmt(Math.abs(t.amount))}
                         </p>
                         <p className="text-[10px] uppercase text-ink-soft font-mono">
                           {t.status}

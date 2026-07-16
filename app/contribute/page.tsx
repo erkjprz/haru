@@ -127,7 +127,7 @@ export default function ContributePage() {
 
     const { data: member } = await supabase
       .from("members")
-      .select("id, status")
+      .select("member_id, status")
       .eq("email", user.email)
       .single()
 
@@ -173,11 +173,11 @@ export default function ContributePage() {
       .from("transactions")
       .insert({
 
-        member_id: member.id,
+        member_id: member.member_id,
 
         bank_account_id: bankId,
 
-        type: "contribution",
+        classification: "Member Contribution",
 
         amount: Number(amount),
 
