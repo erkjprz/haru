@@ -29,7 +29,7 @@ export default function FundBreakdownPage() {
 
     const { data: allocations } = await supabase
       .from("investment_allocations")
-      .select("member_id, category, amount")
+      .select("member_id, allocation_type, amount")
 
     const { data: memberList } = await supabase
       .from("members")
@@ -53,7 +53,11 @@ export default function FundBreakdownPage() {
         const memberInvestmentResult =
           allocations
             ?.filter((a) => a.member_id === member.member_id)
-            .reduce((sum, a) => sum + Number(a.amount), 0) ?? 0
+            .reduce(
+              (sum, a) =>
+                sum + (a.allocation_type === "Investment Loss" ? -Number(a.amount) : Number(a.amount)),
+              0
+            ) ?? 0
 
         const ownershipPercent =
           netContributionTotal > 0
