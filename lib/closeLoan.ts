@@ -2,14 +2,14 @@ import { supabase } from "@/lib/supabase"
 
 // Closes a loan and distributes its gain/loss across gain-sharing-eligible
 // members (excludes the borrower, and excludes anyone with
-// gain_sharing_eligible = false, e.g. Yabie). `repaidApproved` must already
-// be computed by the caller from approved-only loan_repayment transactions —
-// this function does not re-derive it, so it can be reused by both the
-// manual close/write-off buttons (which already have this on hand) and the
+// gain_sharing_eligible = false). `repaidApproved` must already be computed
+// by the caller from approved-only Loan Repayment transactions — this
+// function does not re-derive it, so it can be reused by both the manual
+// close/write-off buttons (which already have this on hand) and the
 // auto-close trigger (which computes it fresh).
 export async function closeLoanAndDistributeGain(loan: {
   id: string
-  member_id: string
+  member_id: string | null
   principal: number | string
   repaidApproved: number
   borrowerName?: string
@@ -18,15 +18,15 @@ export async function closeLoanAndDistributeGain(loan: {
 
   const { data: allMembers } = await supabase
     .from("members")
-    .select("id, name, gain_sharing_eligible")
+    .select("member_id, name, gain_sharing_eligible")
 
   const eligibleMembers = (allMembers ?? []).filter(
-    (m) => m.id !== loan.member_id && m.gain_sharing_eligible !== false
+    (m) => m.member_id !== loan.member_id && m.gain_sharing_eligible !== false
   )
 
   const { data: allTransactions } = await supabase
     .from("transactions")
-    .select("member_id, type, amount, status")
+    .select("member_id, classification, amount, status")
     .eq("status", "approved")
 
   const { data: priorAllocations } = await supabase
@@ -34,16 +34,19 @@ export async function closeLoanAndDistributeGain(loan: {
     .select("member_id, amount")
 
   const balances = eligibleMembers.map((member) => {
-    const contributed = (allTransactions ?? [])
-      .filter((t) => t.member_id === member.id && t.type === "contribution")
-      .reduce((sum, t) => sum + Number(t.amount), 0)
-
-    const withdrawn = (allTransactions ?? [])
-      .filter((t) => t.member_id === member.id && t.type === "withdrawal")
+    // Ledger amounts are signed (contributions +, withdrawals −), so the
+    // member's net position is a straight sum.
+    const net = (allTransactions ?? [])
+      .filter(
+        (t) =>
+          t.member_id === member.member_id &&
+          (t.classification === "Member Contribution" ||
+            t.classification === "Member Withdrawal")
+      )
       .reduce((sum, t) => sum + Number(t.amount), 0)
 
     const priorNet = (priorAllocations ?? [])
-      .filter((a) => a.member_id === member.id)
+      .filter((a) => a.member_id === member.member_id)
       .reduce((sum, a) => sum + Number(a.amount), 0)
 
     // "Current Value" — same basis as /fund-breakdown — so this loan's
@@ -51,7 +54,7 @@ export async function closeLoanAndDistributeGain(loan: {
     // today (including past gains/losses), not just raw contributions.
     return {
       member,
-      balance: contributed - withdrawn + priorNet
+      balance: net + priorNet
     }
   })
 
@@ -63,7 +66,7 @@ export async function closeLoanAndDistributeGain(loan: {
     const label = gain > 0 ? "gain" : "loss"
 
     const allocationRows = balances.map((b) => ({
-      member_id: b.member.id,
+      member_id: b.member.member_id,
       loan_id: loan.id,
       year: currentYear,
       category,
@@ -73,11 +76,14 @@ export async function closeLoanAndDistributeGain(loan: {
 
     await supabase.from("investment_allocations").insert(allocationRows)
 
+    // Gain allocations are bookkeeping, not cash movement: affects_cash 0
+    // keeps them out of the cash ledger.
     const transactionRows = allocationRows.map((row) => ({
       member_id: row.member_id,
       bank_account_id: null,
       loan_id: loan.id,
-      type: "investment_allocation",
+      classification: "Gain Allocation",
+      affects_cash: 0,
       amount: row.amount,
       description: `Share of ${currentYear} loan ${label} (from ${loan.borrowerName || "a member"}'s loan)`,
       status: "approved"
@@ -86,10 +92,10 @@ export async function closeLoanAndDistributeGain(loan: {
     await supabase.from("transactions").insert(transactionRows)
   }
 
-  await supabase.from("loans").update({ status: "closed" }).eq("id", loan.id)
+  await supabase.from("loans").update({ status: "closed" }).eq("loan_id", loan.id)
 }
 
-// Call this right after approving a loan_repayment transaction. Fetches the
+// Call this right after approving a Loan Repayment transaction. Fetches the
 // loan fresh, checks whether it's now fully repaid (approved-only), and if
 // so closes it and distributes gain automatically. No-ops silently if the
 // loan isn't active or isn't fully repaid yet — safe to call after every
@@ -97,8 +103,8 @@ export async function closeLoanAndDistributeGain(loan: {
 export async function autoCloseLoanIfFullyRepaid(loanId: string) {
   const { data: loan } = await supabase
     .from("loans")
-    .select(`*, members ( name )`)
-    .eq("id", loanId)
+    .select(`*, members ( name ), borrowers ( name )`)
+    .eq("loan_id", loanId)
     .single()
 
   if (!loan || loan.status !== "active") return
@@ -107,7 +113,7 @@ export async function autoCloseLoanIfFullyRepaid(loanId: string) {
     .from("transactions")
     .select("amount")
     .eq("loan_id", loanId)
-    .eq("type", "loan_repayment")
+    .eq("classification", "Loan Repayment")
     .eq("status", "approved")
 
   const repaidApproved = (repayments ?? []).reduce(
@@ -116,15 +122,15 @@ export async function autoCloseLoanIfFullyRepaid(loanId: string) {
   )
 
   const totalRepayable =
-    Number(loan.principal) + Number(loan.principal) * (Number(loan.interest_rate) / 100)
+    Number(loan.principal) + Number(loan.principal) * (Number(loan.interest_rate ?? 0) / 100)
 
   if (repaidApproved < totalRepayable) return
 
   await closeLoanAndDistributeGain({
-    id: loan.id,
+    id: loan.loan_id,
     member_id: loan.member_id,
     principal: loan.principal,
     repaidApproved,
-    borrowerName: loan.members?.name
+    borrowerName: loan.members?.name || loan.borrowers?.name
   })
 }

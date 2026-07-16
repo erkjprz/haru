@@ -6,23 +6,31 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 
 const typeLabels: Record<string, string> = {
-  contribution: "Contribution",
-  withdrawal: "Withdrawal",
-  expense: "Expense",
-  loan_disbursement: "Loan Disbursement",
-  loan_repayment: "Loan Repayment",
-  investment_allocation: "Investment Allocation",
-  bank_interest: "Bank Interest"
+  "Member Contribution": "Contribution",
+  "Member Withdrawal": "Withdrawal",
+  "Expense": "Expense",
+  "Loan Release": "Loan Disbursement",
+  "Loan Repayment": "Loan Repayment",
+  "Gain Allocation": "Investment Allocation",
+  "Bank Interest": "Bank Interest",
+  "Internal Transfer": "Bank Transfer",
+  "Investment": "Investment",
+  "Investment Return": "Investment Return",
+  "Tax": "Tax",
+  "Opening Balance": "Opening Balance"
 }
 
 const typeColor: Record<string, string> = {
-  contribution: "text-sage border-sage",
-  withdrawal: "text-rust border-rust",
-  expense: "text-rust border-rust",
-  loan_disbursement: "text-gold border-gold",
-  loan_repayment: "text-gold border-gold",
-  investment_allocation: "text-ink-soft border-ink-soft",
-  bank_interest: "text-sage border-sage"
+  "Member Contribution": "text-sage border-sage",
+  "Member Withdrawal": "text-rust border-rust",
+  "Expense": "text-rust border-rust",
+  "Loan Release": "text-gold border-gold",
+  "Loan Repayment": "text-gold border-gold",
+  "Gain Allocation": "text-ink-soft border-ink-soft",
+  "Bank Interest": "text-sage border-sage",
+  "Investment Return": "text-sage border-sage",
+  "Investment": "text-gold border-gold",
+  "Tax": "text-rust border-rust"
 }
 
 export default function DashboardPage() {
@@ -59,24 +67,11 @@ export default function DashboardPage() {
     const allTransactions = transactions ?? []
     const nonRejected = allTransactions.filter(t => t.status !== "rejected")
 
+    // Ledger amounts are signed (contributions +, withdrawals/releases −),
+    // so cash on hand is just the sum of every cash-affecting row.
     const cashTotal =
       nonRejected.reduce((sum,t)=>{
-        if(t.type==="contribution"){
-          return sum + Number(t.amount)
-        }
-        if(
-          t.type==="expense" ||
-          t.type==="withdrawal"
-        ){
-          return sum - Number(t.amount)
-        }
-        if(t.type==="loan_disbursement"){
-          return sum - Number(t.amount)
-        }
-        if(t.type==="loan_repayment"){
-          return sum + Number(t.amount)
-        }
-        if(t.type==="bank_interest"){
+        if(Number(t.affects_cash) === 1){
           return sum + Number(t.amount)
         }
         return sum
@@ -86,7 +81,7 @@ export default function DashboardPage() {
 
     const contributionTotal =
       nonRejected
-        .filter(t => t.type === "contribution")
+        .filter(t => t.classification === "Member Contribution")
         .reduce(
           (sum,t) => sum + Number(t.amount),
           0
@@ -95,18 +90,20 @@ export default function DashboardPage() {
     setTotalContributions(contributionTotal)
 
     const withdrawalTotal =
-      nonRejected
-        .filter(t => t.type === "withdrawal")
-        .reduce(
-          (sum,t) => sum + Number(t.amount),
-          0
-        )
+      Math.abs(
+        nonRejected
+          .filter(t => t.classification === "Member Withdrawal")
+          .reduce(
+            (sum,t) => sum + Number(t.amount),
+            0
+          )
+      )
 
     setTotalWithdrawals(withdrawalTotal)
 
     const bankInterest =
       nonRejected
-        .filter(t => t.type === "bank_interest")
+        .filter(t => t.classification === "Bank Interest")
         .reduce(
           (sum,t) => sum + Number(t.amount),
           0
@@ -357,7 +354,7 @@ export default function DashboardPage() {
           <div className="mt-4 bg-paper-2 border border-hairline rounded-md p-5">
             {recentTransactions.map((transaction,i)=>(
               <div
-                key={transaction.id}
+                key={transaction.transaction_id}
                 className={`
                   py-4
                   ${
@@ -380,16 +377,16 @@ export default function DashboardPage() {
                           py-0.5
                           font-mono
                           ${
-                            typeColor[transaction.type]
+                            typeColor[transaction.classification]
                             ??
                             "text-ink-soft border-hairline"
                           }
                         `}
                       >
                         {
-                          typeLabels[transaction.type]
+                          typeLabels[transaction.classification]
                           ||
-                          transaction.type
+                          transaction.classification
                         }
                       </span>
                       <span className="text-[10px] text-ink-soft font-mono">
@@ -412,7 +409,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="font-mono font-semibold">
-                    ₱{fmt(transaction.amount)}
+                    ₱{fmt(Math.abs(transaction.amount))}
                   </div>
                 </div>
               </div>

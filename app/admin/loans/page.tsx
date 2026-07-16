@@ -38,33 +38,36 @@ export default function AdminLoansPage() {
       .from("loans")
       .select(`
         *,
-        members ( name )
+        members ( name ),
+        borrowers ( name )
       `)
       .order("start_date", { ascending: false })
 
     const { data: allTransactions } = await supabase
       .from("transactions")
-      .select("loan_id, type, amount, status")
+      .select("loan_id, classification, amount, status")
       .not("loan_id", "is", null)
       .neq("status", "rejected")
 
     const withProgress = (loanList ?? []).map((loan) => {
-      const related = (allTransactions ?? []).filter((t) => t.loan_id === loan.id)
+      const related = (allTransactions ?? []).filter((t) => t.loan_id === loan.loan_id)
 
-      const disbursed = related
-        .filter((t) => t.type === "loan_disbursement")
+      // Loan releases are stored negative in the ledger; flip the sign so
+      // "disbursed" reads as a positive magnitude.
+      const disbursed = -related
+        .filter((t) => t.classification === "Loan Release")
         .reduce((sum, t) => sum + Number(t.amount), 0)
 
       const repaid = related
-        .filter((t) => t.type === "loan_repayment")
+        .filter((t) => t.classification === "Loan Repayment")
         .reduce((sum, t) => sum + Number(t.amount), 0)
 
       const repaidApproved = related
-        .filter((t) => t.type === "loan_repayment" && t.status === "approved")
+        .filter((t) => t.classification === "Loan Repayment" && t.status === "approved")
         .reduce((sum, t) => sum + Number(t.amount), 0)
 
       const totalRepayable =
-        Number(loan.principal) + Number(loan.principal) * (Number(loan.interest_rate) / 100)
+        Number(loan.principal) + Number(loan.principal) * (Number(loan.interest_rate ?? 0) / 100)
 
       const remaining = totalRepayable - repaid
       const remainingApproved = totalRepayable - repaidApproved
@@ -95,35 +98,35 @@ export default function AdminLoansPage() {
   }
 
   async function approveLoan(loan: any) {
-    const bankId = approveBankChoice[loan.id]
+    const bankId = approveBankChoice[loan.loan_id]
     if (!bankId) return
 
-    setApprovingId(loan.id)
+    setApprovingId(loan.loan_id)
 
     await supabase
       .from("loans")
       .update({ status: "active" })
-      .eq("id", loan.id)
+      .eq("loan_id", loan.loan_id)
 
     await supabase
       .from("transactions")
       .update({ status: "approved", bank_account_id: bankId })
-      .eq("loan_id", loan.id)
-      .eq("type", "loan_disbursement")
+      .eq("loan_id", loan.loan_id)
+      .eq("classification", "Loan Release")
 
     setApprovingId(null)
     loadLoans()
   }
 
   async function handleClose(loan: any) {
-    setClosingId(loan.id)
+    setClosingId(loan.loan_id)
 
     await closeLoanAndDistributeGain({
-      id: loan.id,
+      id: loan.loan_id,
       member_id: loan.member_id,
       principal: loan.principal,
       repaidApproved: loan.repaidApproved,
-      borrowerName: loan.members?.name
+      borrowerName: loan.members?.name || loan.borrowers?.name
     })
 
     setClosingId(null)
@@ -131,18 +134,18 @@ export default function AdminLoansPage() {
   }
 
   async function reopenLoan(loan: any) {
-    setReopeningId(loan.id)
+    setReopeningId(loan.loan_id)
 
-    await supabase.from("investment_allocations").delete().eq("loan_id", loan.id)
-    await supabase.from("transactions").delete().eq("loan_id", loan.id).eq("type", "investment_allocation")
-    await supabase.from("loans").update({ status: "active" }).eq("id", loan.id)
+    await supabase.from("investment_allocations").delete().eq("loan_id", loan.loan_id)
+    await supabase.from("transactions").delete().eq("loan_id", loan.loan_id).eq("classification", "Gain Allocation")
+    await supabase.from("loans").update({ status: "active" }).eq("loan_id", loan.loan_id)
 
     setReopeningId(null)
     loadLoans()
   }
 
   function startEditLoan(loan: any) {
-    setEditingLoanId(loan.id)
+    setEditingLoanId(loan.loan_id)
     setEditPrincipal(String(loan.principal ?? ""))
     setEditInterestRate(String(loan.interest_rate ?? ""))
     setEditTermMonths(String(loan.term_months ?? ""))
@@ -168,14 +171,15 @@ export default function AdminLoansPage() {
       updates.principal = Number(editPrincipal)
     }
 
-    await supabase.from("loans").update(updates).eq("id", loan.id)
+    await supabase.from("loans").update(updates).eq("loan_id", loan.loan_id)
 
     if (loan.status === "requested") {
+      // Loan releases are stored negative in the ledger.
       await supabase
         .from("transactions")
-        .update({ amount: Number(editPrincipal) })
-        .eq("loan_id", loan.id)
-        .eq("type", "loan_disbursement")
+        .update({ amount: -Number(editPrincipal) })
+        .eq("loan_id", loan.loan_id)
+        .eq("classification", "Loan Release")
         .eq("status", "pending")
     }
 
@@ -246,12 +250,12 @@ export default function AdminLoansPage() {
           <div className="mt-8 space-y-4">
             {loans.map((loan) => {
               const netResult = loan.repaidApproved - Number(loan.principal)
-              const isEditing = editingLoanId === loan.id
-              const displayName = loan.loan_name || defaultLoanName(loan.start_date)
+              const isEditing = editingLoanId === loan.loan_id
+              const displayName = loan.name || defaultLoanName(loan.start_date)
 
               return (
                 <div
-                  key={loan.id}
+                  key={loan.loan_id}
                   className="bg-paper-2 border border-hairline rounded-sm relative overflow-hidden"
                 >
                   <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
@@ -262,7 +266,7 @@ export default function AdminLoansPage() {
                           {displayName}
                         </p>
                         <p className="text-xs text-ink-soft font-mono mt-1">
-                          Borrower: {loan.members?.name || "Unknown"}
+                          Borrower: {loan.members?.name || loan.borrowers?.name || "Unknown"}
                         </p>
                         <p className="text-xs text-ink-soft font-mono mt-0.5">
                           {loan.start_date} · {loan.interest_rate}% · {loan.term_months}mo · {loan.repayment_frequency}
@@ -392,9 +396,9 @@ export default function AdminLoansPage() {
                             </label>
                             <select
                               className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
-                              value={approveBankChoice[loan.id] || ""}
+                              value={approveBankChoice[loan.loan_id] || ""}
                               onChange={(e) =>
-                                setApproveBankChoice((prev) => ({ ...prev, [loan.id]: e.target.value }))
+                                setApproveBankChoice((prev) => ({ ...prev, [loan.loan_id]: e.target.value }))
                               }
                             >
                               <option value="">Select a bank</option>
@@ -407,9 +411,9 @@ export default function AdminLoansPage() {
                             <button
                               className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50"
                               onClick={() => approveLoan(loan)}
-                              disabled={!approveBankChoice[loan.id] || approvingId === loan.id}
+                              disabled={!approveBankChoice[loan.loan_id] || approvingId === loan.loan_id}
                             >
-                              {approvingId === loan.id ? "Approving..." : "Approve & Activate"}
+                              {approvingId === loan.loan_id ? "Approving..." : "Approve & Activate"}
                             </button>
                           </div>
                         )}
@@ -418,9 +422,9 @@ export default function AdminLoansPage() {
                           <button
                             className="mt-4 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold disabled:opacity-50"
                             onClick={() => handleClose(loan)}
-                            disabled={closingId === loan.id}
+                            disabled={closingId === loan.loan_id}
                           >
-                            {closingId === loan.id
+                            {closingId === loan.loan_id
                               ? "Closing & distributing..."
                               : `Close Loan & Distribute ₱${fmt(netResult)} Gain`}
                           </button>
@@ -445,9 +449,9 @@ export default function AdminLoansPage() {
                                 handleClose(loan)
                               }
                             }}
-                            disabled={closingId === loan.id}
+                            disabled={closingId === loan.loan_id}
                           >
-                            {closingId === loan.id ? "Closing..." : "Close Early (Write Off)"}
+                            {closingId === loan.loan_id ? "Closing..." : "Close Early (Write Off)"}
                           </button>
                         )}
 
@@ -461,9 +465,9 @@ export default function AdminLoansPage() {
                                 reopenLoan(loan)
                               }
                             }}
-                            disabled={reopeningId === loan.id}
+                            disabled={reopeningId === loan.loan_id}
                           >
-                            {reopeningId === loan.id ? "Reopening..." : "Reopen Loan"}
+                            {reopeningId === loan.loan_id ? "Reopening..." : "Reopen Loan"}
                           </button>
                         )}
                       </>

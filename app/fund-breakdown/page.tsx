@@ -11,13 +11,19 @@ export default function FundBreakdownPage() {
   async function load() {
     const { data: transactions } = await supabase
       .from("transactions")
-      .select("member_id, type, amount, status")
+      .select("member_id, classification, amount, status")
       .neq("status", "rejected")
 
+    // Ledger amounts are signed (contributions +, withdrawals −), so the
+    // net total is a straight sum over both classifications.
     const netContributionTotal =
       transactions?.reduce((sum, t) => {
-        if (t.type === "contribution") return sum + Number(t.amount)
-        if (t.type === "withdrawal") return sum - Number(t.amount)
+        if (
+          t.classification === "Member Contribution" ||
+          t.classification === "Member Withdrawal"
+        ) {
+          return sum + Number(t.amount)
+        }
         return sum
       }, 0) ?? 0
 
@@ -27,25 +33,26 @@ export default function FundBreakdownPage() {
 
     const { data: memberList } = await supabase
       .from("members")
-      .select("id, name")
+      .select("member_id, name")
 
     const breakdown =
       (memberList ?? []).map((member) => {
         const memberContributed =
           transactions
-            ?.filter((t) => t.member_id === member.id && t.type === "contribution")
+            ?.filter((t) => t.member_id === member.member_id && t.classification === "Member Contribution")
             .reduce((sum, t) => sum + Number(t.amount), 0) ?? 0
 
-        const memberWithdrawn =
+        const memberWithdrawn = Math.abs(
           transactions
-            ?.filter((t) => t.member_id === member.id && t.type === "withdrawal")
+            ?.filter((t) => t.member_id === member.member_id && t.classification === "Member Withdrawal")
             .reduce((sum, t) => sum + Number(t.amount), 0) ?? 0
+        )
 
         const netContributed = memberContributed - memberWithdrawn
 
         const memberInvestmentResult =
           allocations
-            ?.filter((a) => a.member_id === member.id)
+            ?.filter((a) => a.member_id === member.member_id)
             .reduce((sum, a) => sum + Number(a.amount), 0) ?? 0
 
         const ownershipPercent =

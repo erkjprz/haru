@@ -8,14 +8,14 @@ import ReceiptModal from "@/app/components/ReceiptModal"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 
 const typeLabels: Record<string, string> = {
-  contribution: "Contribution",
-  withdrawal: "Withdrawal",
-  expense: "Expense",
-  loan_disbursement: "Loan Disbursement",
-  loan_repayment: "Loan Repayment",
-  investment_allocation: "Investment Allocation",
-  bank_interest: "Bank Interest",
-  bank_transfer: "Bank Transfer"
+  "Member Contribution": "Contribution",
+  "Member Withdrawal": "Withdrawal",
+  "Expense": "Expense",
+  "Loan Release": "Loan Disbursement",
+  "Loan Repayment": "Loan Repayment",
+  "Gain Allocation": "Investment Allocation",
+  "Bank Interest": "Bank Interest",
+  "Internal Transfer": "Bank Transfer"
 }
 
 export default function AdminPage() {
@@ -98,17 +98,17 @@ export default function AdminPage() {
     await supabase
       .from("members")
       .update({ status: "approved" })
-      .eq("id", id)
+      .eq("member_id", id)
 
     loadData()
   }
 
   async function approveTransaction(id: string) {
-    const transaction = pendingTransactions.find((t) => t.id === id)
+    const transaction = pendingTransactions.find((t) => t.transaction_id === id)
 
     const updates: any = { status: "approved" }
 
-    if (transaction?.type === "withdrawal") {
+    if (transaction?.classification === "Member Withdrawal") {
       const bankId = withdrawalBankChoice[id]
       if (!bankId) return
       updates.bank_account_id = bankId
@@ -117,11 +117,11 @@ export default function AdminPage() {
     await supabase
       .from("transactions")
       .update(updates)
-      .eq("id", id)
+      .eq("transaction_id", id)
 
     // If this was a loan repayment and it just fully covers the loan,
     // this closes it and distributes gain automatically.
-    if (transaction?.type === "loan_repayment" && transaction.loan_id) {
+    if (transaction?.classification === "Loan Repayment" && transaction.loan_id) {
       await autoCloseLoanIfFullyRepaid(transaction.loan_id)
     }
 
@@ -132,7 +132,7 @@ export default function AdminPage() {
     await supabase
       .from("transactions")
       .update({ status: "rejected" })
-      .eq("id", id)
+      .eq("transaction_id", id)
 
     loadData()
   }
@@ -143,7 +143,7 @@ export default function AdminPage() {
     await supabase
       .from("members")
       .update({ status: "approved" })
-      .in("id", Array.from(selectedMemberIds))
+      .in("member_id", Array.from(selectedMemberIds))
 
     loadData()
   }
@@ -155,14 +155,14 @@ export default function AdminPage() {
 
     const affectedLoanIds = new Set(
       pendingTransactions
-        .filter((t) => ids.includes(t.id) && t.type === "loan_repayment" && t.loan_id)
+        .filter((t) => ids.includes(t.transaction_id) && t.classification === "Loan Repayment" && t.loan_id)
         .map((t) => t.loan_id)
     )
 
     await supabase
       .from("transactions")
       .update({ status: "approved" })
-      .in("id", ids)
+      .in("transaction_id", ids)
 
     for (const loanId of affectedLoanIds) {
       await autoCloseLoanIfFullyRepaid(loanId)
@@ -177,7 +177,7 @@ export default function AdminPage() {
     await supabase
       .from("transactions")
       .update({ status: "rejected" })
-      .in("id", Array.from(selectedTransactionIds))
+      .in("transaction_id", Array.from(selectedTransactionIds))
 
     loadData()
   }
@@ -253,31 +253,31 @@ export default function AdminPage() {
       t.description?.toLowerCase().includes(q) ||
       String(t.amount).includes(q)
     const matchesType = transactionTypeFilter
-      ? t.type === transactionTypeFilter
+      ? t.classification === transactionTypeFilter
       : true
     return matchesSearch && matchesType
   })
 
   const totalPendingAmount = pendingTransactions.reduce(
-    (sum, t) => sum + Number(t.amount),
+    (sum, t) => sum + Math.abs(Number(t.amount)),
     0
   )
 
   const allMembersSelected =
     filteredMembers.length > 0 &&
-    filteredMembers.every((m) => selectedMemberIds.has(m.id))
+    filteredMembers.every((m) => selectedMemberIds.has(m.member_id))
 
-  const bulkSelectableTransactions = filteredTransactions.filter((t) => t.type !== "withdrawal")
+  const bulkSelectableTransactions = filteredTransactions.filter((t) => t.classification !== "Member Withdrawal")
 
   const allTransactionsSelected =
     bulkSelectableTransactions.length > 0 &&
-    bulkSelectableTransactions.every((t) => selectedTransactionIds.has(t.id))
+    bulkSelectableTransactions.every((t) => selectedTransactionIds.has(t.transaction_id))
 
   function toggleSelectAllMembers() {
     if (allMembersSelected) {
       setSelectedMemberIds(new Set())
     } else {
-      setSelectedMemberIds(new Set(filteredMembers.map((m) => m.id)))
+      setSelectedMemberIds(new Set(filteredMembers.map((m) => m.member_id)))
     }
   }
 
@@ -285,7 +285,7 @@ export default function AdminPage() {
     if (allTransactionsSelected) {
       setSelectedTransactionIds(new Set())
     } else {
-      setSelectedTransactionIds(new Set(bulkSelectableTransactions.map((t) => t.id)))
+      setSelectedTransactionIds(new Set(bulkSelectableTransactions.map((t) => t.transaction_id)))
     }
   }
 
@@ -422,14 +422,14 @@ export default function AdminPage() {
             <div className="mt-3 space-y-3">
               {filteredMembers.map((member) => (
                 <div
-                  key={member.id}
+                  key={member.member_id}
                   className="bg-paper-2 border border-hairline rounded-md p-4 flex items-start gap-3"
                 >
                   <input
                     type="checkbox"
                     className="mt-1"
-                    checked={selectedMemberIds.has(member.id)}
-                    onChange={() => toggleMemberSelection(member.id)}
+                    checked={selectedMemberIds.has(member.member_id)}
+                    onChange={() => toggleMemberSelection(member.member_id)}
                   />
                   <div className="flex-1">
                     <p className="font-display font-medium">
@@ -440,7 +440,7 @@ export default function AdminPage() {
                     </p>
                     <button
                       className="mt-3 bg-ink text-paper px-4 py-2 rounded-sm text-sm"
-                      onClick={() => approveMember(member.id)}
+                      onClick={() => approveMember(member.member_id)}
                     >
                       Approve
                     </button>
@@ -528,15 +528,15 @@ export default function AdminPage() {
             <div className="mt-3 space-y-3">
               {filteredTransactions.map((transaction) => (
                 <div
-                  key={transaction.id}
+                  key={transaction.transaction_id}
                   className="bg-paper-2 border border-hairline rounded-md p-4 flex items-start gap-3"
                 >
-                  {transaction.type !== "withdrawal" && (
+                  {transaction.classification !== "Member Withdrawal" && (
                     <input
                       type="checkbox"
                       className="mt-1"
-                      checked={selectedTransactionIds.has(transaction.id)}
-                      onChange={() => toggleTransactionSelection(transaction.id)}
+                      checked={selectedTransactionIds.has(transaction.transaction_id)}
+                      onChange={() => toggleTransactionSelection(transaction.transaction_id)}
                     />
                   )}
                   <div className="flex-1">
@@ -549,10 +549,10 @@ export default function AdminPage() {
                       </p>
                     )}
                     <p className="text-sm font-mono">
-                      ₱{fmt(transaction.amount)}
+                      ₱{fmt(Math.abs(transaction.amount))}
                     </p>
                     <p className="text-sm text-ink-soft">
-                      Type: {typeLabels[transaction.type] || transaction.type}
+                      Type: {typeLabels[transaction.classification] || transaction.classification}
                     </p>
                     <p className="text-sm text-ink-soft">
                       Bank:{" "}
@@ -578,18 +578,18 @@ export default function AdminPage() {
                       </button>
                     )}
 
-                    {transaction.type === "withdrawal" && (
+                    {transaction.classification === "Member Withdrawal" && (
                       <div className="mt-3">
                         <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
                           Withdraw from bank
                         </label>
                         <select
                           className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
-                          value={withdrawalBankChoice[transaction.id] || ""}
+                          value={withdrawalBankChoice[transaction.transaction_id] || ""}
                           onChange={(e) =>
                             setWithdrawalBankChoice((prev) => ({
                               ...prev,
-                              [transaction.id]: e.target.value
+                              [transaction.transaction_id]: e.target.value
                             }))
                           }
                         >
@@ -606,17 +606,17 @@ export default function AdminPage() {
                     <div className="mt-4 flex gap-2">
                       <button
                         className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50"
-                        onClick={() => approveTransaction(transaction.id)}
+                        onClick={() => approveTransaction(transaction.transaction_id)}
                         disabled={
-                          transaction.type === "withdrawal" &&
-                          !withdrawalBankChoice[transaction.id]
+                          transaction.classification === "Member Withdrawal" &&
+                          !withdrawalBankChoice[transaction.transaction_id]
                         }
                       >
                         Approve
                       </button>
                       <button
                         className="border border-hairline px-4 py-2 rounded-sm text-sm"
-                        onClick={() => rejectTransaction(transaction.id)}
+                        onClick={() => rejectTransaction(transaction.transaction_id)}
                       >
                         Reject
                       </button>

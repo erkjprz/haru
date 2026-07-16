@@ -28,7 +28,7 @@ export default function AdminBanksPage() {
 
     const { data: relevantTransactions } = await supabase
       .from("transactions")
-      .select("bank_account_id, to_bank_account_id, type, amount, status, created_at")
+      .select("bank_account_id, to_bank_account_id, classification, amount, status, created_at")
       .eq("status", "approved")
       .gte("created_at", CUTOVER_DATE)
 
@@ -38,7 +38,9 @@ export default function AdminBanksPage() {
       )
 
       const netMovement = related.reduce((sum, t) => {
-        if (t.type === "bank_transfer") {
+        // Transfers are stored as one positive-amount row with the two banks
+        // on bank_account_id / to_bank_account_id.
+        if (t.classification === "Internal Transfer") {
           if (t.bank_account_id === bank.id) return sum - Number(t.amount)
           if (t.to_bank_account_id === bank.id) return sum + Number(t.amount)
           return sum
@@ -46,19 +48,9 @@ export default function AdminBanksPage() {
 
         if (t.bank_account_id !== bank.id) return sum
 
-        if (
-          t.type === "contribution" ||
-          t.type === "loan_repayment" ||
-          t.type === "bank_interest"
-        ) {
-          return sum + Number(t.amount)
-        }
-
-        if (t.type === "expense" || t.type === "loan_disbursement") {
-          return sum - Number(t.amount)
-        }
-
-        return sum
+        // Everything else is signed in the ledger (contributions +,
+        // expenses/releases −), so it just adds through.
+        return sum + Number(t.amount)
       }, 0)
 
       return {

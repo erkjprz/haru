@@ -7,23 +7,31 @@ import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
 
 const typeLabels: Record<string, string> = {
-  contribution: "Contribution",
-  withdrawal: "Withdrawal",
-  expense: "Expense",
-  loan_disbursement: "Loan Disbursement",
-  loan_repayment: "Loan Repayment",
-  investment_allocation: "Investment Allocation",
-  bank_interest: "Bank Interest"
+  "Member Contribution": "Contribution",
+  "Member Withdrawal": "Withdrawal",
+  "Expense": "Expense",
+  "Loan Release": "Loan Disbursement",
+  "Loan Repayment": "Loan Repayment",
+  "Gain Allocation": "Investment Allocation",
+  "Bank Interest": "Bank Interest",
+  "Internal Transfer": "Bank Transfer",
+  "Investment": "Investment",
+  "Investment Return": "Investment Return",
+  "Tax": "Tax",
+  "Opening Balance": "Opening Balance"
 }
 
 const typeColor: Record<string, string> = {
-  contribution: "text-sage border-sage",
-  withdrawal: "text-rust border-rust",
-  expense: "text-rust border-rust",
-  loan_disbursement: "text-gold border-gold",
-  loan_repayment: "text-gold border-gold",
-  investment_allocation: "text-ink-soft border-ink-soft",
-  bank_interest: "text-sage border-sage"
+  "Member Contribution": "text-sage border-sage",
+  "Member Withdrawal": "text-rust border-rust",
+  "Expense": "text-rust border-rust",
+  "Loan Release": "text-gold border-gold",
+  "Loan Repayment": "text-gold border-gold",
+  "Gain Allocation": "text-ink-soft border-ink-soft",
+  "Bank Interest": "text-sage border-sage",
+  "Investment Return": "text-sage border-sage",
+  "Investment": "text-gold border-gold",
+  "Tax": "text-rust border-rust"
 }
 
 export default function TransactionsPage() {
@@ -74,7 +82,7 @@ export default function TransactionsPage() {
   async function loadMembers() {
     const { data } = await supabase
       .from("members")
-      .select("id, name")
+      .select("member_id, name")
       .order("name")
 
     setMembers(data ?? [])
@@ -110,7 +118,7 @@ export default function TransactionsPage() {
 
   const selectedMember =
     members.find(
-      (m)=>m.id === selectedMemberId
+      (m)=>m.member_id === selectedMemberId
     )
 
   const filteredTransactions =
@@ -122,7 +130,7 @@ export default function TransactionsPage() {
 
       const typeMatch =
         selectedType
-          ? t.type === selectedType
+          ? t.classification === selectedType
           : true
 
       const yearMatch =
@@ -281,8 +289,8 @@ export default function TransactionsPage() {
               </option>
               {members.map((member)=>(
                 <option
-                  key={member.id}
-                  value={member.id}
+                  key={member.member_id}
+                  value={member.member_id}
                 >
                   {member.name}
                 </option>
@@ -412,7 +420,7 @@ export default function TransactionsPage() {
           <div className="mt-6 space-y-3">
             {filteredTransactions.map((transaction)=>(
               <div
-                key={transaction.id}
+                key={transaction.transaction_id}
                 className="
                   bg-paper-2
                   border border-hairline
@@ -443,16 +451,16 @@ export default function TransactionsPage() {
                           rounded-full
                           px-2 py-0.5
                           ${
-                            typeColor[transaction.type]
+                            typeColor[transaction.classification]
                             ??
                             "text-ink-soft border-hairline"
                           }
                         `}
                       >
                         {
-                          typeLabels[transaction.type]
+                          typeLabels[transaction.classification]
                           ||
-                          transaction.type
+                          transaction.classification
                         }
                       </span>
                       <span className="
@@ -520,7 +528,7 @@ export default function TransactionsPage() {
                       text-xl
                       font-semibold
                     ">
-                      ₱{fmt(transaction.amount)}
+                      ₱{fmt(Math.abs(transaction.amount))}
                     </div>
                     <div className="
                       text-[10px]
