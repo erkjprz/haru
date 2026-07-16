@@ -148,19 +148,21 @@ export default function TransactionsPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-paper text-ink font-sans">
+      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Full History
           </div>
 
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="font-display text-4xl font-semibold text-ink">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink">
               Transactions
             </h1>
             <button
               className="
-                shrink-0
+                w-full
+                sm:w-auto
+                sm:shrink-0
                 bg-gold
                 text-ink
                 px-5
@@ -173,6 +175,7 @@ export default function TransactionsPage() {
                 transition-opacity
                 flex
                 items-center
+                justify-center
                 gap-1.5
               "
               onClick={() => router.push("/transactions/new")}
@@ -234,6 +237,8 @@ export default function TransactionsPage() {
                 text-sm
                 rounded-sm
                 px-3 py-3
+                w-full
+                md:w-auto
               "
               value={selectedYear}
               onChange={(e)=>{
@@ -262,6 +267,8 @@ export default function TransactionsPage() {
                 text-sm
                 rounded-sm
                 px-3 py-3
+                w-full
+                md:w-auto
               "
               value={selectedMemberId}
               onChange={(e)=>{
@@ -290,6 +297,8 @@ export default function TransactionsPage() {
                 text-sm
                 rounded-sm
                 px-3 py-3
+                w-full
+                md:w-auto
               "
               value={selectedType}
               onChange={(e)=>{
@@ -316,6 +325,8 @@ export default function TransactionsPage() {
                 rounded-sm
                 px-3 py-3
                 text-sm
+                w-full
+                md:w-auto
               "
               onClick={clearFilters}
             >
@@ -479,6 +490,7 @@ export default function TransactionsPage() {
                         text-xs
                         text-ink-soft
                         mt-1
+                        break-words
                       ">
                         {transaction.description}
                       </p>
