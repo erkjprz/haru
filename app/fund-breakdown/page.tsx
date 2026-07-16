@@ -9,23 +9,35 @@ export default function FundBreakdownPage() {
   const [loading, setLoading] = useState(true)
 
   async function load() {
-    const { data: transactions } = await supabase
-      .from("transactions")
-      .select("member_id, classification, amount, status")
-      .neq("status", "rejected")
+    // The transactions table has more rows than Supabase's default per-request
+    // row cap, so a single unpaginated select silently truncates. Page through
+    // it in order so every row is accounted for.
+    const pageSize = 1000
+    const transactions: any[] = []
+    for (let from = 0; ; from += pageSize) {
+      const { data } = await supabase
+        .from("transactions")
+        .select("member_id, classification, amount, status")
+        .neq("status", "rejected")
+        .order("transaction_id", { ascending: true })
+        .range(from, from + pageSize - 1)
+
+      if (!data || data.length === 0) break
+      transactions.push(...data)
+      if (data.length < pageSize) break
+    }
 
     // Ledger amounts are signed (contributions +, withdrawals −), so the
     // net total is a straight sum over both classifications.
-    const netContributionTotal =
-      transactions?.reduce((sum, t) => {
-        if (
-          t.classification === "Member Contribution" ||
-          t.classification === "Member Withdrawal"
-        ) {
-          return sum + Number(t.amount)
-        }
-        return sum
-      }, 0) ?? 0
+    const netContributionTotal = transactions.reduce((sum, t) => {
+      if (
+        t.classification === "Member Contribution" ||
+        t.classification === "Member Withdrawal"
+      ) {
+        return sum + Number(t.amount)
+      }
+      return sum
+    }, 0)
 
     const { data: allocations } = await supabase
       .from("investment_allocations")
@@ -37,15 +49,14 @@ export default function FundBreakdownPage() {
 
     const breakdown =
       (memberList ?? []).map((member) => {
-        const memberContributed =
-          transactions
-            ?.filter((t) => t.member_id === member.member_id && t.classification === "Member Contribution")
-            .reduce((sum, t) => sum + Number(t.amount), 0) ?? 0
+        const memberContributed = transactions
+          .filter((t) => t.member_id === member.member_id && t.classification === "Member Contribution")
+          .reduce((sum, t) => sum + Number(t.amount), 0)
 
         const memberWithdrawn = Math.abs(
           transactions
-            ?.filter((t) => t.member_id === member.member_id && t.classification === "Member Withdrawal")
-            .reduce((sum, t) => sum + Number(t.amount), 0) ?? 0
+            .filter((t) => t.member_id === member.member_id && t.classification === "Member Withdrawal")
+            .reduce((sum, t) => sum + Number(t.amount), 0)
         )
 
         const netContributed = memberContributed - memberWithdrawn
