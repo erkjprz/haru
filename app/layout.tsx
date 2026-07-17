@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/ThemeProvider";
@@ -16,6 +16,20 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Haru",
   description: "Shared fund tracker",
+  appleWebApp: {
+    title: "Haru",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+// Theme is a manual toggle stored in localStorage (see ThemeProvider), not
+// driven by prefers-color-scheme, so this is just the pre-hydration default
+// -- ThemeProvider updates the theme-color meta tag to match on toggle.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#0a0a0a",
+  colorScheme: "dark light",
 };
 
 export default function RootLayout({
