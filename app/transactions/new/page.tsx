@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
-import ReceiptModal from "@/app/components/ReceiptModal"
+import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
+import { distributeBankInterest } from "@/lib/bankInterest"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -14,718 +15,773 @@ const typeLabels: Record<string, string> = {
   "Loan Repayment": "Loan Repayment",
   "Gain Allocation": "Investment Allocation",
   "Bank Interest": "Bank Interest",
-  "Internal Transfer": "Bank Transfer",
-  "Investment": "Investment",
-  "Investment Return": "Investment Return",
-  "Tax": "Tax",
-  "Opening Balance": "Opening Balance"
+  "Internal Transfer": "Bank Transfer"
 }
 
-const typeColor: Record<string, string> = {
-  "Member Contribution": "text-sage border-sage",
-  "Member Withdrawal": "text-rust border-rust",
-  "Expense": "text-rust border-rust",
-  "Loan Release": "text-gold border-gold",
-  "Loan Repayment": "text-gold border-gold",
-  "Gain Allocation": "text-ink-soft border-ink-soft",
-  "Bank Interest": "text-sage border-sage",
-  "Investment Return": "text-sage border-sage",
-  "Investment": "text-gold border-gold",
-  "Tax": "text-rust border-rust"
-}
+const ENTRY_TYPES = [
+  { key: "contribution", label: "Contribution", adminOnly: false },
+  { key: "withdrawal", label: "Withdrawal Request", adminOnly: false },
+  { key: "loan_request", label: "Loan Request", adminOnly: false },
+  { key: "loan_payment", label: "Loan Payment", adminOnly: false },
+  { key: "bank_interest", label: "Bank Interest", adminOnly: true },
+  { key: "expense", label: "Expense", adminOnly: true },
+  { key: "bank_transfer", label: "Bank Transfer", adminOnly: true }
+]
 
-// A transaction's real-world date is txn_date. created_at is a row-insert
-// audit timestamp and only happens to match txn_date for migrated rows
-// because the migration script set it that way -- it's not guaranteed to
-// stay in sync (e.g. manual edits, backfills). Always prefer txn_date,
-// falling back to created_at only for rows that genuinely have no txn_date.
-function effectiveDate(transaction: any): Date {
-  return new Date(transaction.txn_date ?? transaction.created_at)
-}
+const MEMBER_LINKED_TYPES = ["contribution", "withdrawal", "loan_request", "loan_payment"]
 
-// ~75% of rows have a description that's just the member's name typed back
-// (sometimes via an old alias like "Ekai"/"Ketty"/"Bors" -- member_id is
-// already resolved correctly for those, so the raw text adds nothing once
-// the member's name is the card title). Only show description when it
-// carries information beyond "this belongs to that member" -- e.g. Fund-level
-// rows (Tax, Bank Interest, Internal Transfer, Investment) where it's the
-// only content, or the rare genuine note.
-// Some non-Contribution/Withdrawal rows (e.g. Investment) can still end up
-// with a description that's just the linked member's name. Kept as a
-// fallback safety net even though the four classifications below are now
-// hidden unconditionally.
-function isRedundantDescription(description: string | null, memberName: string | null): boolean {
-  if (!description || !memberName) return false
-  return description.trim().toLowerCase() === memberName.trim().toLowerCase()
-}
-
-// Tax and Bank Interest rows have no member -- their description ("tax",
-// "interest", "maya interest") was the only way to tell them apart from
-// each other and to see which bank they belonged to. Now that the type
-// badge already says TAX / BANK INTEREST and the bank pill already shows
-// BDO / Maya, that description adds nothing. Member Contribution and
-// Member Withdrawal descriptions are, in practice, always just the
-// member's name (raw or aliased) -- redundant with the card title -- so
-// they're hidden unconditionally too rather than only when they happen to
-// match. Loan Release/Repayment and Internal Transfer get their own
-// richer displays below instead of the raw description.
-const CLASSIFICATIONS_WITH_HIDDEN_DESCRIPTION = new Set([
-  "Member Contribution",
-  "Member Withdrawal",
-  "Bank Interest",
-  "Tax"
-])
-
-// Each legacy (migrated) bank transfer is stored as two rows (a
-// negative-amount leg on the source bank, a positive-amount leg on the
-// destination bank, same date, same absolute amount, identified via the
-// plain `bank` text column) rather than one row with a from/to pair -- see
-// project notes on Internal Transfer. New transfers created through the
-// app are a single row instead, with both ends on bank_account_id /
-// to_bank_account_id. transferDirectionLabel below handles both shapes.
-function findTransferPair(transaction: any, allTransactions: any[]): any | null {
-  return (
-    allTransactions.find(
-      (other) =>
-        other.transaction_id !== transaction.transaction_id &&
-        other.classification === "Internal Transfer" &&
-        other.txn_date === transaction.txn_date &&
-        Number(other.amount) === -Number(transaction.amount)
-    ) ?? null
-  )
-}
-
-function bankAccountLabel(account: any): string | null {
-  if (!account) return null
-  return account.account_name || account.bank_name || null
-}
-
-function transferDirectionLabel(transaction: any, allTransactions: any[]): string | null {
-  // New single-row shape: both ends are already on this row.
-  const fromAccount = bankAccountLabel(transaction.from_bank_account)
-  const toAccount = bankAccountLabel(transaction.to_bank_account)
-  if (fromAccount && toAccount) {
-    return `${fromAccount} → ${toAccount}`
-  }
-
-  // Legacy two-row shape: find the counterpart leg and use the plain
-  // `bank` text column from each side instead.
-  const pair = findTransferPair(transaction, allTransactions)
-  if (!pair || !transaction.bank || !pair.bank) return null
-
-  const fromLeg = Number(transaction.amount) < 0 ? transaction : pair
-  const toLeg = Number(transaction.amount) < 0 ? pair : transaction
-
-  return `${fromLeg.bank} → ${toLeg.bank}`
-}
-
-export default function TransactionsPage() {
+export default function NewTransactionPage() {
   const router = useRouter()
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [totalCount, setTotalCount] = useState(0)
-  const [members, setMembers] = useState<any[]>([])
-  const [selectedMemberId, setSelectedMemberId] = useState("")
-  const [selectedType, setSelectedType] = useState("")
-  const [selectedYear, setSelectedYear] = useState("")
-  const [showFilters, setShowFilters] = useState(false)
-  const [loadError, setLoadError] = useState("")
-  const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
+  const [checkingAccess, setCheckingAccess] = useState(true)
+  const [memberId, setMemberId] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [banks, setBanks] = useState<any[]>([])
+  const [allMembers, setAllMembers] = useState<any[]>([])
+  const [recent, setRecent] = useState<any[]>([])
+  const [myLoans, setMyLoans] = useState<any[]>([])
 
-  async function loadTransactions() {
-    // members needs an explicit FK hint: transactions has two FKs into
-    // members (member_id, submitted_by), so a bare `members(...)` embed is
-    // ambiguous and PostgREST errors on it.
-    //
-    // bank_accounts is intentionally NOT joined here anymore -- the
-    // bank_accounts table has zero rows (bank_account_id is never populated
-    // on any transaction), so that embed always resolved to null. The real
-    // bank info (BDO / Maya) lives in transactions.bank, a plain text
-    // column that's populated on every logs-sourced row. We select it
-    // directly via `*` below instead of joining a table that holds no data.
-    //
-    // .range() is required: without an explicit range, PostgREST applies its
-    // own default row cap (1000), which silently truncates the result and
-    // makes "Showing X of Y" lie about the real total. 4999 comfortably
-    // covers current volume; if the table keeps growing, switch this to
-    // real server-side pagination ("Load more" / page tokens) instead of
-    // raising the number again.
-    // bank_accounts is now used again -- populated going forward with real
-    // rows (BDO / Maya). New Internal Transfer rows carry both ends on a
-    // single row via bank_account_id (from) and to_bank_account_id (to);
-    // legacy migrated transfers instead used two separate rows with the
-    // plain `bank` text column and have null bank_account_id/to_bank_account_id
-    // (see transferDirectionLabel below, which handles both shapes).
-    const { data, error, count } = await supabase
+  const [selectedType, setSelectedType] = useState("contribution")
+  const [onBehalfOfId, setOnBehalfOfId] = useState("")
+  const [bankId, setBankId] = useState("")
+  const [toBankId, setToBankId] = useState("")
+  const [amount, setAmount] = useState("")
+  const [description, setDescription] = useState("")
+  const [receipt, setReceipt] = useState<File | null>(null)
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
+  const [dragActive, setDragActive] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState("")
+
+  const [interestRate, setInterestRate] = useState("")
+  const [termMonths, setTermMonths] = useState("")
+  const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
+  const [selectedLoanId, setSelectedLoanId] = useState("")
+
+  async function loadRecent(id: string) {
+    const { data } = await supabase
       .from("transactions")
-      .select(
-        `
-        *,
-        members!transactions_member_id_fkey (
-          name,
-          email
-        ),
-        submitted_by_member:members!transactions_submitted_by_fkey (
-          name
-        ),
-        loans!transactions_loan_id_fkey (
-          name,
-          borrowers!loans_borrower_id_fkey (
-            name
-          )
-        ),
-        from_bank_account:bank_accounts!transactions_bank_account_id_fkey (
-          bank_name,
-          account_name
-        ),
-        to_bank_account:bank_accounts!transactions_to_bank_account_id_fkey (
-          bank_name,
-          account_name
-        )
-      `,
-        { count: "exact" }
-      )
-      .order("txn_date", { ascending: false, nullsFirst: false })
+      .select("transaction_id, classification, amount, description, status, created_at")
+      .eq("member_id", id)
       .order("created_at", { ascending: false })
-      .range(0, 4999)
+      .limit(5)
 
-    if (error) {
-      setLoadError(error.message)
-      setTransactions([])
-      setTotalCount(0)
-      return
-    }
-
-    setLoadError("")
-    setTransactions(data ?? [])
-    setTotalCount(count ?? (data?.length ?? 0))
+    setRecent(data ?? [])
   }
 
-  async function loadMembers() {
+  async function loadLoansFor(id: string) {
     const { data } = await supabase
-      .from("members")
-      .select("member_id, name")
-      .order("name")
+      .from("loans")
+      .select("loan_id, principal, interest_rate, term_months, status, start_date")
+      .eq("member_id", id)
+      .in("status", ["active", "requested"])
+      .order("start_date", { ascending: false })
 
-    setMembers(data ?? [])
+    setMyLoans(data ?? [])
   }
 
   useEffect(() => {
-    loadTransactions()
-    loadMembers()
+    async function checkAccess() {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.push("/login")
+        return
+      }
+
+      const { data: member } = await supabase
+        .from("members")
+        .select("member_id, status, role")
+        .eq("email", user.email)
+        .single()
+
+      if (!member || member.status !== "approved") {
+        router.push("/waiting")
+        return
+      }
+
+      setMemberId(member.member_id)
+      setIsAdmin(member.role === "admin")
+
+      const { data: bankList } = await supabase
+        .from("bank_accounts")
+        .select("id, bank_name, account_name")
+        .order("bank_name")
+
+      setBanks(bankList ?? [])
+
+      if (member.role === "admin") {
+        const { data: memberList } = await supabase
+          .from("members")
+          .select("member_id, name")
+          .order("name")
+
+        setAllMembers(memberList ?? [])
+      }
+
+      await loadRecent(member.member_id)
+      await loadLoansFor(member.member_id)
+      setCheckingAccess(false)
+    }
+
+    checkAccess()
   }, [])
 
-  function closeFilters() {
-    setShowFilters(false)
+  const visibleTypes = ENTRY_TYPES.filter((t) => !t.adminOnly || isAdmin)
+  const isMemberLinkedType = MEMBER_LINKED_TYPES.includes(selectedType)
+  const effectiveMemberId =
+    isAdmin && isMemberLinkedType && onBehalfOfId ? onBehalfOfId : memberId
+
+  // Who actually clicked submit, when it's not the same person the
+  // transaction is recorded for. Null for normal self-submissions.
+  const submittedByForOnBehalf =
+    isAdmin && isMemberLinkedType && onBehalfOfId ? memberId : null
+
+  const isBankTransfer = selectedType === "bank_transfer"
+  const isAdminEntry =
+    selectedType === "bank_interest" ||
+    selectedType === "expense" ||
+    selectedType === "bank_transfer"
+  const needsReceipt =
+    (selectedType === "contribution" || selectedType === "loan_payment") && !isAdminEntry
+  const needsBank =
+    selectedType === "contribution" ||
+    selectedType === "loan_payment" ||
+    selectedType === "bank_interest" ||
+    selectedType === "expense" ||
+    isBankTransfer
+  const isLoanRequest = selectedType === "loan_request"
+  const isLoanPayment = selectedType === "loan_payment"
+
+  const helperText: Record<string, string> = {
+    contribution: "You've already sent this money. Attach proof of deposit.",
+    withdrawal: "You're requesting money to be sent to you. No receipt needed yet.",
+    loan_request: "You're requesting to borrow from the fund. No receipt needed yet.",
+    loan_payment: "You've already sent this repayment. Attach proof of deposit.",
+    bank_interest: "Recording interest earned by a bank account. Goes straight in as approved.",
+    expense: "Recording money spent out of the fund. Goes straight in as approved.",
+    bank_transfer: "Moving money between two of the fund's own banks. Doesn't affect total contributions or cash — it's just internal."
   }
 
-  function clearFilters() {
-    setSelectedYear("")
-    setSelectedMemberId("")
-    setSelectedType("")
+  const previewTotalRepayable =
+    amount && interestRate
+      ? Number(amount) + Number(amount) * (Number(interestRate) / 100)
+      : 0
+
+  const previewPerInstallment =
+    previewTotalRepayable && termMonths && repaymentFrequency === "monthly"
+      ? previewTotalRepayable / Number(termMonths)
+      : previewTotalRepayable
+
+  function setReceiptFile(file: File | null) {
+    setReceipt(file)
+    setReceiptPreview(file ? URL.createObjectURL(file) : null)
   }
 
-  const typeOptions = Object.keys(typeLabels)
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragActive(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) setReceiptFile(file)
+  }
 
-  const yearOptions = Array.from(
-    new Set(
-      transactions.map((t) =>
-        effectiveDate(t)
-          .getFullYear()
-          .toString()
-      )
+  async function handleTypeChange(newType: string) {
+    setSelectedType(newType)
+    setReceiptFile(null)
+    setBankId("")
+    setToBankId("")
+    setInterestRate("")
+    setTermMonths("")
+    setRepaymentFrequency("monthly")
+    setSelectedLoanId("")
+    setOnBehalfOfId("")
+
+    if (newType === "loan_payment" && memberId) {
+      await loadLoansFor(memberId)
+    }
+  }
+
+  async function handleOnBehalfChange(id: string) {
+    setOnBehalfOfId(id)
+    setSelectedLoanId("")
+
+    if (selectedType === "loan_payment") {
+      await loadLoansFor(id || memberId || "")
+    }
+  }
+
+  async function handleSubmit() {
+    setMessage("")
+
+    if (!amount || Number(amount) <= 0) {
+      setMessage("Enter a valid amount.")
+      return
+    }
+
+    if (needsBank && !bankId) {
+      setMessage(isBankTransfer ? "Select a source bank." : "Select a bank.")
+      return
+    }
+
+    if (isBankTransfer && !toBankId) {
+      setMessage("Select a destination bank.")
+      return
+    }
+
+    if (isBankTransfer && bankId === toBankId) {
+      setMessage("Source and destination banks must be different.")
+      return
+    }
+
+    if (needsReceipt && !receipt) {
+      setMessage("Attach a receipt.")
+      return
+    }
+
+    if (isLoanRequest && (!interestRate || !termMonths)) {
+      setMessage("Enter interest rate and term.")
+      return
+    }
+
+    if (isLoanPayment && !selectedLoanId) {
+      setMessage("Select which loan you're paying.")
+      return
+    }
+
+    setSubmitting(true)
+
+    let receiptUrl = null
+
+    if (receipt) {
+      const fileName = `${effectiveMemberId}-${Date.now()}-${receipt.name}`
+
+      const { error: uploadError } = await supabase.storage
+        .from("Receipts")
+        .upload(fileName, receipt, {
+          contentType: receipt.type
+        })
+
+      if (uploadError) {
+        setMessage(uploadError.message)
+        setSubmitting(false)
+        return
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("Receipts")
+        .getPublicUrl(fileName)
+
+      receiptUrl = urlData.publicUrl
+    }
+
+    if (isLoanRequest) {
+      const { data: newLoan, error: loanError } = await supabase
+        .from("loans")
+        .insert({
+          member_id: effectiveMemberId,
+          principal: Number(amount),
+          interest_rate: Number(interestRate),
+          term_months: Number(termMonths),
+          repayment_frequency: repaymentFrequency,
+          status: "requested",
+          start_date: new Date().toISOString().slice(0, 10),
+          notes: description
+        })
+        .select()
+        .single()
+
+      if (loanError) {
+        setMessage(loanError.message)
+        setSubmitting(false)
+        return
+      }
+
+      // Loan releases are cash going out, so the ledger stores them negative.
+      const { error } = await supabase
+        .from("transactions")
+        .insert({
+          member_id: effectiveMemberId,
+          bank_account_id: null,
+          loan_id: newLoan.loan_id,
+          classification: "Loan Release",
+          amount: -Number(amount),
+          description,
+          receipt_url: null,
+          status: "pending",
+          submitted_by: submittedByForOnBehalf
+        })
+
+      setSubmitting(false)
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      router.push("/transactions")
+      return
+    }
+
+    if (isBankTransfer) {
+      // Cash-neutral: affects_cash 0 keeps it out of the cash ledger; the
+      // per-bank balances use bank_account_id / to_bank_account_id instead.
+      const { error } = await supabase
+        .from("transactions")
+        .insert({
+          member_id: null,
+          bank_account_id: bankId,
+          to_bank_account_id: toBankId,
+          classification: "Internal Transfer",
+          affects_cash: 0,
+          amount: Number(amount),
+          description,
+          receipt_url: null,
+          status: "approved"
+        })
+
+      setSubmitting(false)
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      router.push("/transactions")
+      return
+    }
+
+    if (isAdminEntry) {
+      // Expenses are cash going out, so the ledger stores them negative.
+      const { data: newTransaction, error } = await supabase
+        .from("transactions")
+        .insert({
+          member_id: null,
+          bank_account_id: bankId || null,
+          classification: selectedType === "bank_interest" ? "Bank Interest" : "Expense",
+          amount: selectedType === "expense" ? -Number(amount) : Number(amount),
+          description,
+          receipt_url: null,
+          status: "approved"
+        })
+        .select()
+        .single()
+
+      setSubmitting(false)
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      // Bank interest gets split across members immediately, proportional
+      // to their balance right now — no manual step needed.
+      if (selectedType === "bank_interest" && newTransaction) {
+        await distributeBankInterest(newTransaction.transaction_id)
+      }
+
+      router.push("/transactions")
+      return
+    }
+
+    const classification =
+      selectedType === "loan_payment"
+        ? "Loan Repayment"
+        : selectedType === "withdrawal"
+        ? "Member Withdrawal"
+        : "Member Contribution"
+
+    const status =
+      isAdmin && isMemberLinkedType && onBehalfOfId ? "approved" : "pending"
+
+    // Withdrawals are cash going out, so the ledger stores them negative.
+    const { error } = await supabase
+      .from("transactions")
+      .insert({
+        member_id: effectiveMemberId,
+        bank_account_id: bankId || null,
+        loan_id: isLoanPayment ? selectedLoanId : null,
+        classification,
+        amount: selectedType === "withdrawal" ? -Number(amount) : Number(amount),
+        description,
+        receipt_url: receiptUrl,
+        status,
+        submitted_by: submittedByForOnBehalf
+      })
+
+    setSubmitting(false)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    // If an admin just instant-approved a repayment on someone's behalf and
+    // it fully covers the loan, close it and distribute gain automatically.
+    if (isLoanPayment && status === "approved" && selectedLoanId) {
+      await autoCloseLoanIfFullyRepaid(selectedLoanId)
+    }
+
+    router.push("/transactions")
+  }
+
+  const fmt = (n: number) =>
+    Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  if (checkingAccess) {
+    return (
+      <>
+        <Navbar />
+        <main className="p-6 bg-paper min-h-screen text-ink font-sans">
+          Loading...
+        </main>
+      </>
     )
-  )
-    .sort((a,b)=>Number(b)-Number(a))
-
-  const selectedMember =
-    members.find(
-      (m)=>m.member_id === selectedMemberId
-    )
-
-  const filteredTransactions =
-    transactions.filter((t)=>{
-      const memberMatch =
-        selectedMemberId
-          ? t.member_id === selectedMemberId
-          : true
-
-      const typeMatch =
-        selectedType
-          ? t.classification === selectedType
-          : true
-
-      const yearMatch =
-        selectedYear
-          ? effectiveDate(t)
-              .getFullYear()
-              .toString() === selectedYear
-          : true
-
-      return (
-        memberMatch &&
-        typeMatch &&
-        yearMatch
-      )
-    })
-
-  const fmt = (n:number)=>
-    Number(n).toLocaleString(undefined,{
-      minimumFractionDigits:2,
-      maximumFractionDigits:2
-    })
+  }
 
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+      <main className="min-h-screen bg-paper text-ink font-sans">
+        <div className="max-w-lg mx-auto px-5 pt-10 pb-24">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
-            Full History
+            New Entry
           </div>
+          <h1 className="font-display text-4xl font-semibold text-ink">
+            New Transaction
+          </h1>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink">
-              Transactions
-            </h1>
-            <button
-              className="
-                w-full
-                sm:w-auto
-                sm:shrink-0
-                bg-gold
-                text-ink
-                px-5
-                py-3
-                rounded-sm
-                text-sm
-                font-semibold
-                shadow-sm
-                hover:opacity-90
-                transition-opacity
-                flex
-                items-center
-                justify-center
-                gap-1.5
-              "
-              onClick={() => router.push("/transactions/new")}
-            >
-              <span className="text-lg leading-none">+</span>
-              New Transaction
-            </button>
-          </div>
-
-          {loadError && (
-            <p className="mt-4 text-sm text-rust">
-              Couldn't load transactions: {loadError}
-            </p>
-          )}
-
-          <button
-            className="
-              mt-6
-              md:hidden
-              w-full
-              border
-              border-hairline
-              bg-paper-2
-              rounded-sm
-              px-4
-              py-3
-              text-sm
-              text-left
-            "
-            onClick={() =>
-              setShowFilters(!showFilters)
-            }
-          >
-            Filters
-            <span className="float-right">
-              {showFilters ? "−" : "+"}
-            </span>
-          </button>
-
-          <div
-            className={`
-              mt-3
-              gap-3
-              ${
-                showFilters
-                  ? "flex flex-col"
-                  : "hidden"
-              }
-              md:flex
-              md:flex-row
-              md:flex-wrap
-            `}
-          >
-            <select
-              className="
-                border border-hairline
-                bg-paper-2
-                text-ink
-                text-sm
-                rounded-sm
-                px-3 py-3
-                w-full
-                md:w-auto
-              "
-              value={selectedYear}
-              onChange={(e)=>{
-                setSelectedYear(e.target.value)
-                closeFilters()
-              }}
-            >
-              <option value="">
-                All years
-              </option>
-              {yearOptions.map((year)=>(
-                <option
-                  key={year}
-                  value={year}
+          <div className="mt-8 bg-paper-2 border border-hairline rounded-sm relative overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
+            <div className="pl-6 pr-5 py-6 space-y-4">
+              <div>
+                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                  Type
+                </label>
+                <select
+                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                  value={selectedType}
+                  onChange={(e) => handleTypeChange(e.target.value)}
                 >
-                  {year}
-                </option>
-              ))}
-            </select>
+                  {visibleTypes.map((t) => (
+                    <option key={t.key} value={t.key}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-ink-soft mt-2">
+                  {helperText[selectedType]}
+                </p>
+              </div>
 
-            <select
-              className="
-                border border-hairline
-                bg-paper-2
-                text-ink
-                text-sm
-                rounded-sm
-                px-3 py-3
-                w-full
-                md:w-auto
-              "
-              value={selectedMemberId}
-              onChange={(e)=>{
-                setSelectedMemberId(e.target.value)
-                closeFilters()
-              }}
-            >
-              <option value="">
-                All members
-              </option>
-              {members.map((member)=>(
-                <option
-                  key={member.member_id}
-                  value={member.member_id}
-                >
-                  {member.name}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className="
-                border border-hairline
-                bg-paper-2
-                text-ink
-                text-sm
-                rounded-sm
-                px-3 py-3
-                w-full
-                md:w-auto
-              "
-              value={selectedType}
-              onChange={(e)=>{
-                setSelectedType(e.target.value)
-                closeFilters()
-              }}
-            >
-              <option value="">
-                All types
-              </option>
-              {typeOptions.map((type)=>(
-                <option
-                  key={type}
-                  value={type}
-                >
-                  {typeLabels[type]}
-                </option>
-              ))}
-            </select>
-
-            <button
-              className="
-                border border-hairline
-                rounded-sm
-                px-3 py-3
-                text-sm
-                w-full
-                md:w-auto
-              "
-              onClick={clearFilters}
-            >
-              Clear Filters
-            </button>
-          </div>
-
-          {(selectedYear ||
-            selectedMemberId ||
-            selectedType) && (
-            <div className="
-              mt-4
-              flex
-              flex-wrap
-              gap-2
-            ">
-              {selectedYear && (
-                <button
-                  className="
-                    border
-                    border-hairline
-                    bg-paper-2
-                    rounded-full
-                    px-3 py-1
-                    text-xs
-                    font-mono
-                  "
-                  onClick={()=>{
-                    setSelectedYear("")
-                  }}
-                >
-                  Year: {selectedYear} ×
-                </button>
-              )}
-              {selectedMemberId && (
-                <button
-                  className="
-                    border
-                    border-hairline
-                    bg-paper-2
-                    rounded-full
-                    px-3 py-1
-                    text-xs
-                    font-mono
-                  "
-                  onClick={()=>{
-                    setSelectedMemberId("")
-                  }}
-                >
-                  Member: {selectedMember?.name} ×
-                </button>
-              )}
-              {selectedType && (
-                <button
-                  className="
-                    border
-                    border-hairline
-                    bg-paper-2
-                    rounded-full
-                    px-3 py-1
-                    text-xs
-                    font-mono
-                  "
-                  onClick={()=>{
-                    setSelectedType("")
-                  }}
-                >
-                  Type: {typeLabels[selectedType]} ×
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="
-            mt-4
-            text-xs
-            text-ink-soft
-            font-mono
-          ">
-            Showing {filteredTransactions.length} of {totalCount}
-          </div>
-
-          <div className="mt-6 space-y-3">
-            {filteredTransactions.map((transaction)=>{
-              const memberName = transaction.members?.name || null
-              const isLoanTxn =
-                transaction.classification === "Loan Release" ||
-                transaction.classification === "Loan Repayment"
-              const isTransferTxn = transaction.classification === "Internal Transfer"
-
-              const loanName = transaction.loans?.name || null
-              const borrowerName = transaction.loans?.borrowers?.name || null
-              const transferLabel = isTransferTxn
-                ? transferDirectionLabel(transaction, transactions)
-                : null
-
-              // Borrower-only loans (e.g. Joy, who isn't a fund member) have
-              // no member_id, so fall back to the borrower's name as the
-              // card title instead of leaving it as generic "Fund".
-              const displayName = memberName || (isLoanTxn ? borrowerName : null) || "Fund"
-
-              const showDescription =
-                transaction.description &&
-                !isRedundantDescription(transaction.description, memberName) &&
-                !CLASSIFICATIONS_WITH_HIDDEN_DESCRIPTION.has(transaction.classification) &&
-                !isLoanTxn &&
-                !isTransferTxn
-
-              return (
-                <div
-                  key={transaction.transaction_id}
-                  className="
-                    bg-paper-2
-                    border border-hairline
-                    rounded-md
-                    p-4
-                  "
-                >
-                  <div className="
-                    flex
-                    justify-between
-                    items-start
-                    gap-3
-                  ">
-                    <div className="min-w-0">
-                      <div className="
-                        flex
-                        items-center
-                        gap-2
-                        flex-wrap
-                      ">
-                        <span
-                          className={`
-                            text-[9px]
-                            uppercase
-                            tracking-widest
-                            font-mono
-                            border
-                            rounded-full
-                            px-2 py-0.5
-                            ${
-                              typeColor[transaction.classification]
-                              ??
-                              "text-ink-soft border-hairline"
-                            }
-                          `}
-                        >
-                          {
-                            typeLabels[transaction.classification]
-                            ||
-                            transaction.classification
-                          }
-                        </span>
-                        {transaction.bank && !isTransferTxn && (
-                          <span className="
-                            text-[9px]
-                            uppercase
-                            tracking-widest
-                            font-mono
-                            border
-                            border-hairline
-                            text-ink-soft
-                            rounded-full
-                            px-2 py-0.5
-                          ">
-                            {transaction.bank}
-                          </span>
-                        )}
-                        <span className="
-                          text-xs
-                          text-ink-soft
-                          font-mono
-                        ">
-                          {
-                            effectiveDate(transaction)
-                              .toLocaleDateString()
-                          }
-                        </span>
-                      </div>
-                      <div className="
-                        font-display
-                        text-lg
-                        font-medium
-                        mt-2
-                      ">
-                        {displayName}
-                      </div>
-                      {transaction.submitted_by_member && (
-                        <p className="text-[11px] text-gold font-mono mt-0.5">
-                          Recorded by {transaction.submitted_by_member.name}
-                        </p>
-                      )}
-                      {isLoanTxn && loanName && (
-                        <p className="text-xs text-ink-soft mt-1 font-mono">
-                          {loanName}
-                        </p>
-                      )}
-                      {isTransferTxn && transferLabel && (
-                        <p className="text-xs text-ink-soft mt-1 font-mono">
-                          {transferLabel}
-                        </p>
-                      )}
-                      {showDescription && (
-                        <p className="
-                          text-xs
-                          text-ink-soft
-                          mt-1
-                          break-words
-                        ">
-                          {transaction.description}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="
-                      text-right
-                      shrink-0
-                    ">
-                      <div className="
-                        font-mono
-                        text-xl
-                        font-semibold
-                      ">
-                        ₱{fmt(Math.abs(transaction.amount))}
-                      </div>
-                      <div className="
-                        text-[10px]
-                        uppercase
-                        text-ink-soft
-                        font-mono
-                        mt-1
-                      ">
-                        {transaction.status}
-                      </div>
-                    </div>
-                  </div>
-
-                  {transaction.receipt_url && (
-                    <button
-                      type="button"
-                      onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
-                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
-                    >
-                      🧾 View Receipt
-                    </button>
+              {isAdmin && isMemberLinkedType && (
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    On behalf of
+                  </label>
+                  <select
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    value={onBehalfOfId}
+                    onChange={(e) => handleOnBehalfChange(e.target.value)}
+                  >
+                    <option value="">Myself</option>
+                    {allMembers
+                      .filter((m) => m.member_id !== memberId)
+                      .map((m) => (
+                        <option key={m.member_id} value={m.member_id}>
+                          {m.name}
+                        </option>
+                      ))}
+                  </select>
+                  {onBehalfOfId && (
+                    <p className="text-xs text-gold mt-2">
+                      This will be recorded as approved immediately for {allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.
+                    </p>
                   )}
                 </div>
-              )
-            })}
+              )}
 
-            {filteredTransactions.length === 0 && !loadError && (
-              <p className="
-                py-8
-                text-sm
-                text-ink-soft
-                text-center
-              ">
-                No transactions found.
-              </p>
-            )}
+              {isLoanPayment && (
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    Which loan
+                  </label>
+                  {myLoans.filter((l) => l.status === "active").length === 0 ? (
+                    <p className="text-xs text-rust">
+                      No active loans to pay against.
+                    </p>
+                  ) : (
+                    <select
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                      value={selectedLoanId}
+                      onChange={(e) => setSelectedLoanId(e.target.value)}
+                    >
+                      <option value="">Select a loan</option>
+                      {myLoans
+                        .filter((l) => l.status === "active")
+                        .map((loan) => (
+                          <option key={loan.loan_id} value={loan.loan_id}>
+                            ₱{fmt(loan.principal)} from {loan.start_date}
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                  {isLoanRequest ? "Amount to borrow" : "Amount"}
+                </label>
+                <input
+                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
+                  type="number"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+
+              {isLoanRequest && (
+                <>
+                  <div>
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                      Interest rate (%)
+                    </label>
+                    <input
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
+                      type="number"
+                      placeholder="e.g. 5"
+                      value={interestRate}
+                      onChange={(e) => setInterestRate(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                      Term (months)
+                    </label>
+                    <input
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
+                      type="number"
+                      placeholder="e.g. 6"
+                      value={termMonths}
+                      onChange={(e) => setTermMonths(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                      Repayment mode
+                    </label>
+                    <select
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                      value={repaymentFrequency}
+                      onChange={(e) => setRepaymentFrequency(e.target.value)}
+                    >
+                      <option value="monthly">Monthly installments</option>
+                      <option value="lump_sum">One lump sum at end of term</option>
+                    </select>
+                  </div>
+
+                  {Number(amount) > 0 && Number(interestRate) > 0 && Number(termMonths) > 0 && (
+                    <div className="border border-hairline rounded-sm p-4 bg-paper">
+                      <p className="text-xs text-ink-soft font-mono mb-2">
+                        Estimated repayment
+                      </p>
+                      <div className="flex justify-between text-sm font-mono">
+                        <span className="text-ink-soft">Total repayable</span>
+                        <span>₱{fmt(previewTotalRepayable)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-mono mt-1">
+                        <span className="text-ink-soft">
+                          {repaymentFrequency === "monthly"
+                            ? `Per month × ${termMonths}`
+                            : `Due at ${termMonths} months`}
+                        </span>
+                        <span className="font-semibold">
+                          ₱{fmt(previewPerInstallment)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {needsBank && (
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    {isBankTransfer ? "From bank" : "Bank"}
+                  </label>
+                  <select
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    value={bankId}
+                    onChange={(e) => setBankId(e.target.value)}
+                  >
+                    <option value="">Select a bank</option>
+                    {banks.map((bank) => (
+                      <option key={bank.id} value={bank.id}>
+                        {bank.account_name || bank.bank_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {isBankTransfer && (
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    To bank
+                  </label>
+                  <select
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    value={toBankId}
+                    onChange={(e) => setToBankId(e.target.value)}
+                  >
+                    <option value="">Select a bank</option>
+                    {banks.map((bank) => (
+                      <option key={bank.id} value={bank.id}>
+                        {bank.account_name || bank.bank_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                  Description
+                </label>
+                <input
+                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                  placeholder="Add a note"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+
+              {needsReceipt && (
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    Receipt
+                  </label>
+
+                  {!receiptPreview ? (
+                    <label
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        setDragActive(true)
+                      }}
+                      onDragLeave={() => setDragActive(false)}
+                      onDrop={handleDrop}
+                      className={`
+                        flex flex-col items-center justify-center gap-2
+                        border-2 border-dashed rounded-sm
+                        py-10 px-4 cursor-pointer text-center transition-colors
+                        ${dragActive ? "border-gold bg-gold/5" : "border-hairline"}
+                      `}
+                    >
+                      <span className="text-2xl">📎</span>
+                      <span className="text-sm text-ink">
+                        Tap to upload, or drag a photo here
+                      </span>
+                      <span className="text-xs text-ink-soft">
+                        Screenshot or photo of your deposit slip
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  ) : (
+                    <div className="relative border border-hairline rounded-sm p-3 flex items-center gap-3">
+                      <img
+                        src={receiptPreview}
+                        alt="Receipt preview"
+                        className="w-16 h-16 object-cover rounded-sm border border-hairline"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-ink truncate">
+                          {receipt?.name}
+                        </p>
+                        <p className="text-xs text-ink-soft">
+                          {receipt ? `${(receipt.size / 1024).toFixed(0)} KB` : ""}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReceiptFile(null)}
+                        className="text-xs text-rust border border-rust rounded-full px-2 py-1 shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button
+                className="bg-ink text-paper px-4 py-3 rounded-sm w-full font-medium disabled:opacity-50"
+                onClick={handleSubmit}
+                disabled={submitting}
+              >
+                {submitting ? "Submitting..." : "Submit"}
+              </button>
+
+              {message && (
+                <p className="text-sm text-rust">
+                  {message}
+                </p>
+              )}
+            </div>
           </div>
+
+          {recent.length > 0 && (
+            <div className="mt-10">
+              <h2 className="font-display text-lg font-medium text-ink mb-3">
+                Your Recent Activity
+              </h2>
+              <div className="bg-paper-2 border border-hairline rounded-sm relative overflow-hidden">
+                <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
+                <div className="pl-6 pr-5">
+                  {recent.map((t, i) => (
+                    <div
+                      key={t.transaction_id}
+                      className={`py-3 flex justify-between items-center gap-3 ${
+                        i !== recent.length - 1 ? "border-b border-dashed border-hairline" : ""
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm text-ink">
+                          {typeLabels[t.classification] || t.classification}
+                          <span className="text-ink-soft font-mono text-xs ml-2">
+                            {new Date(t.created_at).toLocaleDateString()}
+                          </span>
+                        </p>
+                        {t.description && (
+                          <p className="text-xs text-ink-soft truncate">
+                            {t.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-mono text-sm text-ink">
+                          ₱{fmt(Math.abs(t.amount))}
+                        </p>
+                        <p className="text-[10px] uppercase text-ink-soft font-mono">
+                          {t.status}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
-
-      {openReceiptUrl && (
-        <ReceiptModal
-          url={openReceiptUrl}
-          onClose={() => setOpenReceiptUrl(null)}
-        />
-      )}
     </>
   )
 }
