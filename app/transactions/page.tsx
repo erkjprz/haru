@@ -159,26 +159,21 @@ export default function TransactionsPage() {
     // members (member_id, submitted_by), so a bare `members(...)` embed is
     // ambiguous and PostgREST errors on it.
     //
-    // bank_accounts is intentionally NOT joined here anymore -- the
-    // bank_accounts table has zero rows (bank_account_id is never populated
-    // on any transaction), so that embed always resolved to null. The real
-    // bank info (BDO / Maya) lives in transactions.bank, a plain text
-    // column that's populated on every logs-sourced row. We select it
-    // directly via `*` below instead of joining a table that holds no data.
+    // bank_accounts is joined twice (aliased from_bank_account /
+    // to_bank_account) for the new single-row Internal Transfer shape --
+    // legacy migrated transfers instead used two separate rows with the
+    // plain `bank` text column and null bank_account_id/to_bank_account_id
+    // (see transferDirectionLabel / dedupeLegacyTransferPairs above, which
+    // handle both shapes).
     //
     // .range() is required: without an explicit range, PostgREST applies its
-    // own default row cap (1000), which silently truncates the result and
-    // makes "Showing X of Y" lie about the real total. 4999 comfortably
-    // covers current volume; if the table keeps growing, switch this to
-    // real server-side pagination ("Load more" / page tokens) instead of
-    // raising the number again.
-    // bank_accounts is now used again -- populated going forward with real
-    // rows (BDO / Maya). New Internal Transfer rows carry both ends on a
-    // single row via bank_account_id (from) and to_bank_account_id (to);
-    // legacy migrated transfers instead used two separate rows with the
-    // plain `bank` text column and have null bank_account_id/to_bank_account_id
-    // (see transferDirectionLabel below, which handles both shapes).
-    const { data, error, count } = await supabase
+    // own default row cap (1000), which silently truncates the result. 4999
+    // comfortably covers current volume; if the table keeps growing, switch
+    // this to real server-side pagination ("Load more" / page tokens)
+    // instead of raising the number again. totalCount is derived from the
+    // deduped row count below rather than a separate exact-count query,
+    // since we already fetch every row within that range.
+    const { data, error } = await supabase
       .from("transactions")
       .select(
         `
@@ -204,8 +199,7 @@ export default function TransactionsPage() {
           bank_name,
           account_name
         )
-      `,
-        { count: "exact" }
+      `
       )
       .order("txn_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -585,9 +579,7 @@ export default function TransactionsPage() {
 
               const loanName = transaction.loans?.name || null
               const borrowerName = transaction.loans?.borrowers?.name || null
-              const transferLabel = isTransferTxn
-                ? transferDirectionLabel(transaction, transactions)
-                : null
+              const transferLabel = isTransferTxn ? transaction._transferLabel ?? null : null
 
               // Borrower-only loans (e.g. Joy, who isn't a fund member) have
               // no member_id, so fall back to the borrower's name as the
