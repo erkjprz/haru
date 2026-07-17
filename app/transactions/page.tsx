@@ -34,9 +34,31 @@ const typeColor: Record<string, string> = {
   "Tax": "text-rust border-rust"
 }
 
+// A transaction's real-world date is txn_date. created_at is a row-insert
+// audit timestamp and only happens to match txn_date for migrated rows
+// because the migration script set it that way -- it's not guaranteed to
+// stay in sync (e.g. manual edits, backfills). Always prefer txn_date,
+// falling back to created_at only for rows that genuinely have no txn_date.
+function effectiveDate(transaction: any): Date {
+  return new Date(transaction.txn_date ?? transaction.created_at)
+}
+
+// ~75% of rows have a description that's just the member's name typed back
+// (sometimes via an old alias like "Ekai"/"Ketty"/"Bors" -- member_id is
+// already resolved correctly for those, so the raw text adds nothing once
+// the member's name is the card title). Only show description when it
+// carries information beyond "this belongs to that member" -- e.g. Fund-level
+// rows (Tax, Bank Interest, Internal Transfer, Investment) where it's the
+// only content, or the rare genuine note.
+function isRedundantDescription(description: string | null, memberName: string | null): boolean {
+  if (!description || !memberName) return false
+  return description.trim().toLowerCase() === memberName.trim().toLowerCase()
+}
+
 export default function TransactionsPage() {
   const router = useRouter()
   const [transactions, setTransactions] = useState<any[]>([])
+  const [totalCount, setTotalCount] = useState(0)
   const [members, setMembers] = useState<any[]>([])
   const [selectedMemberId, setSelectedMemberId] = useState("")
   const [selectedType, setSelectedType] = useState("")
@@ -46,14 +68,27 @@ export default function TransactionsPage() {
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
   async function loadTransactions() {
-    // Both members and bank_accounts need explicit FK hints:
-    // - transactions has two FKs into members (member_id, submitted_by)
-    // - transactions has two FKs into bank_accounts (bank_account_id, to_bank_account_id)
-    // A bare `members(...)` or `bank_accounts(...)` embed is ambiguous and
-    // PostgREST errors on it.
-    const { data, error } = await supabase
+    // members needs an explicit FK hint: transactions has two FKs into
+    // members (member_id, submitted_by), so a bare `members(...)` embed is
+    // ambiguous and PostgREST errors on it.
+    //
+    // bank_accounts is intentionally NOT joined here anymore -- the
+    // bank_accounts table has zero rows (bank_account_id is never populated
+    // on any transaction), so that embed always resolved to null. The real
+    // bank info (BDO / Maya) lives in transactions.bank, a plain text
+    // column that's populated on every logs-sourced row. We select it
+    // directly via `*` below instead of joining a table that holds no data.
+    //
+    // .range() is required: without an explicit range, PostgREST applies its
+    // own default row cap (1000), which silently truncates the result and
+    // makes "Showing X of Y" lie about the real total. 4999 comfortably
+    // covers current volume; if the table keeps growing, switch this to
+    // real server-side pagination ("Load more" / page tokens) instead of
+    // raising the number again.
+    const { data, error, count } = await supabase
       .from("transactions")
-      .select(`
+      .select(
+        `
         *,
         members!transactions_member_id_fkey (
           name,
@@ -61,22 +96,24 @@ export default function TransactionsPage() {
         ),
         submitted_by_member:members!transactions_submitted_by_fkey (
           name
-        ),
-        bank_accounts!transactions_bank_account_id_fkey (
-          bank_name,
-          account_name
         )
-      `)
+      `,
+        { count: "exact" }
+      )
+      .order("txn_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
+      .range(0, 4999)
 
     if (error) {
       setLoadError(error.message)
       setTransactions([])
+      setTotalCount(0)
       return
     }
 
     setLoadError("")
     setTransactions(data ?? [])
+    setTotalCount(count ?? (data?.length ?? 0))
   }
 
   async function loadMembers() {
@@ -108,7 +145,7 @@ export default function TransactionsPage() {
   const yearOptions = Array.from(
     new Set(
       transactions.map((t) =>
-        new Date(t.created_at)
+        effectiveDate(t)
           .getFullYear()
           .toString()
       )
@@ -135,7 +172,7 @@ export default function TransactionsPage() {
 
       const yearMatch =
         selectedYear
-          ? new Date(t.created_at)
+          ? effectiveDate(t)
               .getFullYear()
               .toString() === selectedYear
           : true
@@ -414,145 +451,147 @@ export default function TransactionsPage() {
             text-ink-soft
             font-mono
           ">
-            Showing {filteredTransactions.length} of {transactions.length}
+            Showing {filteredTransactions.length} of {totalCount}
           </div>
 
           <div className="mt-6 space-y-3">
-            {filteredTransactions.map((transaction)=>(
-              <div
-                key={transaction.transaction_id}
-                className="
-                  bg-paper-2
-                  border border-hairline
-                  rounded-md
-                  p-4
-                "
-              >
-                <div className="
-                  flex
-                  justify-between
-                  items-start
-                  gap-3
-                ">
-                  <div className="min-w-0">
-                    <div className="
-                      flex
-                      items-center
-                      gap-2
-                      flex-wrap
-                    ">
-                      <span
-                        className={`
-                          text-[9px]
-                          uppercase
-                          tracking-widest
-                          font-mono
-                          border
-                          rounded-full
-                          px-2 py-0.5
-                          ${
-                            typeColor[transaction.classification]
-                            ??
-                            "text-ink-soft border-hairline"
-                          }
-                        `}
-                      >
-                        {
-                          typeLabels[transaction.classification]
-                          ||
-                          transaction.classification
-                        }
-                      </span>
-                      <span className="
-                        text-xs
-                        text-ink-soft
-                        font-mono
-                      ">
-                        {
-                          new Date(
-                            transaction.created_at
-                          )
-                            .toLocaleDateString()
-                        }
-                      </span>
-                    </div>
-                    <div className="
-                      font-display
-                      text-lg
-                      font-medium
-                      mt-2
-                    ">
-                      {
-                        transaction.members?.name
-                        ||
-                        "Fund"
-                      }
-                    </div>
-                    {transaction.submitted_by_member && (
-                      <p className="text-[11px] text-gold font-mono mt-0.5">
-                        Recorded by {transaction.submitted_by_member.name}
-                      </p>
-                    )}
-                    {transaction.description && (
-                      <p className="
-                        text-xs
-                        text-ink-soft
-                        mt-1
-                        break-words
-                      ">
-                        {transaction.description}
-                      </p>
-                    )}
-                    {transaction.bank_accounts && (
-                      <p className="
-                        text-xs
-                        text-ink-soft
-                        mt-1
-                        font-mono
-                      ">
-                        {
-                          transaction.bank_accounts.account_name
-                          ||
-                          transaction.bank_accounts.bank_name
-                        }
-                      </p>
-                    )}
-                  </div>
+            {filteredTransactions.map((transaction)=>{
+              const memberName = transaction.members?.name || null
+              const showDescription =
+                transaction.description &&
+                !isRedundantDescription(transaction.description, memberName)
 
+              return (
+                <div
+                  key={transaction.transaction_id}
+                  className="
+                    bg-paper-2
+                    border border-hairline
+                    rounded-md
+                    p-4
+                  "
+                >
                   <div className="
-                    text-right
-                    shrink-0
+                    flex
+                    justify-between
+                    items-start
+                    gap-3
                   ">
-                    <div className="
-                      font-mono
-                      text-xl
-                      font-semibold
-                    ">
-                      ₱{fmt(Math.abs(transaction.amount))}
+                    <div className="min-w-0">
+                      <div className="
+                        flex
+                        items-center
+                        gap-2
+                        flex-wrap
+                      ">
+                        <span
+                          className={`
+                            text-[9px]
+                            uppercase
+                            tracking-widest
+                            font-mono
+                            border
+                            rounded-full
+                            px-2 py-0.5
+                            ${
+                              typeColor[transaction.classification]
+                              ??
+                              "text-ink-soft border-hairline"
+                            }
+                          `}
+                        >
+                          {
+                            typeLabels[transaction.classification]
+                            ||
+                            transaction.classification
+                          }
+                        </span>
+                        {transaction.bank && (
+                          <span className="
+                            text-[9px]
+                            uppercase
+                            tracking-widest
+                            font-mono
+                            border
+                            border-hairline
+                            text-ink-soft
+                            rounded-full
+                            px-2 py-0.5
+                          ">
+                            {transaction.bank}
+                          </span>
+                        )}
+                        <span className="
+                          text-xs
+                          text-ink-soft
+                          font-mono
+                        ">
+                          {
+                            effectiveDate(transaction)
+                              .toLocaleDateString()
+                          }
+                        </span>
+                      </div>
+                      <div className="
+                        font-display
+                        text-lg
+                        font-medium
+                        mt-2
+                      ">
+                        {memberName || "Fund"}
+                      </div>
+                      {transaction.submitted_by_member && (
+                        <p className="text-[11px] text-gold font-mono mt-0.5">
+                          Recorded by {transaction.submitted_by_member.name}
+                        </p>
+                      )}
+                      {showDescription && (
+                        <p className="
+                          text-xs
+                          text-ink-soft
+                          mt-1
+                          break-words
+                        ">
+                          {transaction.description}
+                        </p>
+                      )}
                     </div>
+
                     <div className="
-                      text-[10px]
-                      uppercase
-                      text-ink-soft
-                      font-mono
-                      mt-1
+                      text-right
+                      shrink-0
                     ">
-                      {transaction.status}
+                      <div className="
+                        font-mono
+                        text-xl
+                        font-semibold
+                      ">
+                        ₱{fmt(Math.abs(transaction.amount))}
+                      </div>
+                      <div className="
+                        text-[10px]
+                        uppercase
+                        text-ink-soft
+                        font-mono
+                        mt-1
+                      ">
+                        {transaction.status}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {transaction.receipt_url && (
-                  <button
-                    type="button"
-                    onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
-                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
-                  >
-                    🧾 View Receipt
-                  </button>
-                )}
-              </div>
-            ))}
+                  {transaction.receipt_url && (
+                    <button
+                      type="button"
+                      onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
+                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
+                    >
+                      🧾 View Receipt
+                    </button>
+                  )}
+                </div>
+              )
+            })}
 
             {filteredTransactions.length === 0 && !loadError && (
               <p className="
