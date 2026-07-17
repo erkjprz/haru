@@ -180,15 +180,18 @@ function InvestmentCard({
           <p className="font-display text-[17px] font-semibold text-ink truncate">{inv.investment}</p>
           <p className="text-[12px] text-ink-soft">₱{fmt(inv.invested)} invested</p>
         </div>
-        <div className="shrink-0 flex items-center gap-1.5">
-          <span className={`w-1.5 h-1.5 rounded-full ${isGain ? "bg-sage" : isFlat ? "bg-ink-soft" : "bg-rust"}`} />
-          <span
-            className={`text-[11px] font-mono uppercase tracking-wide ${
-              isGain ? "text-sage" : isFlat ? "text-ink-soft" : "text-rust"
-            }`}
-          >
-            {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
-          </span>
+        <div className="shrink-0 flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${isGain ? "bg-sage" : isFlat ? "bg-ink-soft" : "bg-rust"}`} />
+            <span
+              className={`text-[11px] font-mono uppercase tracking-wide ${
+                isGain ? "text-sage" : isFlat ? "text-ink-soft" : "text-rust"
+              }`}
+            >
+              {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
+            </span>
+          </div>
+          <span className="text-ink-soft">→</span>
         </div>
       </div>
 

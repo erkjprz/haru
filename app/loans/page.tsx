@@ -197,9 +197,12 @@ function LoanCard({
             {loan.borrower} · {dateLabel}
           </p>
         </div>
-        <div className="shrink-0 flex items-center gap-1.5">
-          <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
-          <span className={`text-[11px] font-mono uppercase tracking-wide ${meta.text}`}>{meta.label}</span>
+        <div className="shrink-0 flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+            <span className={`text-[11px] font-mono uppercase tracking-wide ${meta.text}`}>{meta.label}</span>
+          </div>
+          <span className="text-ink-soft">→</span>
         </div>
       </div>
 
