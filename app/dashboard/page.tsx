@@ -324,7 +324,10 @@ export default function DashboardPage() {
 
           {activeTab === "fund" && (
             <section>
-              <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5">
+              <button
+                onClick={() => router.push("/bank")}
+                className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 hover:bg-paper transition-colors"
+              >
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
                   Fund Total Cash
                 </p>
@@ -358,7 +361,9 @@ export default function DashboardPage() {
                     it'll be split among members by year-end, same as in past years.
                   </p>
                 )}
-              </div>
+
+                <p className="text-[11px] text-ink-soft text-right mt-2.5">View Bank Details →</p>
+              </button>
 
               {fund != null && (
                 <button
@@ -409,26 +414,31 @@ export default function DashboardPage() {
               {fund != null && fund.open_loans_count > 0 && (
                 <button
                   onClick={() => router.push("/loans")}
-                  className="w-full text-left bg-paper-2 border border-hairline rounded-md px-4 py-3.5 mt-4 hover:bg-paper transition-colors"
+                  className="relative w-full text-left bg-paper-2 border border-hairline rounded-md overflow-hidden pl-[21px] pr-5 py-4 mt-4 hover:bg-paper transition-colors"
                 >
-                  <div className="flex justify-between items-center text-xs text-ink-soft mb-2">
-                    <span>
-                      {fund.open_loans_count} Loan{fund.open_loans_count === 1 ? "" : "s"} Outstanding
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono [font-variant-numeric:tabular-nums] font-semibold text-ink">
-                        ₱{fmt(fund.open_loans_outstanding)}
+                  <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
+
+                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
+                    {fund.open_loans_count} Loan{fund.open_loans_count === 1 ? "" : "s"} Outstanding
+                  </p>
+                  <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink">
+                    ₱{fmt(fund.open_loans_outstanding)}
+                  </p>
+
+                  <div className="mt-3">
+                    <div className="flex justify-between text-[11px] text-ink-soft mb-1.5">
+                      <span className="font-semibold text-sage">{loanRepaidPct.toFixed(0)}% repaid</span>
+                      <span>
+                        ₱{fmt(fund.open_loans_principal - fund.open_loans_outstanding)} of ₱
+                        {fmt(fund.open_loans_principal)}
                       </span>
-                      <span className="text-ink-soft">→</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-hairline overflow-hidden">
+                      <div className="h-full bg-sage" style={{ width: `${loanRepaidPct}%` }} />
                     </div>
                   </div>
-                  <div className="h-2 rounded-full bg-hairline overflow-hidden">
-                    <div className="h-full bg-sage" style={{ width: `${loanRepaidPct}%` }} />
-                  </div>
-                  <p className="text-[11px] text-ink-soft mt-2">
-                    ₱{fmt(fund.open_loans_principal - fund.open_loans_outstanding)} repaid of ₱
-                    {fmt(fund.open_loans_principal)} principal
-                  </p>
+
+                  <p className="text-[11px] text-ink-soft text-right mt-2.5">View All Loans →</p>
                 </button>
               )}
             </section>
