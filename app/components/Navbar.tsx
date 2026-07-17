@@ -44,6 +44,7 @@ export default function Navbar() {
   const links = [
     { label: "Dashboard", path: "/dashboard" },
     { label: "Fund Breakdown", path: "/fund-breakdown" },
+    { label: "Loans", path: "/loans" },
     { label: "Transactions", path: "/transactions" },
     ...(isAdmin ? [{ label: "Admin", path: "/admin" }] : [])
   ]

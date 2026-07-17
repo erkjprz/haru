@@ -32,6 +32,9 @@ type FundSummary = {
   open_loans_count: number
   open_loans_principal: number
   open_loans_outstanding: number
+  total_contribution: number
+  total_withdrawal: number
+  net_contribution: number
 }
 
 type TrendPoint = { value: number; date: string }
@@ -91,11 +94,13 @@ export default function DashboardPage() {
       setIsAdmin(member.role === "admin")
 
       // Fund-wide performance: v_fund_summary applies the correct sign to
-      // investment gain/loss (Farmon losses vs. Perfume Biz gains) and
+      // investment gain/loss (Farmon losses vs. Perfume Biz gains),
       // separates total interest income from what's been distributed to
-      // members so far -- see the view's own comment. Never derive these
-      // by summing investment_allocations.amount or bank_interest_allocations
-      // directly.
+      // members so far, and includes fund-wide capital totals (same
+      // definition v_member_ledger uses per member: status = 'approved',
+      // Member Contribution / Member Withdrawal only) -- see the view's
+      // own comments. Never derive these by summing investment_allocations
+      // or bank_interest_allocations directly.
       const fundPromise = supabase.from("v_fund_summary").select("*").single()
 
       // Personal performance: v_member_performance mirrors that same
@@ -148,7 +153,10 @@ export default function DashboardPage() {
           total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed),
           open_loans_count: Number(fundResult.data.open_loans_count),
           open_loans_principal: Number(fundResult.data.open_loans_principal),
-          open_loans_outstanding: Number(fundResult.data.open_loans_outstanding)
+          open_loans_outstanding: Number(fundResult.data.open_loans_outstanding),
+          total_contribution: Number(fundResult.data.total_contribution),
+          total_withdrawal: Number(fundResult.data.total_withdrawal),
+          net_contribution: Number(fundResult.data.net_contribution)
         })
       }
 
@@ -368,6 +376,18 @@ export default function DashboardPage() {
 
               {fund != null && (
                 <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
+                  <InfoBox label="Capital">
+                    <InfoRow label="Total Contribution" value={`₱${fmt(fund.total_contribution)}`} />
+                    {fund.total_withdrawal !== 0 && (
+                      <InfoRow
+                        label="Total Withdrawal"
+                        value={`-₱${fmt(Math.abs(fund.total_withdrawal))}`}
+                        valueClass="text-rust"
+                      />
+                    )}
+                    <InfoRow label="Net Contribution" value={`₱${fmt(fund.net_contribution)}`} bold />
+                  </InfoBox>
+
                   <InfoBox label="Performance">
                     <InfoRow
                       label="Total Fund Gain/Loss"
@@ -396,7 +416,7 @@ export default function DashboardPage() {
               )}
 
               {fund != null && fund.open_loans_count > 0 && (
-                <div className="bg-paper-2 border border-hairline rounded-sm px-4 py-3.5 mt-4">
+                <div className="bg-paper-2 border border-hairline rounded-md px-4 py-3.5 mt-4">
                   <div className="flex justify-between text-xs text-ink-soft mb-2">
                     <span>
                       {fund.open_loans_count} Loan{fund.open_loans_count === 1 ? "" : "s"} Outstanding
@@ -465,7 +485,7 @@ export default function DashboardPage() {
 
           <button
             onClick={() => router.push("/fund-breakdown")}
-            className="mt-8 w-full border border-hairline rounded-sm px-5 py-4 text-sm font-medium text-ink hover:bg-paper-2 transition-colors"
+            className="mt-8 w-full border border-hairline rounded-md px-5 py-4 text-sm font-medium text-ink hover:bg-paper-2 transition-colors"
           >
             View Full Fund Breakdown →
           </button>
@@ -476,13 +496,13 @@ export default function DashboardPage() {
           <div className="max-w-3xl mx-auto px-4 sm:px-5 py-3 grid grid-cols-2 gap-3">
             <button
               onClick={() => router.push("/transactions")}
-              className="border border-hairline rounded-sm px-4 py-3 text-sm font-medium text-ink hover:bg-paper-2 transition-colors"
+              className="border border-hairline rounded-md px-4 py-3 text-sm font-medium text-ink hover:bg-paper-2 transition-colors"
             >
               View Transactions
             </button>
             <button
               onClick={() => router.push("/transactions/new")}
-              className="bg-gold text-ink px-4 py-3 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
+              className="bg-gold text-ink px-4 py-3 rounded-md text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
             >
               <span className="text-lg leading-none">+</span>
               New Transaction

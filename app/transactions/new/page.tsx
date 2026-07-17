@@ -29,6 +29,17 @@ const ENTRY_TYPES = [
 
 const MEMBER_LINKED_TYPES = ["contribution", "withdrawal", "loan_request", "loan_payment"]
 
+// A number input is "valid" here if it's not empty, parses to a real
+// number (not NaN -- e.g. a stray non-numeric paste), and clears the given
+// floor. Number(amount) <= 0 alone lets NaN slip through silently, since
+// every comparison against NaN is false.
+function isValidPositiveNumber(value: string, allowZero = false): boolean {
+  if (!value.trim()) return false
+  const n = Number(value)
+  if (Number.isNaN(n)) return false
+  return allowZero ? n >= 0 : n > 0
+}
+
 export default function NewTransactionPage() {
   const router = useRouter()
   const [checkingAccess, setCheckingAccess] = useState(true)
@@ -164,12 +175,12 @@ export default function NewTransactionPage() {
   }
 
   const previewTotalRepayable =
-    amount && interestRate
+    isValidPositiveNumber(amount) && isValidPositiveNumber(interestRate, true)
       ? Number(amount) + Number(amount) * (Number(interestRate) / 100)
       : 0
 
   const previewPerInstallment =
-    previewTotalRepayable && termMonths && repaymentFrequency === "monthly"
+    previewTotalRepayable && isValidPositiveNumber(termMonths) && repaymentFrequency === "monthly"
       ? previewTotalRepayable / Number(termMonths)
       : previewTotalRepayable
 
@@ -213,8 +224,8 @@ export default function NewTransactionPage() {
   async function handleSubmit() {
     setMessage("")
 
-    if (!amount || Number(amount) <= 0) {
-      setMessage("Enter a valid amount.")
+    if (!isValidPositiveNumber(amount)) {
+      setMessage("Enter a valid amount greater than zero.")
       return
     }
 
@@ -238,8 +249,13 @@ export default function NewTransactionPage() {
       return
     }
 
-    if (isLoanRequest && (!interestRate || !termMonths)) {
-      setMessage("Enter interest rate and term.")
+    if (isLoanRequest && !isValidPositiveNumber(interestRate, true)) {
+      setMessage("Enter a valid interest rate (0 or higher).")
+      return
+    }
+
+    if (isLoanRequest && !isValidPositiveNumber(termMonths)) {
+      setMessage("Enter a valid term, in months greater than zero.")
       return
     }
 
@@ -437,23 +453,21 @@ export default function NewTransactionPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans">
-        <div className="max-w-lg mx-auto px-5 pt-10 pb-24">
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             New Entry
           </div>
-          <h1 className="font-display text-4xl font-semibold text-ink">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink">
             New Transaction
           </h1>
 
-          <div className="mt-8 bg-paper-2 border border-hairline rounded-sm relative overflow-hidden">
-            <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
-            <div className="pl-6 pr-5 py-6 space-y-4">
+          <div className="mt-8 bg-paper-2 border border-hairline rounded-md p-5 space-y-4">
               <div>
                 <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                   Type
                 </label>
                 <select
-                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                  className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
                   value={selectedType}
                   onChange={(e) => handleTypeChange(e.target.value)}
                 >
@@ -474,7 +488,7 @@ export default function NewTransactionPage() {
                     On behalf of
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
                     value={onBehalfOfId}
                     onChange={(e) => handleOnBehalfChange(e.target.value)}
                   >
@@ -506,7 +520,7 @@ export default function NewTransactionPage() {
                     </p>
                   ) : (
                     <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
                       value={selectedLoanId}
                       onChange={(e) => setSelectedLoanId(e.target.value)}
                     >
@@ -528,8 +542,10 @@ export default function NewTransactionPage() {
                   {isLoanRequest ? "Amount to borrow" : "Amount"}
                 </label>
                 <input
-                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
+                  className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                   type="number"
+                  min="0.01"
+                  step="0.01"
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
@@ -543,8 +559,10 @@ export default function NewTransactionPage() {
                       Interest rate (%)
                     </label>
                     <input
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                       type="number"
+                      min="0"
+                      step="0.01"
                       placeholder="e.g. 5"
                       value={interestRate}
                       onChange={(e) => setInterestRate(e.target.value)}
@@ -556,8 +574,10 @@ export default function NewTransactionPage() {
                       Term (months)
                     </label>
                     <input
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                       type="number"
+                      min="1"
+                      step="1"
                       placeholder="e.g. 6"
                       value={termMonths}
                       onChange={(e) => setTermMonths(e.target.value)}
@@ -569,7 +589,7 @@ export default function NewTransactionPage() {
                       Repayment mode
                     </label>
                     <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
                       value={repaymentFrequency}
                       onChange={(e) => setRepaymentFrequency(e.target.value)}
                     >
@@ -578,16 +598,16 @@ export default function NewTransactionPage() {
                     </select>
                   </div>
 
-                  {Number(amount) > 0 && Number(interestRate) > 0 && Number(termMonths) > 0 && (
-                    <div className="border border-hairline rounded-sm p-4 bg-paper">
+                  {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
+                    <div className="border border-hairline rounded-md p-4 bg-paper">
                       <p className="text-xs text-ink-soft font-mono mb-2">
                         Estimated repayment
                       </p>
-                      <div className="flex justify-between text-sm font-mono">
+                      <div className="flex justify-between text-sm font-mono [font-variant-numeric:tabular-nums]">
                         <span className="text-ink-soft">Total repayable</span>
                         <span>₱{fmt(previewTotalRepayable)}</span>
                       </div>
-                      <div className="flex justify-between text-sm font-mono mt-1">
+                      <div className="flex justify-between text-sm font-mono [font-variant-numeric:tabular-nums] mt-1">
                         <span className="text-ink-soft">
                           {repaymentFrequency === "monthly"
                             ? `Per month × ${termMonths}`
@@ -608,7 +628,7 @@ export default function NewTransactionPage() {
                     {isBankTransfer ? "From bank" : "Bank"}
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
                     value={bankId}
                     onChange={(e) => setBankId(e.target.value)}
                   >
@@ -628,7 +648,7 @@ export default function NewTransactionPage() {
                     To bank
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
                     value={toBankId}
                     onChange={(e) => setToBankId(e.target.value)}
                   >
@@ -647,7 +667,7 @@ export default function NewTransactionPage() {
                   Description
                 </label>
                 <input
-                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                  className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
                   placeholder="Add a note"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -670,7 +690,7 @@ export default function NewTransactionPage() {
                       onDrop={handleDrop}
                       className={`
                         flex flex-col items-center justify-center gap-2
-                        border-2 border-dashed rounded-sm
+                        border-2 border-dashed rounded-md
                         py-10 px-4 cursor-pointer text-center transition-colors
                         ${dragActive ? "border-gold bg-gold/5" : "border-hairline"}
                       `}
@@ -690,11 +710,11 @@ export default function NewTransactionPage() {
                       />
                     </label>
                   ) : (
-                    <div className="relative border border-hairline rounded-sm p-3 flex items-center gap-3">
+                    <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
                       <img
                         src={receiptPreview}
                         alt="Receipt preview"
-                        className="w-16 h-16 object-cover rounded-sm border border-hairline"
+                        className="w-16 h-16 object-cover rounded-md border border-hairline"
                       />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-ink truncate">
@@ -717,7 +737,7 @@ export default function NewTransactionPage() {
               )}
 
               <button
-                className="bg-ink text-paper px-4 py-3 rounded-sm w-full font-medium disabled:opacity-50"
+                className="bg-ink text-paper px-4 py-3 rounded-md w-full font-medium disabled:opacity-50"
                 onClick={handleSubmit}
                 disabled={submitting}
               >
@@ -729,7 +749,6 @@ export default function NewTransactionPage() {
                   {message}
                 </p>
               )}
-            </div>
           </div>
 
           {recent.length > 0 && (
@@ -737,9 +756,7 @@ export default function NewTransactionPage() {
               <h2 className="font-display text-lg font-medium text-ink mb-3">
                 Your Recent Activity
               </h2>
-              <div className="bg-paper-2 border border-hairline rounded-sm relative overflow-hidden">
-                <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
-                <div className="pl-6 pr-5">
+              <div className="bg-paper-2 border border-hairline rounded-md px-5">
                   {recent.map((t, i) => (
                     <div
                       key={t.transaction_id}
@@ -761,7 +778,7 @@ export default function NewTransactionPage() {
                         )}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-mono text-sm text-ink">
+                        <p className="font-mono [font-variant-numeric:tabular-nums] text-sm text-ink">
                           ₱{fmt(Math.abs(t.amount))}
                         </p>
                         <p className="text-[10px] uppercase text-ink-soft font-mono">
@@ -770,7 +787,6 @@ export default function NewTransactionPage() {
                       </div>
                     </div>
                   ))}
-                </div>
               </div>
             </div>
           )}
