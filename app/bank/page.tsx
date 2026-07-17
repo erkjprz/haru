@@ -144,7 +144,7 @@ export default function BanksPage() {
 
           <div className="flex flex-col gap-3">
             {banks.map((b) => (
-              <BankCard key={b.bank} bank={b} fmt={fmt} onClick={() => router.push(`/banks/${encodeURIComponent(b.bank)}`)} />
+              <BankCard key={b.bank} bank={b} fmt={fmt} onClick={() => router.push(`/bank/${encodeURIComponent(b.bank)}`)} />
             ))}
           </div>
         </div>
