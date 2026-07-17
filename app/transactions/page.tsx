@@ -343,15 +343,17 @@ export default function TransactionsPage() {
 const searchMatch =
   searchQuery.trim() === "" ||
   [
-    t.members?.name,
-    t.description,
-    t.bank,
-    t.classification,
-    typeLabels[t.classification],
-    t.loans?.name,
-    t.loans?.borrowers?.name,
-    t._transferLabel
-  ]
+  t.members?.name,
+  t.description,
+  t.bank,
+  t.classification,
+  typeLabels[t.classification],
+  t.loans?.name,
+  t.loans?.borrowers?.name,
+  t._transferLabel,
+  t.txn_date,
+  effectiveDate(t).toLocaleDateString()
+]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
