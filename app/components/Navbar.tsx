@@ -45,8 +45,8 @@ export default function Navbar() {
     { label: "Dashboard", path: "/dashboard" },
     { label: "Fund Breakdown", path: "/fund-breakdown" },
     { label: "Loans", path: "/loans" },
-    { label: "Investment", path: "/investment" },
-    { label: "Bank", path: "/bank" },
+    { label: "Investments", path: "/investment" },
+    { label: "Banks", path: "/bank" },
     { label: "Transactions", path: "/transactions" },
     ...(isAdmin ? [{ label: "Admin", path: "/admin" }] : [])
   ]
