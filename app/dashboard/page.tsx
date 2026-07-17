@@ -5,22 +5,6 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 
-const typeLabels: Record<string, string> = {
-  "Member Contribution": "Contribution",
-  "Member Withdrawal": "Withdrawal",
-  "Expense": "Expense",
-  "Loan Release": "Loan Disbursement",
-  "Loan Repayment": "Loan Repayment",
-  "Gain Allocation": "Investment Allocation",
-  "Bank Interest": "Bank Interest",
-  "Internal Transfer": "Bank Transfer",
-  "Investment": "Investment",
-  "Investment Return": "Investment Return",
-  "Tax": "Tax",
-  "Bank Write-off": "Bank Write-off",
-  "Opening Balance": "Opening Balance"
-}
-
 type FundSummary = {
   total_cash: number
   bdo_balance: number
@@ -65,7 +49,6 @@ export default function DashboardPage() {
   const [myTrend, setMyTrend] = useState<TrendPoint[]>([])
   const [fundTrend, setFundTrend] = useState<TrendPoint[]>([])
   const [pendingCount, setPendingCount] = useState(0)
-  const [recent, setRecent] = useState<any[]>([])
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
@@ -123,13 +106,6 @@ export default function DashboardPage() {
         .select("month, running_balance")
         .order("month", { ascending: true })
 
-      const recentPromise = supabase
-        .from("transactions")
-        .select("transaction_id, classification, amount, description, status, created_at")
-        .eq("member_id", member.member_id)
-        .order("created_at", { ascending: false })
-        .limit(5)
-
       const pendingPromise = member.role === "admin"
         ? supabase
             .from("transactions")
@@ -137,8 +113,8 @@ export default function DashboardPage() {
             .eq("status", "pending")
         : Promise.resolve({ count: 0 } as any)
 
-      const [fundResult, mineResult, myTrendResult, fundTrendResult, recentResult, pendingResult] =
-        await Promise.all([fundPromise, minePromise, myTrendPromise, fundTrendPromise, recentPromise, pendingPromise])
+      const [fundResult, mineResult, myTrendResult, fundTrendResult, pendingResult] =
+        await Promise.all([fundPromise, minePromise, myTrendPromise, fundTrendPromise, pendingPromise])
 
       if (fundResult.error) {
         setLoadError(fundResult.error.message)
@@ -183,7 +159,6 @@ export default function DashboardPage() {
         setFundTrend(fundTrendResult.data.map((r: any) => ({ value: Number(r.running_balance), date: r.month })))
       }
 
-      setRecent(recentResult.data ?? [])
       setPendingCount(pendingResult.count ?? 0)
       setAsOf(new Date())
       setCheckingAccess(false)
@@ -435,52 +410,6 @@ export default function DashboardPage() {
                 </div>
               )}
             </section>
-          )}
-
-          {recent.length > 0 && (
-            <section className="mt-8">
-              <h2 className="font-display text-lg font-medium text-ink mb-3">
-                Your Recent Activity
-              </h2>
-              <div className="bg-paper-2 border border-hairline rounded-md">
-                <div className="px-5">
-                  {recent.map((t, i) => (
-                    <div
-                      key={t.transaction_id}
-                      className={`py-3 flex justify-between items-center gap-3 ${
-                        i !== recent.length - 1 ? "border-b border-dashed border-hairline" : ""
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm text-ink">
-                          {typeLabels[t.classification] || t.classification}
-                          <span className="text-ink-soft font-mono text-xs ml-2">
-                            {new Date(t.created_at).toLocaleDateString()}
-                          </span>
-                        </p>
-                        {t.description && (
-                          <p className="text-xs text-ink-soft truncate">{t.description}</p>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-mono [font-variant-numeric:tabular-nums] text-sm text-ink">
-                          ₱{fmt(Math.abs(t.amount))}
-                        </p>
-                        <p className="text-[10px] uppercase text-ink-soft font-mono">
-                          {t.status}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
-
-          {recent.length === 0 && (
-            <p className="mt-10 text-sm text-ink-soft text-center py-8">
-              No activity yet — your first transaction will show up here.
-            </p>
           )}
 
           <button
