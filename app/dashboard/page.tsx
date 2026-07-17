@@ -275,7 +275,10 @@ export default function DashboardPage() {
               </div>
 
               {mine != null && (
-                <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
+                <button
+                  onClick={() => router.push("/fund-breakdown")}
+                  className="w-full text-left bg-paper-2 border border-hairline rounded-md p-5 mt-4 hover:bg-paper transition-colors"
+                >
                   <InfoBox label="Capital">
                     <InfoRow label="Total Contribution" value={`₱${fmt(mine.total_contribution)}`} />
                     {mine.total_withdrawal !== 0 && (
@@ -312,7 +315,9 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </InfoBox>
-                </div>
+
+                  <p className="text-[11px] text-ink-soft text-right mt-1">View Full Fund Breakdown →</p>
+                </button>
               )}
             </section>
           )}
@@ -331,12 +336,18 @@ export default function DashboardPage() {
                 {fund != null && (
                   <div className="mt-3">
                     <div className="flex h-2 rounded-full overflow-hidden bg-hairline">
-                      <div className="bg-gold" style={{ width: `${bdoPct}%` }} />
-                      <div className="bg-sage" style={{ width: `${100 - bdoPct}%` }} />
+                      <div className="bg-[#28405C]" style={{ width: `${bdoPct}%` }} />
+                      <div className="bg-[#3B5443]" style={{ width: `${100 - bdoPct}%` }} />
                     </div>
                     <div className="flex justify-between text-[11px] text-ink-soft mt-1.5">
-                      <span>BDO ₱{fmt(fund.bdo_balance)}</span>
-                      <span>Maya ₱{fmt(fund.maya_balance)}</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#28405C]" />
+                        BDO ₱{fmt(fund.bdo_balance)}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#3B5443]" />
+                        Maya ₱{fmt(fund.maya_balance)}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -350,7 +361,10 @@ export default function DashboardPage() {
               </div>
 
               {fund != null && (
-                <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
+                <button
+                  onClick={() => router.push("/fund-breakdown")}
+                  className="w-full text-left bg-paper-2 border border-hairline rounded-md p-5 mt-4 hover:bg-paper transition-colors"
+                >
                   <InfoBox label="Capital">
                     <InfoRow label="Total Contribution" value={`₱${fmt(fund.total_contribution)}`} />
                     {fund.total_withdrawal !== 0 && (
@@ -387,7 +401,9 @@ export default function DashboardPage() {
                       />
                     </div>
                   </InfoBox>
-                </div>
+
+                  <p className="text-[11px] text-ink-soft text-right mt-1">View Full Fund Breakdown →</p>
+                </button>
               )}
 
               {fund != null && fund.open_loans_count > 0 && (
@@ -417,13 +433,6 @@ export default function DashboardPage() {
               )}
             </section>
           )}
-
-          <button
-            onClick={() => router.push("/fund-breakdown")}
-            className="mt-8 w-full border border-hairline rounded-md px-5 py-4 text-sm font-medium text-ink hover:bg-paper-2 transition-colors"
-          >
-            View Full Fund Breakdown →
-          </button>
         </div>
 
         {/* Sticky thumb-reach action bar */}
