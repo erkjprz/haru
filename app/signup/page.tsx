@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
@@ -12,9 +13,17 @@ export default function SignupPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [message, setMessage] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
 
   async function signup() {
+
+    if (loading) return
+
+    setLoading(true)
+    setMessage("")
+
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -23,6 +32,7 @@ export default function SignupPage() {
 
 
     if (error) {
+      setLoading(false)
       setMessage(error.message)
       return
     }
@@ -41,68 +51,285 @@ export default function SignupPage() {
 
 
       if (memberError) {
+        setLoading(false)
         setMessage(memberError.message)
         return
       }
 
 
-      setMessage(
-        "Account created. Waiting for admin approval."
-      )
-
-
-      setTimeout(() => {
-        router.push("/login")
-      }, 2000)
-
+      router.push("/waiting")
+      return
     }
+
+
+    setLoading(false)
   }
 
 
   return (
-    <main className="flex min-h-screen items-center justify-center">
+    <main className="min-h-screen bg-paper flex items-center justify-center px-5 py-8">
 
-      <div className="w-full max-w-sm space-y-4">
-
-        <h1 className="text-3xl font-bold">
-          Create Account
-        </h1>
+      <div className="w-full max-w-md animate-in fade-in duration-500">
 
 
-        <input
-          className="w-full border p-3 rounded"
-          placeholder="Name"
-          value={name}
-          onChange={(e)=>setName(e.target.value)}
-        />
+        {/* Header */}
+
+        <div className="text-center mb-8">
+
+          <p className="text-[11px] uppercase tracking-[0.2em] text-gold font-mono">
+            Est. 2017
+          </p>
+
+          <h1 className="font-display text-4xl font-semibold text-ink mt-2">
+            Haru
+          </h1>
+
+          <p className="text-sm text-ink-soft mt-2">
+            Create your shared fund account.
+          </p>
+
+        </div>
 
 
-        <input
-          className="w-full border p-3 rounded"
-          placeholder="Email"
-          value={email}
-          onChange={(e)=>setEmail(e.target.value)}
-        />
+
+        {/* Card */}
+
+        <div className="
+          bg-paper-2
+          border
+          border-hairline
+          rounded-xl
+          shadow-sm
+          p-6
+        ">
 
 
-        <input
-          className="w-full border p-3 rounded"
-          placeholder="Password"
-          type="password"
-          value={password}
-          onChange={(e)=>setPassword(e.target.value)}
-        />
+          <div className="space-y-5">
 
 
-        <button
-          className="w-full bg-black text-white p-3 rounded"
-          onClick={signup}
-        >
-          Sign Up
-        </button>
+            {/* Name */}
+
+            <div>
+
+              <label className="block text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-2">
+                Name
+              </label>
+
+              <input
+                type="text"
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") signup()
+                }}
+                className="
+                  w-full
+                  rounded-md
+                  border
+                  border-hairline
+                  bg-paper
+                  px-4
+                  py-3
+                  text-sm
+                  text-ink
+                  placeholder:text-ink-soft
+                  outline-none
+                  transition-all
+                  focus:border-gold
+                  focus:ring-2
+                  focus:ring-gold/20
+                "
+              />
+
+            </div>
 
 
-        <p>{message}</p>
+
+            {/* Email */}
+
+            <div>
+
+              <label className="block text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-2">
+                Email
+              </label>
+
+              <input
+                type="email"
+                placeholder="name@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") signup()
+                }}
+                className="
+                  w-full
+                  rounded-md
+                  border
+                  border-hairline
+                  bg-paper
+                  px-4
+                  py-3
+                  text-sm
+                  text-ink
+                  placeholder:text-ink-soft
+                  outline-none
+                  transition-all
+                  focus:border-gold
+                  focus:ring-2
+                  focus:ring-gold/20
+                "
+              />
+
+            </div>
+
+
+
+            {/* Password */}
+
+            <div>
+
+              <label className="block text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-2">
+                Password
+              </label>
+
+
+              <div className="relative">
+
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") signup()
+                  }}
+                  className="
+                    w-full
+                    rounded-md
+                    border
+                    border-hairline
+                    bg-paper
+                    px-4
+                    py-3
+                    pr-16
+                    text-sm
+                    text-ink
+                    placeholder:text-ink-soft
+                    outline-none
+                    transition-all
+                    focus:border-gold
+                    focus:ring-2
+                    focus:ring-gold/20
+                  "
+                />
+
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="
+                    absolute
+                    right-3
+                    top-1/2
+                    -translate-y-1/2
+                    text-xs
+                    font-medium
+                    text-gold
+                    hover:text-ink
+                  "
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+
+              </div>
+
+            </div>
+
+
+
+            {/* Message */}
+
+            {message && (
+
+              <div className="
+                rounded-md
+                border
+                border-rust/20
+                bg-rust/10
+                px-4
+                py-3
+              ">
+
+                <p className="text-sm text-rust">
+                  {message}
+                </p>
+
+              </div>
+
+            )}
+
+
+
+            {/* Button */}
+
+            <button
+              onClick={signup}
+              disabled={loading}
+              className="
+                w-full
+                rounded-md
+                bg-gold
+                py-3
+                font-semibold
+                text-ink
+                shadow-sm
+                transition-all
+                hover:opacity-90
+                active:scale-[0.99]
+                disabled:opacity-60
+              "
+            >
+              {loading ? "Creating account..." : "Create Account"}
+            </button>
+
+
+          </div>
+
+
+
+          {/* Login */}
+
+          <div className="mt-6 border-t border-hairline pt-5 text-center">
+
+            <p className="text-sm text-ink-soft">
+              Already have an account?
+            </p>
+
+            <Link
+              href="/login"
+              className="
+                mt-2
+                inline-block
+                font-medium
+                text-gold
+                hover:underline
+              "
+            >
+              Sign in →
+            </Link>
+
+          </div>
+
+
+        </div>
+
+
+
+        <p className="mt-6 text-center text-xs text-ink-soft">
+          Your account will be reviewed before joining the fund.
+        </p>
+
 
       </div>
 
