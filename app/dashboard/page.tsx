@@ -295,47 +295,46 @@ export default function DashboardPage() {
                 <Sparkline points={myTrend} color="#5F7A5A" />
               </div>
 
-              <LedgerCard>
-                <SectionLabel>Capital</SectionLabel>
-                <LedgerRow label="Total Contribution" value={mine ? `₱${fmt(mine.total_contribution)}` : "—"} />
-                {mine != null && mine.total_withdrawal !== 0 && (
-                  <LedgerRow
-                    label="Total Withdrawal"
-                    value={`-₱${fmt(Math.abs(mine.total_withdrawal))}`}
-                    valueClass="text-rust"
-                  />
-                )}
-                <LedgerRow label="Net Contribution" value={mine ? `₱${fmt(mine.net_contribution)}` : "—"} bold />
-
-                <SectionLabel>Performance</SectionLabel>
-                {mine != null && (
-                  <LedgerRow
-                    label="Total Gain/Loss"
-                    value={signed(mine.bank_interest + mine.investment_gain_loss + mine.loan_gain + mine.bank_writeoff)}
-                    valueClass={tone(mine.bank_interest + mine.investment_gain_loss + mine.loan_gain + mine.bank_writeoff)}
-                    bold
-                    noBorder
-                  />
-                )}
-                {mine != null && (
-                  <div className="pl-3 mb-3">
-                    <SubRow label="Bank Interest" value={signed(mine.bank_interest)} valueClass={tone(mine.bank_interest)} />
-                    <SubRow
-                      label="Investment Gain/Loss"
-                      value={signed(mine.investment_gain_loss)}
-                      valueClass={tone(mine.investment_gain_loss)}
-                    />
-                    <SubRow label="Loan Gain Share" value={signed(mine.loan_gain)} valueClass={tone(mine.loan_gain)} />
-                    {mine.bank_writeoff !== 0 && (
-                      <SubRow
-                        label="Bank Write-off Share"
-                        value={signed(mine.bank_writeoff)}
-                        valueClass={tone(mine.bank_writeoff)}
+              {mine != null && (
+                <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
+                  <InfoBox label="Capital">
+                    <InfoRow label="Total Contribution" value={`₱${fmt(mine.total_contribution)}`} />
+                    {mine.total_withdrawal !== 0 && (
+                      <InfoRow
+                        label="Total Withdrawal"
+                        value={`-₱${fmt(Math.abs(mine.total_withdrawal))}`}
+                        valueClass="text-rust"
                       />
                     )}
-                  </div>
-                )}
-              </LedgerCard>
+                    <InfoRow label="Net Contribution" value={`₱${fmt(mine.net_contribution)}`} bold />
+                  </InfoBox>
+
+                  <InfoBox label="Performance">
+                    <InfoRow
+                      label="Total Gain/Loss"
+                      value={signed(mine.bank_interest + mine.investment_gain_loss + mine.loan_gain + mine.bank_writeoff)}
+                      valueClass={tone(mine.bank_interest + mine.investment_gain_loss + mine.loan_gain + mine.bank_writeoff)}
+                      bold
+                    />
+                    <div className="pt-1 space-y-1.5">
+                      <InfoSubRow label="Bank Interest" value={signed(mine.bank_interest)} valueClass={tone(mine.bank_interest)} />
+                      <InfoSubRow
+                        label="Investment Gain/Loss"
+                        value={signed(mine.investment_gain_loss)}
+                        valueClass={tone(mine.investment_gain_loss)}
+                      />
+                      <InfoSubRow label="Loan Gain Share" value={signed(mine.loan_gain)} valueClass={tone(mine.loan_gain)} />
+                      {mine.bank_writeoff !== 0 && (
+                        <InfoSubRow
+                          label="Bank Write-off Share"
+                          value={signed(mine.bank_writeoff)}
+                          valueClass={tone(mine.bank_writeoff)}
+                        />
+                      )}
+                    </div>
+                  </InfoBox>
+                </div>
+              )}
             </section>
           )}
 
@@ -372,39 +371,37 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              <LedgerCard>
-                <SectionLabel>Performance</SectionLabel>
-                {fund != null && (
-                  <LedgerRow
-                    label="Total Fund Gain/Loss"
-                    value={signed(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
-                    valueClass={tone(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
-                    bold
-                    noBorder
-                  />
-                )}
-                {fund != null && (
-                  <div className="pl-3 mb-3">
-                    <SubRow
-                      label="Bank Interest (all-time)"
-                      value={signed(fund.total_bank_interest)}
-                      valueClass="text-sage"
+              {fund != null && (
+                <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
+                  <InfoBox label="Performance">
+                    <InfoRow
+                      label="Total Fund Gain/Loss"
+                      value={signed(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
+                      valueClass={tone(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
+                      bold
                     />
-                    <SubRow
-                      label="Investment Position"
-                      value={signed(fund.net_investment_gain_loss)}
-                      valueClass={tone(fund.net_investment_gain_loss)}
-                    />
-                    <SubRow
-                      label="Loan Gains Distributed"
-                      value={`₱${fmt(fund.total_loan_gain_distributed)}`}
-                    />
-                  </div>
-                )}
-              </LedgerCard>
+                    <div className="pt-1 space-y-1.5">
+                      <InfoSubRow
+                        label="Bank Interest (all-time)"
+                        value={signed(fund.total_bank_interest)}
+                        valueClass="text-sage"
+                      />
+                      <InfoSubRow
+                        label="Investment Position"
+                        value={signed(fund.net_investment_gain_loss)}
+                        valueClass={tone(fund.net_investment_gain_loss)}
+                      />
+                      <InfoSubRow
+                        label="Loan Gains Distributed"
+                        value={`₱${fmt(fund.total_loan_gain_distributed)}`}
+                      />
+                    </div>
+                  </InfoBox>
+                </div>
+              )}
 
               {fund != null && fund.open_loans_count > 0 && (
-                <div className="bg-paper-2 border border-hairline rounded-sm px-4 py-3.5 mb-4">
+                <div className="bg-paper-2 border border-hairline rounded-sm px-4 py-3.5 mt-4">
                   <div className="flex justify-between text-xs text-ink-soft mb-2">
                     <span>
                       {fund.open_loans_count} Loan{fund.open_loans_count === 1 ? "" : "s"} Outstanding
@@ -503,46 +500,35 @@ export default function DashboardPage() {
   )
 }
 
-function LedgerCard({ children }: { children: React.ReactNode }) {
+// A single calm block for a group of related figures -- flat background,
+// one soft border, no internal rule lines. Reads at a glance rather than
+// as a row-by-row ledger. Matches the Fund Breakdown page's InfoBox.
+function InfoBox({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="border-t border-b border-hairline mb-4">
-      {children}
+    <div className="bg-paper rounded-lg px-4 py-3.5 mb-3 last:mb-0">
+      <p className="text-[10px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-2">{label}</p>
+      <div className="space-y-1.5">{children}</div>
     </div>
   )
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[10px] uppercase tracking-[0.1em] text-ink-soft font-mono pt-4 pb-1 first:pt-3">
-      {children}
-    </p>
-  )
-}
-
-function LedgerRow({
+function InfoRow({
   label,
   value,
   valueClass = "text-ink",
-  bold = false,
-  noBorder = false
+  bold = false
 }: {
   label: string
   value: string
   valueClass?: string
   bold?: boolean
-  noBorder?: boolean
 }) {
   return (
-    <div
-      className={`flex items-baseline gap-2 py-[11px] last:border-b-0 ${
-        noBorder ? "" : "border-b border-dashed border-hairline"
-      }`}
-    >
-      <span className="text-[13.5px] text-ink whitespace-nowrap">{label}</span>
-      <span className="flex-1 border-b border-dotted border-ink-soft opacity-30 -translate-y-[3px]" />
+    <div className="flex items-baseline justify-between gap-3">
+      <span className={`text-[13px] ${bold ? "text-ink font-semibold" : "text-ink-soft"}`}>{label}</span>
       <span
         className={`font-mono [font-variant-numeric:tabular-nums] whitespace-nowrap ${
-          bold ? "text-[15px] font-bold" : "text-[13.5px] font-semibold"
+          bold ? "text-[15px] font-bold" : "text-[13px] font-semibold"
         } ${valueClass}`}
       >
         {value}
@@ -551,11 +537,10 @@ function LedgerRow({
   )
 }
 
-// Lightweight row for the items *underneath* a subtotal (e.g. what makes up
-// Total Gain/Loss). Deliberately smaller, no leader-dot line, no per-row
-// border -- reads as detail supporting the line above it, not as another
-// equal-weight ledger entry.
-function SubRow({
+// Smaller detail line underneath a subtotal (e.g. what makes up Total
+// Gain/Loss) -- distinguished from InfoRow by size and indentation alone,
+// no border or leader line.
+function InfoSubRow({
   label,
   value,
   valueClass = "text-ink"
@@ -565,11 +550,9 @@ function SubRow({
   valueClass?: string
 }) {
   return (
-    <div className="flex items-baseline justify-between py-[5px]">
+    <div className="flex items-baseline justify-between gap-3 pl-2">
       <span className="text-[12px] text-ink-soft">{label}</span>
-      <span
-        className={`font-mono [font-variant-numeric:tabular-nums] text-[12px] font-medium whitespace-nowrap ${valueClass}`}
-      >
+      <span className={`font-mono [font-variant-numeric:tabular-nums] text-[12px] font-medium whitespace-nowrap ${valueClass}`}>
         {value}
       </span>
     </div>
