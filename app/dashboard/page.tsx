@@ -242,18 +242,15 @@ export default function DashboardPage() {
           {isAdmin && pendingCount > 0 && (
             <button
               onClick={() => router.push("/admin")}
-              className="mb-6 w-full text-left bg-paper-2 border border-hairline rounded-sm relative overflow-hidden"
+              className="mb-6 w-full text-left bg-paper-2 border border-hairline rounded-md px-5 py-4 flex items-center justify-between"
             >
-              <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-rust" />
-              <div className="pl-6 pr-5 py-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-ink font-medium">
-                    {pendingCount} {pendingCount === 1 ? "entry" : "entries"} awaiting approval
-                  </p>
-                  <p className="text-xs text-ink-soft mt-0.5">Tap to review in Admin</p>
-                </div>
-                <span className="text-ink-soft">→</span>
+              <div>
+                <p className="text-sm text-ink font-medium">
+                  {pendingCount} {pendingCount === 1 ? "entry" : "entries"} awaiting approval
+                </p>
+                <p className="text-xs text-rust mt-0.5">Tap to review in Admin</p>
               </div>
+              <span className="text-ink-soft">→</span>
             </button>
           )}
 
@@ -279,8 +276,7 @@ export default function DashboardPage() {
 
           {activeTab === "you" && (
             <section>
-              <div className="bg-paper-2 border border-hairline rounded-sm relative overflow-hidden pl-[22px] pr-4 pt-4 pb-3.5">
-                <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-sage" />
+              <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
                   Available Balance
                 </p>
@@ -340,8 +336,7 @@ export default function DashboardPage() {
 
           {activeTab === "fund" && (
             <section>
-              <div className="bg-paper-2 border border-hairline rounded-sm relative overflow-hidden pl-[22px] pr-4 pt-4 pb-3.5">
-                <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
+              <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
                   Fund Total Cash
                 </p>
@@ -427,9 +422,8 @@ export default function DashboardPage() {
               <h2 className="font-display text-lg font-medium text-ink mb-3">
                 Your Recent Activity
               </h2>
-              <div className="bg-paper-2 border border-hairline rounded-sm relative overflow-hidden">
-                <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
-                <div className="pl-6 pr-5">
+              <div className="bg-paper-2 border border-hairline rounded-md">
+                <div className="px-5">
                   {recent.map((t, i) => (
                     <div
                       key={t.transaction_id}
