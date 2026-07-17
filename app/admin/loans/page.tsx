@@ -225,9 +225,7 @@ export default function AdminLoansPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans">
-          Loading...
-        </main>
+        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
       </>
     )
   }
