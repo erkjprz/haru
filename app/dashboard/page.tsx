@@ -391,14 +391,20 @@ export default function DashboardPage() {
               )}
 
               {fund != null && fund.open_loans_count > 0 && (
-                <div className="bg-paper-2 border border-hairline rounded-md px-4 py-3.5 mt-4">
-                  <div className="flex justify-between text-xs text-ink-soft mb-2">
+                <button
+                  onClick={() => router.push("/loans")}
+                  className="w-full text-left bg-paper-2 border border-hairline rounded-md px-4 py-3.5 mt-4 hover:bg-paper transition-colors"
+                >
+                  <div className="flex justify-between items-center text-xs text-ink-soft mb-2">
                     <span>
                       {fund.open_loans_count} Loan{fund.open_loans_count === 1 ? "" : "s"} Outstanding
                     </span>
-                    <span className="font-mono [font-variant-numeric:tabular-nums] font-semibold text-ink">
-                      ₱{fmt(fund.open_loans_outstanding)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono [font-variant-numeric:tabular-nums] font-semibold text-ink">
+                        ₱{fmt(fund.open_loans_outstanding)}
+                      </span>
+                      <span className="text-ink-soft">→</span>
+                    </div>
                   </div>
                   <div className="h-2 rounded-full bg-hairline overflow-hidden">
                     <div className="h-full bg-sage" style={{ width: `${loanRepaidPct}%` }} />
@@ -407,7 +413,7 @@ export default function DashboardPage() {
                     ₱{fmt(fund.open_loans_principal - fund.open_loans_outstanding)} repaid of ₱
                     {fmt(fund.open_loans_principal)} principal
                   </p>
-                </div>
+                </button>
               )}
             </section>
           )}
