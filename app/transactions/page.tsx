@@ -76,11 +76,13 @@ const CLASSIFICATIONS_WITH_HIDDEN_DESCRIPTION = new Set([
   "Tax"
 ])
 
-// Each bank transfer is stored as two legs (a negative-amount row on the
-// source bank, a positive-amount row on the destination bank, same date,
-// same absolute amount) rather than one row with a from/to pair -- see
-// project notes on Internal Transfer. To show "BDO -> Maya" on either leg,
-// find its counterpart leg among the already-loaded transactions.
+// Each legacy (migrated) bank transfer is stored as two rows (a
+// negative-amount leg on the source bank, a positive-amount leg on the
+// destination bank, same date, same absolute amount, identified via the
+// plain `bank` text column) rather than one row with a from/to pair -- see
+// project notes on Internal Transfer. New transfers created through the
+// app are a single row instead, with both ends on bank_account_id /
+// to_bank_account_id. transferDirectionLabel below handles both shapes.
 function findTransferPair(transaction: any, allTransactions: any[]): any | null {
   return (
     allTransactions.find(
@@ -93,7 +95,21 @@ function findTransferPair(transaction: any, allTransactions: any[]): any | null 
   )
 }
 
+function bankAccountLabel(account: any): string | null {
+  if (!account) return null
+  return account.account_name || account.bank_name || null
+}
+
 function transferDirectionLabel(transaction: any, allTransactions: any[]): string | null {
+  // New single-row shape: both ends are already on this row.
+  const fromAccount = bankAccountLabel(transaction.from_bank_account)
+  const toAccount = bankAccountLabel(transaction.to_bank_account)
+  if (fromAccount && toAccount) {
+    return `${fromAccount} → ${toAccount}`
+  }
+
+  // Legacy two-row shape: find the counterpart leg and use the plain
+  // `bank` text column from each side instead.
   const pair = findTransferPair(transaction, allTransactions)
   if (!pair || !transaction.bank || !pair.bank) return null
 
@@ -133,6 +149,12 @@ export default function TransactionsPage() {
     // covers current volume; if the table keeps growing, switch this to
     // real server-side pagination ("Load more" / page tokens) instead of
     // raising the number again.
+    // bank_accounts is now used again -- populated going forward with real
+    // rows (BDO / Maya). New Internal Transfer rows carry both ends on a
+    // single row via bank_account_id (from) and to_bank_account_id (to);
+    // legacy migrated transfers instead used two separate rows with the
+    // plain `bank` text column and have null bank_account_id/to_bank_account_id
+    // (see transferDirectionLabel below, which handles both shapes).
     const { data, error, count } = await supabase
       .from("transactions")
       .select(
@@ -150,6 +172,14 @@ export default function TransactionsPage() {
           borrowers!loans_borrower_id_fkey (
             name
           )
+        ),
+        from_bank_account:bank_accounts!transactions_bank_account_id_fkey (
+          bank_name,
+          account_name
+        ),
+        to_bank_account:bank_accounts!transactions_to_bank_account_id_fkey (
+          bank_name,
+          account_name
         )
       `,
         { count: "exact" }
