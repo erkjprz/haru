@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { useAuth } from "@/app/auth-context"
+import { SkeletonPanel } from "@/app/components/Skeleton"
 
 type FundSummary = {
   total_cash: number
@@ -38,9 +40,8 @@ type MemberPerformance = {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [checkingAccess, setCheckingAccess] = useState(true)
-  const [memberName, setMemberName] = useState("")
-  const [isAdmin, setIsAdmin] = useState(false)
+  const { loading: authLoading, member } = useAuth()
+  const [dataLoading, setDataLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"you" | "fund">("you")
   const [asOf, setAsOf] = useState<Date | null>(null)
 
@@ -51,30 +52,25 @@ export default function DashboardPage() {
   const [pendingCount, setPendingCount] = useState(0)
   const [loadError, setLoadError] = useState("")
 
+  const memberName = member?.name ?? ""
+  const isAdmin = member?.role === "admin"
+  const checkingAccess = authLoading || dataLoading
+
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
     async function loadDashboard() {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("member_id, name, status, role")
-        .eq("email", user.email)
-        .single()
-
-      if (!member || member.status !== "approved") {
-        router.push("/waiting")
-        return
-      }
-
-      setMemberName(member.name)
-      setIsAdmin(member.role === "admin")
+      if (!member) return
 
       // Fund-wide performance: v_fund_summary applies the correct sign to
       // investment gain/loss (Farmon losses vs. Perfume Biz gains),
@@ -161,11 +157,11 @@ export default function DashboardPage() {
 
       setPendingCount(pendingResult.count ?? 0)
       setAsOf(new Date())
-      setCheckingAccess(false)
+      setDataLoading(false)
     }
 
     loadDashboard()
-  }, [])
+  }, [authLoading, member, router])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -187,7 +183,11 @@ export default function DashboardPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+            <SkeletonPanel />
+          </div>
+        </main>
       </>
     )
   }

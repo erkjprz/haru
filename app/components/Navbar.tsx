@@ -4,33 +4,15 @@ import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useTheme } from "@/app/components/ThemeProvider"
+import { useAuth } from "@/app/auth-context"
 
 export default function Navbar() {
   const router = useRouter()
   const pathname = usePathname()
   const { theme, toggleTheme } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
-
-  useEffect(() => {
-    async function checkRole() {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-      if (!user) return
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("role")
-        .eq("email", user.email)
-        .single()
-
-      setIsAdmin(member?.role === "admin")
-    }
-
-    checkRole()
-  }, [])
+  const { member } = useAuth()
+  const isAdmin = member?.role === "admin"
 
   useEffect(() => {
     setIsOpen(false)

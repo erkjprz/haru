@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
+import { useAuth } from "@/app/auth-context"
+import { SkeletonCardList } from "@/app/components/Skeleton"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 import {
   getPendingBankInterestGroups,
@@ -25,7 +27,9 @@ const typeLabels: Record<string, string> = {
 
 export default function AdminPage() {
   const router = useRouter()
-  const [checkingAccess, setCheckingAccess] = useState(true)
+  const { loading: authLoading, member } = useAuth()
+  const [dataLoading, setDataLoading] = useState(true)
+  const checkingAccess = authLoading || dataLoading
 
   const [memberCount, setMemberCount] = useState(0)
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
@@ -178,32 +182,25 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.role !== "admin") {
+      router.push("/dashboard")
+      return
+    }
+
     async function checkAdminAccess() {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("role")
-        .eq("email", user.email)
-        .single()
-
-      if (member?.role === "admin") {
-        await loadData()
-        setCheckingAccess(false)
-      } else {
-        router.push("/dashboard")
-      }
+      await loadData()
+      setDataLoading(false)
     }
 
     checkAdminAccess()
-  }, [])
+  }, [authLoading, member, router])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -234,7 +231,11 @@ export default function AdminPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink p-6 font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+            <SkeletonCardList rows={3} />
+          </div>
+        </main>
       </>
     )
   }

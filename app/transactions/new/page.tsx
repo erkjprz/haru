@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
+import { useAuth } from "@/app/auth-context"
+import { SkeletonPanel } from "@/app/components/Skeleton"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -42,9 +44,11 @@ function isValidPositiveNumber(value: string, allowZero = false): boolean {
 
 export default function NewTransactionPage() {
   const router = useRouter()
-  const [checkingAccess, setCheckingAccess] = useState(true)
-  const [memberId, setMemberId] = useState<string | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const { loading: authLoading, member } = useAuth()
+  const [dataLoading, setDataLoading] = useState(true)
+  const checkingAccess = authLoading || dataLoading
+  const memberId = member?.member_id ?? null
+  const isAdmin = member?.role === "admin"
   const [banks, setBanks] = useState<any[]>([])
   const [allMembers, setAllMembers] = useState<any[]>([])
   const [recent, setRecent] = useState<any[]>([])
@@ -90,29 +94,20 @@ export default function NewTransactionPage() {
   }
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
     async function checkAccess() {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("member_id, status, role")
-        .eq("email", user.email)
-        .single()
-
-      if (!member || member.status !== "approved") {
-        router.push("/waiting")
-        return
-      }
-
-      setMemberId(member.member_id)
-      setIsAdmin(member.role === "admin")
+      if (!member) return
 
       const { data: bankList } = await supabase
         .from("bank_accounts")
@@ -132,11 +127,11 @@ export default function NewTransactionPage() {
 
       await loadRecent(member.member_id)
       await loadLoansFor(member.member_id)
-      setCheckingAccess(false)
+      setDataLoading(false)
     }
 
     checkAccess()
-  }, [])
+  }, [authLoading, member, router])
 
   const visibleTypes = ENTRY_TYPES.filter((t) => !t.adminOnly || isAdmin)
   const isMemberLinkedType = MEMBER_LINKED_TYPES.includes(selectedType)
@@ -442,7 +437,11 @@ export default function NewTransactionPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
+            <SkeletonPanel />
+          </div>
+        </main>
       </>
     )
   }

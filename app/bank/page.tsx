@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { useAuth } from "@/app/auth-context"
+import { SkeletonCardList } from "@/app/components/Skeleton"
 
 type Bank = {
   bank: string
@@ -15,32 +17,26 @@ type Bank = {
 
 export default function BanksPage() {
   const router = useRouter()
-  const [checkingAccess, setCheckingAccess] = useState(true)
+  const { loading: authLoading, member } = useAuth()
+  const [dataLoading, setDataLoading] = useState(true)
+  const checkingAccess = authLoading || dataLoading
   const [banks, setBanks] = useState<Bank[]>([])
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
     async function load() {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("member_id, status")
-        .eq("email", user.email)
-        .single()
-
-      if (!member || member.status !== "approved") {
-        router.push("/waiting")
-        return
-      }
-
       // v_bank_balances: running cash balance per bank from the ledger.
       const balancesPromise = supabase.from("v_bank_balances").select("*")
 
@@ -64,7 +60,7 @@ export default function BanksPage() {
 
       if (balancesResult.error) {
         setLoadError(balancesResult.error.message)
-        setCheckingAccess(false)
+        setDataLoading(false)
         return
       }
 
@@ -89,11 +85,11 @@ export default function BanksPage() {
       }
 
       setBanks(Object.values(byBank).sort((a, b) => b.balance - a.balance))
-      setCheckingAccess(false)
+      setDataLoading(false)
     }
 
     load()
-  }, [])
+  }, [authLoading, member, router])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -102,7 +98,11 @@ export default function BanksPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+env(safe-area-inset-bottom))]">
+            <SkeletonCardList rows={3} />
+          </div>
+        </main>
       </>
     )
   }

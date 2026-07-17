@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { useAuth } from "@/app/auth-context"
+import { SkeletonPanel } from "@/app/components/Skeleton"
 
 type Share = {
   member_id: string
@@ -18,36 +20,28 @@ export default function BankYearDetailPage() {
   const bank = decodeURIComponent((params?.bank as string) ?? "")
   const year = params?.year as string
 
-  const [checkingAccess, setCheckingAccess] = useState(true)
+  const { loading: authLoading, member } = useAuth()
+  const [dataLoading, setDataLoading] = useState(true)
+  const checkingAccess = authLoading || dataLoading
   const [shares, setShares] = useState<Share[]>([])
-  const [myMemberId, setMyMemberId] = useState<string | null>(null)
+  const myMemberId = member?.member_id ?? null
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
     async function load() {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("member_id, status")
-        .eq("email", user.email)
-        .single()
-
-      if (!member || member.status !== "approved") {
-        router.push("/waiting")
-        return
-      }
-
-      setMyMemberId(member.member_id)
-
       // Per-member split for this bank's interest in this calendar year.
       // Mirrors investment_allocations' shape: one row per member per
       // distribution event, joined to members(name) for display.
@@ -73,11 +67,11 @@ export default function BankYearDetailPage() {
         )
       }
 
-      setCheckingAccess(false)
+      setDataLoading(false)
     }
 
     if (bank && year) load()
-  }, [bank, year])
+  }, [bank, year, authLoading, member, router])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -86,7 +80,11 @@ export default function BankYearDetailPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+env(safe-area-inset-bottom))]">
+            <SkeletonPanel />
+          </div>
+        </main>
       </>
     )
   }

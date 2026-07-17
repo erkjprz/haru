@@ -4,12 +4,16 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { useAuth } from "@/app/auth-context"
+import { SkeletonCardList } from "@/app/components/Skeleton"
 
 const CUTOVER_DATE = "2026-07-16"
 
 export default function AdminBanksPage() {
   const router = useRouter()
-  const [checkingAccess, setCheckingAccess] = useState(true)
+  const { loading: authLoading, member } = useAuth()
+  const [dataLoading, setDataLoading] = useState(true)
+  const checkingAccess = authLoading || dataLoading
   const [banks, setBanks] = useState<any[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -63,33 +67,25 @@ export default function AdminBanksPage() {
   }
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.role !== "admin") {
+      router.push("/dashboard")
+      return
+    }
+
     async function checkAdmin() {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("role")
-        .eq("email", user.email)
-        .single()
-
-      if (!member || member.role !== "admin") {
-        router.push("/dashboard")
-        return
-      }
-
       await loadBanks()
-      setCheckingAccess(false)
+      setDataLoading(false)
     }
 
     checkAdmin()
-  }, [])
+  }, [authLoading, member, router])
 
   function clearForm() {
     setShowForm(false)
@@ -169,7 +165,11 @@ export default function AdminBanksPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+            <SkeletonCardList rows={3} />
+          </div>
+        </main>
       </>
     )
   }
