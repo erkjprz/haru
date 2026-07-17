@@ -1,188 +1,198 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 
-export default function AdminBanksPage() {
-  const [banks, setBanks] = useState<any[]>([])
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [bankName, setBankName] = useState("")
-  const [accountName, setAccountName] = useState("")
-  const [openingBalance, setOpeningBalance] = useState("")
-  const [interestRate, setInterestRate] = useState("")
-  const [message, setMessage] = useState("")
+type Bank = {
+  bank: string
+  balance: number
+  interest_earned: number
+  tax: number
+  distributed: number
+}
 
-  async function loadBanks() {
-    const { data } = await supabase
-      .from("bank_accounts")
-      .select("*")
-      .order("created_at", { ascending: false })
-
-    setBanks(data ?? [])
-  }
+export default function BanksPage() {
+  const router = useRouter()
+  const [checkingAccess, setCheckingAccess] = useState(true)
+  const [banks, setBanks] = useState<Bank[]>([])
+  const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
-    loadBanks()
+    async function load() {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.push("/login")
+        return
+      }
+
+      const { data: member } = await supabase
+        .from("members")
+        .select("member_id, status")
+        .eq("email", user.email)
+        .single()
+
+      if (!member || member.status !== "approved") {
+        router.push("/waiting")
+        return
+      }
+
+      // v_bank_balances: running cash balance per bank from the ledger.
+      const balancesPromise = supabase.from("v_bank_balances").select("*")
+
+      // Interest earned and tax withheld per bank, all-time, approved only.
+      // Mirrors v_bank_summary's own filter (Bank Interest / Tax, approved)
+      // but pulled per-row here so we can pivot classification into columns.
+      const interestPromise = supabase
+        .from("transactions")
+        .select("bank, classification, amount")
+        .eq("status", "approved")
+        .in("classification", ["Bank Interest", "Tax"])
+
+      // What's actually been paid out to members so far, per bank.
+      const distributedPromise = supabase.from("bank_interest_allocations").select("bank, amount")
+
+      const [balancesResult, interestResult, distributedResult] = await Promise.all([
+        balancesPromise,
+        interestPromise,
+        distributedPromise
+      ])
+
+      if (balancesResult.error) {
+        setLoadError(balancesResult.error.message)
+        setCheckingAccess(false)
+        return
+      }
+
+      const byBank: Record<string, Bank> = {}
+      for (const row of balancesResult.data ?? []) {
+        byBank[row.bank] = { bank: row.bank, balance: Number(row.balance), interest_earned: 0, tax: 0, distributed: 0 }
+      }
+
+      if (!interestResult.error) {
+        for (const row of interestResult.data ?? []) {
+          if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+          if (row.classification === "Bank Interest") byBank[row.bank].interest_earned += Number(row.amount)
+          if (row.classification === "Tax") byBank[row.bank].tax += Number(row.amount)
+        }
+      }
+
+      if (!distributedResult.error) {
+        for (const row of distributedResult.data ?? []) {
+          if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+          byBank[row.bank].distributed += Number(row.amount)
+        }
+      }
+
+      setBanks(Object.values(byBank).sort((a, b) => b.balance - a.balance))
+      setCheckingAccess(false)
+    }
+
+    load()
   }, [])
 
-  function clearForm() {
-    setEditingId(null)
-    setBankName("")
-    setAccountName("")
-    setOpeningBalance("")
-    setInterestRate("")
-  }
+  const fmt = (n: number) =>
+    Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  async function saveBank() {
-    const bankData = {
-      bank_name: bankName,
-      account_name: accountName,
-      opening_balance: Number(openingBalance),
-      interest_rate: Number(interestRate)
-    }
-
-    if (editingId) {
-      const { error } = await supabase
-        .from("bank_accounts")
-        .update(bankData)
-        .eq("id", editingId)
-
-      if (error) {
-        setMessage(error.message)
-        return
-      }
-      setMessage("Bank updated")
-    } else {
-      const { error } = await supabase
-        .from("bank_accounts")
-        .insert(bankData)
-
-      if (error) {
-        setMessage(error.message)
-        return
-      }
-      setMessage("Bank added")
-    }
-
-    clearForm()
-    loadBanks()
-  }
-
-  function editBank(bank: any) {
-    setEditingId(bank.id)
-    setBankName(bank.bank_name ?? "")
-    setAccountName(bank.account_name ?? "")
-    setOpeningBalance(
-      String(bank.opening_balance ?? "")
-    )
-    setInterestRate(
-      String(bank.interest_rate ?? "")
+  if (checkingAccess) {
+    return (
+      <>
+        <Navbar />
+        <main className="p-6 bg-paper min-h-screen text-ink font-sans">Loading...</main>
+      </>
     )
   }
+
+  const totalBalance = banks.reduce((sum, b) => sum + b.balance, 0)
 
   return (
     <>
       <Navbar />
-      <main className="p-6">
-        <h1 className="text-3xl font-bold">
-          Manage Bank Accounts
-        </h1>
+      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+env(safe-area-inset-bottom))]">
+          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
+            Fund accounts
+          </div>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">Banks</h1>
+          <p className="text-[13px] text-ink-soft mb-5">
+            Where the fund's cash sits, and the interest each account has earned.
+          </p>
 
-        <div className="mt-6 border rounded p-4 max-w-md space-y-3">
-          <h2 className="font-bold">
-            {editingId
-              ? "Edit Bank Account"
-              : "Add Bank Account"}
-          </h2>
-
-          <input
-            className="border p-3 rounded w-full"
-            placeholder="Bank name"
-            value={bankName}
-            onChange={(e) => setBankName(e.target.value)}
-          />
-
-          <input
-            className="border p-3 rounded w-full"
-            placeholder="Account name"
-            value={accountName}
-            onChange={(e) => setAccountName(e.target.value)}
-          />
-
-          <input
-            className="border p-3 rounded w-full"
-            placeholder="Opening balance"
-            type="number"
-            value={openingBalance}
-            onChange={(e) => setOpeningBalance(e.target.value)}
-          />
-
-          <input
-            className="border p-3 rounded w-full"
-            placeholder="Interest rate %"
-            type="number"
-            value={interestRate}
-            onChange={(e) => setInterestRate(e.target.value)}
-          />
-
-          <button
-            className="bg-black text-white px-4 py-2 rounded w-full"
-            onClick={saveBank}
-          >
-            {editingId
-              ? "Save Changes"
-              : "Add Bank"}
-          </button>
-
-          {editingId && (
-            <button
-              className="border px-4 py-2 rounded w-full"
-              onClick={clearForm}
-            >
-              Cancel
-            </button>
+          {!loadError && banks.length > 0 && (
+            <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 mb-6">
+              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
+                Total Bank Balance
+              </p>
+              <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">
+                ₱{fmt(totalBalance)}
+              </p>
+              <p className="text-[11px] text-ink-soft mt-1">
+                across {banks.length} account{banks.length === 1 ? "" : "s"}
+              </p>
+            </div>
           )}
 
-          <p>
-            {message}
-          </p>
-        </div>
+          {loadError && <p className="mb-4 text-sm text-rust">Couldn't load banks: {loadError}</p>}
 
-        <div className="mt-8 space-y-4">
-          <h2 className="text-xl font-bold">
-            Existing Banks
-          </h2>
+          {!loadError && banks.length === 0 && (
+            <p className="text-sm text-ink-soft text-center py-12">No bank accounts on record yet.</p>
+          )}
 
-          {banks.map((bank) => (
-            <div
-              key={bank.id}
-              className="border rounded p-4"
-            >
-              <h3 className="font-bold">
-                {bank.account_name || bank.bank_name}
-              </h3>
-              <p>
-                Bank: {bank.bank_name}
-              </p>
-              <p>
-                Opening Balance:{" "}
-                ₱{bank.opening_balance}
-              </p>
-              <p>
-                Interest:{" "}
-                {bank.interest_rate}%
-              </p>
-              <button
-                className="mt-3 border px-4 py-2 rounded"
-                onClick={() => editBank(bank)}
-              >
-                Edit
-              </button>
-            </div>
-          ))}
+          <div className="flex flex-col gap-3">
+            {banks.map((b) => (
+              <BankCard key={b.bank} bank={b} fmt={fmt} onClick={() => router.push(`/banks/${encodeURIComponent(b.bank)}`)} />
+            ))}
+          </div>
         </div>
       </main>
     </>
+  )
+}
+
+function BankCard({ bank, fmt, onClick }: { bank: Bank; fmt: (n: number) => string; onClick: () => void }) {
+  const netInterest = bank.interest_earned - bank.tax
+  const undistributed = netInterest - bank.distributed
+  const distributedPct = netInterest > 0 ? Math.min(100, (bank.distributed / netInterest) * 100) : 0
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 py-4 hover:bg-paper transition-colors"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-display text-[17px] font-semibold text-ink truncate">{bank.bank}</p>
+          <p className="text-[12px] text-ink-soft">₱{fmt(bank.balance)} current balance</p>
+        </div>
+        <span className="text-ink-soft shrink-0">→</span>
+      </div>
+
+      <div className="flex items-baseline justify-between mt-3.5">
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Interest Earned</p>
+          <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-sage">
+            +₱{fmt(netInterest)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Distributed</p>
+          <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-ink">
+            ₱{fmt(bank.distributed)}
+          </p>
+        </div>
+      </div>
+
+      <div className="h-1.5 rounded-full bg-hairline overflow-hidden mt-2.5">
+        <div className="h-full bg-sage" style={{ width: `${distributedPct}%` }} />
+      </div>
+
+      {undistributed > 0.01 && (
+        <p className="text-[11px] text-gold mt-2">₱{fmt(undistributed)} not yet distributed to members</p>
+      )}
+    </button>
   )
 }
