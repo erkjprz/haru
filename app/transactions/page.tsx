@@ -153,6 +153,11 @@ export default function TransactionsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
+  const [memberAllocations, setMemberAllocations] = useState<{
+    investmentGainLoss: number
+    bankInterest: number
+    loanGain: number
+  } | null>(null)
 
   async function loadTransactions() {
     // members needs an explicit FK hint: transactions has two FKs into
@@ -244,6 +249,48 @@ export default function TransactionsPage() {
     loadTransactions()
     loadMembers()
   }, [])
+
+  // These three tables (investment_allocations, bank_interest_allocations,
+  // loan_gain_allocations) are separate from `transactions` and never show
+  // up in the list above -- this pulls a quick summary for whichever
+  // member is currently selected in the filter, so their investment/loan/
+  // interest totals are visible without leaving this page.
+  useEffect(() => {
+    async function loadMemberAllocations() {
+      if (!selectedMemberId) {
+        setMemberAllocations(null)
+        return
+      }
+
+      const [investResult, bankResult, loanResult] = await Promise.all([
+        supabase
+          .from("investment_allocations")
+          .select("amount, allocation_type")
+          .eq("member_id", selectedMemberId),
+        supabase
+          .from("bank_interest_allocations")
+          .select("amount")
+          .eq("member_id", selectedMemberId),
+        supabase
+          .from("loan_gain_allocations")
+          .select("amount")
+          .eq("member_id", selectedMemberId)
+      ])
+
+      const investmentGainLoss = (investResult.data ?? []).reduce((sum, r) => {
+        if (r.allocation_type === "Investment Gain") return sum + Number(r.amount)
+        if (r.allocation_type === "Investment Loss") return sum - Number(r.amount)
+        return sum
+      }, 0)
+
+      const bankInterest = (bankResult.data ?? []).reduce((sum, r) => sum + Number(r.amount), 0)
+      const loanGain = (loanResult.data ?? []).reduce((sum, r) => sum + Number(r.amount), 0)
+
+      setMemberAllocations({ investmentGainLoss, bankInterest, loanGain })
+    }
+
+    loadMemberAllocations()
+  }, [selectedMemberId])
 
   function closeFilters() {
     setShowFilters(false)
@@ -557,6 +604,43 @@ export default function TransactionsPage() {
                   Type: {typeLabels[selectedType]} ×
                 </button>
               )}
+            </div>
+          )}
+
+          {selectedMemberId && memberAllocations && (
+            <div className="mt-4 bg-paper-2 border border-hairline rounded-sm p-4">
+              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-3">
+                {selectedMember?.name}'s Allocations
+              </p>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p className="text-[10px] uppercase text-ink-soft font-mono">
+                    Investment
+                  </p>
+                  <p className={`font-mono text-sm font-semibold mt-1 ${
+                    memberAllocations.investmentGainLoss >= 0 ? "text-sage" : "text-rust"
+                  }`}>
+                    {memberAllocations.investmentGainLoss >= 0 ? "+" : "-"}₱
+                    {fmt(Math.abs(memberAllocations.investmentGainLoss))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-ink-soft font-mono">
+                    Bank Interest
+                  </p>
+                  <p className="font-mono text-sm font-semibold mt-1 text-sage">
+                    +₱{fmt(memberAllocations.bankInterest)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-ink-soft font-mono">
+                    Loan Gain
+                  </p>
+                  <p className="font-mono text-sm font-semibold mt-1 text-sage">
+                    +₱{fmt(memberAllocations.loanGain)}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
