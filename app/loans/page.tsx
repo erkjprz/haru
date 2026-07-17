@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { useAuth } from "@/app/auth-context"
 
 type Loan = {
   loan_id: string
@@ -21,35 +22,27 @@ type Loan = {
 
 export default function LoansPage() {
   const router = useRouter()
-  const [checkingAccess, setCheckingAccess] = useState(true)
+  const { loading: authLoading, member } = useAuth()
+  const [dataLoading, setDataLoading] = useState(true)
+  const checkingAccess = authLoading || dataLoading
   const [loans, setLoans] = useState<Loan[]>([])
-  const [myMemberId, setMyMemberId] = useState<string | null>(null)
+  const myMemberId = member?.member_id ?? null
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
     async function load() {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("member_id, status")
-        .eq("email", user.email)
-        .single()
-
-      if (!member || member.status !== "approved") {
-        router.push("/waiting")
-        return
-      }
-
-      setMyMemberId(member.member_id)
-
       // v_loan_summary carries the same principal/repayment/gain/outstanding
       // math as the audit's loan ledger (Section 5), plus loan_id, status,
       // and closed_date (read from loan_gain_allocations, Section 14) so
@@ -65,11 +58,11 @@ export default function LoansPage() {
         setLoans((data as Loan[]) ?? [])
       }
 
-      setCheckingAccess(false)
+      setDataLoading(false)
     }
 
     load()
-  }, [])
+  }, [authLoading, member, router])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { useAuth } from "@/app/auth-context"
 
 type Loan = {
   loan_id: string
@@ -33,37 +34,29 @@ export default function LoanDetailPage() {
   const params = useParams()
   const loanId = params?.id as string
 
-  const [checkingAccess, setCheckingAccess] = useState(true)
+  const { loading: authLoading, member } = useAuth()
+  const [dataLoading, setDataLoading] = useState(true)
+  const checkingAccess = authLoading || dataLoading
   const [loan, setLoan] = useState<Loan | null>(null)
   const [shares, setShares] = useState<GainShare[]>([])
-  const [myMemberId, setMyMemberId] = useState<string | null>(null)
+  const myMemberId = member?.member_id ?? null
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
     async function load() {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        router.push("/login")
-        return
-      }
-
-      const { data: member } = await supabase
-        .from("members")
-        .select("member_id, status")
-        .eq("email", user.email)
-        .single()
-
-      if (!member || member.status !== "approved") {
-        router.push("/waiting")
-        return
-      }
-
-      setMyMemberId(member.member_id)
-
       const loanPromise = supabase.from("v_loan_summary").select("*").eq("loan_id", loanId).single()
 
       // Gain share per member, per Section 14 of the audit doc: split
@@ -96,11 +89,11 @@ export default function LoanDetailPage() {
         setLoadError(sharesResult.error.message)
       }
 
-      setCheckingAccess(false)
+      setDataLoading(false)
     }
 
     if (loanId) load()
-  }, [loanId])
+  }, [loanId, authLoading, member, router])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })

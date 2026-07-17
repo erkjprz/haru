@@ -4,33 +4,27 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/app/auth-context"
 
 export default function LoginPage() {
   const router = useRouter()
+  const { loading: authLoading, user } = useAuth()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [message, setMessage] = useState("")
   const [loading, setLoading] = useState(false)
-  const [checkingSession, setCheckingSession] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
-    async function checkSession() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+    if (authLoading) return
 
-      if (session) {
-        router.replace("/dashboard")
-        return
-      }
-
-      setCheckingSession(false)
+    if (user) {
+      router.replace("/dashboard")
     }
+  }, [authLoading, user, router])
 
-    checkSession()
-  }, [router])
+  const checkingSession = authLoading || !!user
 
   async function login() {
     if (loading) return
