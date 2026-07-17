@@ -414,10 +414,8 @@ export default function DashboardPage() {
               {fund != null && fund.open_loans_count > 0 && (
                 <button
                   onClick={() => router.push("/loans")}
-                  className="relative w-full text-left bg-paper-2 border border-hairline rounded-md overflow-hidden pl-[21px] pr-5 py-4 mt-4 hover:bg-paper transition-colors"
+                  className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 py-4 mt-4 hover:bg-paper transition-colors"
                 >
-                  <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
-
                   <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
                     {fund.open_loans_count} Loan{fund.open_loans_count === 1 ? "" : "s"} Outstanding
                   </p>
