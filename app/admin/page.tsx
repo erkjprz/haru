@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
+import { distributeBankInterest } from "@/lib/bankInterest"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -20,52 +21,49 @@ const typeLabels: Record<string, string> = {
 
 export default function AdminPage() {
   const router = useRouter()
+  const [checkingAccess, setCheckingAccess] = useState(true)
 
-  const [totalMembers, setTotalMembers] = useState(0)
+  const [memberCount, setMemberCount] = useState(0)
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([])
+  const [pendingBankInterest, setPendingBankInterest] = useState<any[]>([])
   const [banks, setBanks] = useState<any[]>([])
-  const [withdrawalBankChoice, setWithdrawalBankChoice] = useState<Record<string, string>>({})
-  const [checkingAccess, setCheckingAccess] = useState(true)
+  const [withdrawalBankSelections, setWithdrawalBankSelections] = useState<Record<string, string>>({})
+
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
   const [memberSearch, setMemberSearch] = useState("")
-  const [transactionSearch, setTransactionSearch] = useState("")
-  const [transactionTypeFilter, setTransactionTypeFilter] = useState("")
+  const [txnSearch, setTxnSearch] = useState("")
+  const [txnTypeFilter, setTxnTypeFilter] = useState("")
 
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
-  const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set())
+  const [selectedTxnIds, setSelectedTxnIds] = useState<Set<string>>(new Set())
+
+  const [distributingId, setDistributingId] = useState<string | null>(null)
 
   async function loadData() {
-    const { count: memberCount } = await supabase
+    const { count } = await supabase
       .from("members")
       .select("*", { count: "exact", head: true })
+    setMemberCount(count ?? 0)
 
-    setTotalMembers(memberCount ?? 0)
-
-    const { data: members } = await supabase
+    const { data: pendingM } = await supabase
       .from("members")
       .select("*")
       .eq("status", "pending")
-
-    setPendingMembers(members ?? [])
+    setPendingMembers(pendingM ?? [])
 
     const { data: bankList } = await supabase
       .from("bank_accounts")
       .select("id, bank_name, account_name")
       .order("bank_name")
-
     setBanks(bankList ?? [])
 
-    // Both members and bank_accounts need explicit FK hints:
-    // - transactions has two FKs into members (member_id, submitted_by)
-    // - transactions has two FKs into bank_accounts (bank_account_id, to_bank_account_id)
-    // A bare `members(...)` or `bank_accounts(...)` embed is ambiguous and
-    // PostgREST errors on it.
-    const { data: transactions, error: txError } = await supabase
+    const { data: pendingT, error } = await supabase
       .from("transactions")
-      .select(`
+      .select(
+        `
         *,
         members!transactions_member_id_fkey (
           name,
@@ -78,93 +76,97 @@ export default function AdminPage() {
           bank_name,
           account_name
         )
-      `)
+      `
+      )
       .eq("status", "pending")
       .order("created_at", { ascending: false })
 
-    if (txError) {
-      setLoadError(txError.message)
+    if (error) {
+      setLoadError(error.message)
       setPendingTransactions([])
     } else {
       setLoadError("")
-      setPendingTransactions(transactions ?? [])
+      setPendingTransactions(pendingT ?? [])
     }
+
+    // Bank Interest transactions that have been approved but not yet had
+    // their per-member split run -- distribution is now a separate manual
+    // step from this page instead of happening automatically on insert.
+    const { data: pendingInterest } = await supabase
+      .from("transactions")
+      .select(
+        `
+        transaction_id,
+        amount,
+        description,
+        txn_date,
+        created_at,
+        bank,
+        bank_accounts!transactions_bank_account_id_fkey (
+          bank_name,
+          account_name
+        )
+      `
+      )
+      .eq("classification", "Bank Interest")
+      .eq("interest_distributed", false)
+      .order("txn_date", { ascending: false, nullsFirst: false })
+    setPendingBankInterest(pendingInterest ?? [])
 
     setSelectedMemberIds(new Set())
-    setSelectedTransactionIds(new Set())
+    setSelectedTxnIds(new Set())
   }
 
-  async function approveMember(id: string) {
-    await supabase
-      .from("members")
-      .update({ status: "approved" })
-      .eq("member_id", id)
-
+  async function approveMember(memberId: string) {
+    await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
     loadData()
   }
 
-  async function approveTransaction(id: string) {
-    const transaction = pendingTransactions.find((t) => t.transaction_id === id)
+  async function approveTransaction(transactionId: string) {
+    const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
+    const updates: Record<string, any> = { status: "approved" }
 
-    const updates: any = { status: "approved" }
-
-    if (transaction?.classification === "Member Withdrawal") {
-      const bankId = withdrawalBankChoice[id]
-      if (!bankId) return
-      updates.bank_account_id = bankId
+    if (txn?.classification === "Member Withdrawal") {
+      const bankAccountId = withdrawalBankSelections[transactionId]
+      if (!bankAccountId) return
+      updates.bank_account_id = bankAccountId
     }
 
-    await supabase
-      .from("transactions")
-      .update(updates)
-      .eq("transaction_id", id)
+    await supabase.from("transactions").update(updates).eq("transaction_id", transactionId)
 
-    // If this was a loan repayment and it just fully covers the loan,
-    // this closes it and distributes gain automatically.
-    if (transaction?.classification === "Loan Repayment" && transaction.loan_id) {
-      await autoCloseLoanIfFullyRepaid(transaction.loan_id)
+    if (txn?.classification === "Loan Repayment" && txn.loan_id) {
+      await autoCloseLoanIfFullyRepaid(txn.loan_id)
     }
 
     loadData()
   }
 
-  async function rejectTransaction(id: string) {
-    await supabase
-      .from("transactions")
-      .update({ status: "rejected" })
-      .eq("transaction_id", id)
-
+  async function rejectTransaction(transactionId: string) {
+    await supabase.from("transactions").update({ status: "rejected" }).eq("transaction_id", transactionId)
     loadData()
   }
 
   async function bulkApproveMembers() {
     if (selectedMemberIds.size === 0) return
-
     await supabase
       .from("members")
       .update({ status: "approved" })
       .in("member_id", Array.from(selectedMemberIds))
-
     loadData()
   }
 
   async function bulkApproveTransactions() {
-    if (selectedTransactionIds.size === 0) return
-
-    const ids = Array.from(selectedTransactionIds)
-
-    const affectedLoanIds = new Set(
+    if (selectedTxnIds.size === 0) return
+    const ids = Array.from(selectedTxnIds)
+    const loanIdsToCheck = new Set(
       pendingTransactions
         .filter((t) => ids.includes(t.transaction_id) && t.classification === "Loan Repayment" && t.loan_id)
         .map((t) => t.loan_id)
     )
 
-    await supabase
-      .from("transactions")
-      .update({ status: "approved" })
-      .in("transaction_id", ids)
+    await supabase.from("transactions").update({ status: "approved" }).in("transaction_id", ids)
 
-    for (const loanId of affectedLoanIds) {
+    for (const loanId of loanIdsToCheck) {
       await autoCloseLoanIfFullyRepaid(loanId)
     }
 
@@ -172,67 +174,47 @@ export default function AdminPage() {
   }
 
   async function bulkRejectTransactions() {
-    if (selectedTransactionIds.size === 0) return
-
+    if (selectedTxnIds.size === 0) return
     await supabase
       .from("transactions")
       .update({ status: "rejected" })
-      .in("transaction_id", Array.from(selectedTransactionIds))
-
+      .in("transaction_id", Array.from(selectedTxnIds))
     loadData()
   }
 
-  function toggleMemberSelection(id: string) {
-    setSelectedMemberIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }
-
-  function toggleTransactionSelection(id: string) {
-    setSelectedTransactionIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }
-
-  async function checkAdmin() {
-    const {
-      data: { user }
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      router.push("/login")
-      return
-    }
-
-    const { data: member } = await supabase
-      .from("members")
-      .select("role")
-      .eq("email", user.email)
-      .single()
-
-    if (!member || member.role !== "admin") {
-      router.push("/dashboard")
-      return
-    }
-
-    await loadData()
-    setCheckingAccess(false)
+  async function handleDistribute(transactionId: string) {
+    setDistributingId(transactionId)
+    await distributeBankInterest(transactionId)
+    setDistributingId(null)
+    loadData()
   }
 
   useEffect(() => {
-    checkAdmin()
+    async function checkAdminAccess() {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.push("/login")
+        return
+      }
+
+      const { data: member } = await supabase
+        .from("members")
+        .select("role")
+        .eq("email", user.email)
+        .single()
+
+      if (member?.role === "admin") {
+        await loadData()
+        setCheckingAccess(false)
+      } else {
+        router.push("/dashboard")
+      }
+    }
+
+    checkAdminAccess()
   }, [])
 
   const fmt = (n: number) =>
@@ -240,54 +222,25 @@ export default function AdminPage() {
 
   const filteredMembers = pendingMembers.filter((m) => {
     const q = memberSearch.toLowerCase()
-    return (
-      m.name?.toLowerCase().includes(q) ||
-      m.email?.toLowerCase().includes(q)
-    )
+    return m.name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)
   })
 
   const filteredTransactions = pendingTransactions.filter((t) => {
-    const q = transactionSearch.toLowerCase()
+    const q = txnSearch.toLowerCase()
     const matchesSearch =
       t.members?.name?.toLowerCase().includes(q) ||
       t.description?.toLowerCase().includes(q) ||
       String(t.amount).includes(q)
-    const matchesType = transactionTypeFilter
-      ? t.classification === transactionTypeFilter
-      : true
+    const matchesType = !txnTypeFilter || t.classification === txnTypeFilter
     return matchesSearch && matchesType
   })
 
-  const totalPendingAmount = pendingTransactions.reduce(
-    (sum, t) => sum + Math.abs(Number(t.amount)),
-    0
-  )
+  const pendingAmountTotal = pendingTransactions.reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0)
 
-  const allMembersSelected =
-    filteredMembers.length > 0 &&
-    filteredMembers.every((m) => selectedMemberIds.has(m.member_id))
-
-  const bulkSelectableTransactions = filteredTransactions.filter((t) => t.classification !== "Member Withdrawal")
-
+  const allMembersSelected = filteredMembers.length > 0 && filteredMembers.every((m) => selectedMemberIds.has(m.member_id))
+  const selectableTransactions = filteredTransactions.filter((t) => t.classification !== "Member Withdrawal")
   const allTransactionsSelected =
-    bulkSelectableTransactions.length > 0 &&
-    bulkSelectableTransactions.every((t) => selectedTransactionIds.has(t.transaction_id))
-
-  function toggleSelectAllMembers() {
-    if (allMembersSelected) {
-      setSelectedMemberIds(new Set())
-    } else {
-      setSelectedMemberIds(new Set(filteredMembers.map((m) => m.member_id)))
-    }
-  }
-
-  function toggleSelectAllTransactions() {
-    if (allTransactionsSelected) {
-      setSelectedTransactionIds(new Set())
-    } else {
-      setSelectedTransactionIds(new Set(bulkSelectableTransactions.map((t) => t.transaction_id)))
-    }
-  }
+    selectableTransactions.length > 0 && selectableTransactions.every((t) => selectedTxnIds.has(t.transaction_id))
 
   if (checkingAccess) {
     return (
@@ -300,13 +253,6 @@ export default function AdminPage() {
     )
   }
 
-  const menu = [
-    { title: "Members", description: "Manage contributors and roles", path: "/admin/members" },
-    { title: "Banks", description: "Manage bank accounts and balances", path: "/admin/banks" },
-    { title: "Assets", description: "Manage investments and write-offs", path: "/admin/assets" },
-    { title: "Loans", description: "Approve requests, track repayment", path: "/admin/loans" }
-  ]
-
   return (
     <>
       <Navbar />
@@ -315,9 +261,7 @@ export default function AdminPage() {
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Administration
           </div>
-          <h1 className="font-display text-4xl font-semibold">
-            Admin Panel
-          </h1>
+          <h1 className="font-display text-4xl font-semibold">Admin Panel</h1>
 
           {loadError && (
             <p className="mt-4 text-sm text-rust">
@@ -328,61 +272,87 @@ export default function AdminPage() {
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-paper-2 border border-hairline rounded-md p-4">
               <div className="text-xs text-ink-soft font-mono">Members</div>
-              <div className="font-display text-2xl font-semibold mt-1">
-                {totalMembers}
-              </div>
+              <div className="font-display text-2xl font-semibold mt-1">{memberCount}</div>
             </div>
             <div className="bg-paper-2 border border-hairline rounded-md p-4">
               <div className="text-xs text-ink-soft font-mono">Pending Members</div>
-              <div className="font-display text-2xl font-semibold mt-1 text-gold">
-                {pendingMembers.length}
-              </div>
+              <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingMembers.length}</div>
             </div>
             <div className="bg-paper-2 border border-hairline rounded-md p-4">
               <div className="text-xs text-ink-soft font-mono">Pending Txns</div>
-              <div className="font-display text-2xl font-semibold mt-1 text-gold">
-                {pendingTransactions.length}
-              </div>
+              <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingTransactions.length}</div>
             </div>
             <div className="bg-paper-2 border border-hairline rounded-md p-4">
               <div className="text-xs text-ink-soft font-mono">Pending Amount</div>
-              <div className="font-display text-lg font-semibold mt-1 font-mono">
-                ₱{fmt(totalPendingAmount)}
-              </div>
+              <div className="font-display text-lg font-semibold mt-1 font-mono">₱{fmt(pendingAmountTotal)}</div>
             </div>
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-3">
-            {menu.map((item) => (
+            {[
+              { title: "Members", description: "Manage contributors and roles", path: "/admin/members" },
+              { title: "Banks", description: "Manage bank accounts and balances", path: "/admin/banks" },
+              { title: "Assets", description: "Manage investments and write-offs", path: "/admin/assets" },
+              { title: "Loans", description: "Approve requests, track repayment", path: "/admin/loans" }
+            ].map((item) => (
               <button
                 key={item.title}
                 onClick={() => router.push(item.path)}
-                className="
-                  text-left
-                  bg-paper-2
-                  border
-                  border-hairline
-                  rounded-md
-                  p-4
-                  hover:border-gold
-                  transition
-                "
+                className="text-left bg-paper-2 border border-hairline rounded-md p-4 hover:border-gold transition"
               >
-                <div className="font-display text-lg font-medium">
-                  {item.title}
-                </div>
-                <div className="text-xs text-ink-soft mt-1">
-                  {item.description}
-                </div>
+                <div className="font-display text-lg font-medium">{item.title}</div>
+                <div className="text-xs text-ink-soft mt-1">{item.description}</div>
               </button>
             ))}
           </div>
 
+          {/* Bank interest pending distribution -- new manual step. */}
           <section className="mt-10">
             <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-2xl font-semibold">
-                Pending Members
-              </h2>
+              <h2 className="font-display text-2xl font-semibold">Bank Interest — Pending Distribution</h2>
+              <span className="text-xs text-ink-soft font-mono">{pendingBankInterest.length}</span>
+            </div>
+
+            {pendingBankInterest.length === 0 && (
+              <p className="mt-3 text-sm text-ink-soft">
+                No bank interest waiting to be split across members.
+              </p>
+            )}
+
+            <div className="mt-3 space-y-3">
+              {pendingBankInterest.map((t) => {
+                const bankLabel = t.bank || t.bank_accounts?.account_name || t.bank_accounts?.bank_name || "Unknown bank"
+                const date = t.txn_date || t.created_at?.slice(0, 10)
+                return (
+                  <div
+                    key={t.transaction_id}
+                    className="bg-paper-2 border border-hairline rounded-md p-4 flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <p className="font-display font-medium">₱{fmt(Math.abs(Number(t.amount)))}</p>
+                      <p className="text-sm text-ink-soft">
+                        {bankLabel} · {date}
+                      </p>
+                      {t.description && (
+                        <p className="text-xs text-ink-soft mt-1">{t.description}</p>
+                      )}
+                    </div>
+                    <button
+                      className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50 shrink-0"
+                      onClick={() => handleDistribute(t.transaction_id)}
+                      disabled={distributingId === t.transaction_id}
+                    >
+                      {distributingId === t.transaction_id ? "Distributing..." : "Distribute"}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          <section className="mt-10">
+            <div className="flex items-baseline justify-between">
+              <h2 className="font-display text-2xl font-semibold">Pending Members</h2>
               <span className="text-xs text-ink-soft font-mono">
                 {filteredMembers.length} of {pendingMembers.length}
               </span>
@@ -396,22 +366,23 @@ export default function AdminPage() {
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
                 />
-
                 <div className="mt-3 flex items-center justify-between">
                   <label className="flex items-center gap-2 text-sm text-ink-soft">
                     <input
                       type="checkbox"
                       checked={allMembersSelected}
-                      onChange={toggleSelectAllMembers}
+                      onChange={() => {
+                        if (allMembersSelected) {
+                          setSelectedMemberIds(new Set())
+                        } else {
+                          setSelectedMemberIds(new Set(filteredMembers.map((m) => m.member_id)))
+                        }
+                      }}
                     />
                     Select all
                   </label>
-
                   {selectedMemberIds.size > 0 && (
-                    <button
-                      className="bg-ink text-paper px-3 py-1.5 rounded-sm text-sm"
-                      onClick={bulkApproveMembers}
-                    >
+                    <button className="bg-ink text-paper px-3 py-1.5 rounded-sm text-sm" onClick={bulkApproveMembers}>
                       Approve {selectedMemberIds.size} selected
                     </button>
                   )}
@@ -420,53 +391,43 @@ export default function AdminPage() {
             )}
 
             <div className="mt-3 space-y-3">
-              {filteredMembers.map((member) => (
-                <div
-                  key={member.member_id}
-                  className="bg-paper-2 border border-hairline rounded-md p-4 flex items-start gap-3"
-                >
+              {filteredMembers.map((m) => (
+                <div key={m.member_id} className="bg-paper-2 border border-hairline rounded-md p-4 flex items-start gap-3">
                   <input
                     type="checkbox"
                     className="mt-1"
-                    checked={selectedMemberIds.has(member.member_id)}
-                    onChange={() => toggleMemberSelection(member.member_id)}
+                    checked={selectedMemberIds.has(m.member_id)}
+                    onChange={() => {
+                      setSelectedMemberIds((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(m.member_id)) next.delete(m.member_id)
+                        else next.add(m.member_id)
+                        return next
+                      })
+                    }}
                   />
                   <div className="flex-1">
-                    <p className="font-display font-medium">
-                      {member.name}
-                    </p>
-                    <p className="text-sm text-ink-soft">
-                      {member.email}
-                    </p>
+                    <p className="font-display font-medium">{m.name}</p>
+                    <p className="text-sm text-ink-soft">{m.email}</p>
                     <button
                       className="mt-3 bg-ink text-paper px-4 py-2 rounded-sm text-sm"
-                      onClick={() => approveMember(member.member_id)}
+                      onClick={() => approveMember(m.member_id)}
                     >
                       Approve
                     </button>
                   </div>
                 </div>
               ))}
-
-              {pendingMembers.length === 0 && (
-                <p className="text-sm text-ink-soft">
-                  No pending members
-                </p>
-              )}
-
+              {pendingMembers.length === 0 && <p className="text-sm text-ink-soft">No pending members</p>}
               {pendingMembers.length > 0 && filteredMembers.length === 0 && (
-                <p className="text-sm text-ink-soft">
-                  No matches for "{memberSearch}"
-                </p>
+                <p className="text-sm text-ink-soft">No matches for "{memberSearch}"</p>
               )}
             </div>
           </section>
 
           <section className="mt-10">
             <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-2xl font-semibold">
-                Pending Transactions
-              </h2>
+              <h2 className="font-display text-2xl font-semibold">Pending Transactions</h2>
               <span className="text-xs text-ink-soft font-mono">
                 {filteredTransactions.length} of {pendingTransactions.length}
               </span>
@@ -478,46 +439,44 @@ export default function AdminPage() {
                   <input
                     className="border border-hairline bg-paper-2 text-ink text-sm rounded-sm px-3 py-2 flex-1"
                     placeholder="Search by member, description, or amount"
-                    value={transactionSearch}
-                    onChange={(e) => setTransactionSearch(e.target.value)}
+                    value={txnSearch}
+                    onChange={(e) => setTxnSearch(e.target.value)}
                   />
                   <select
                     className="border border-hairline bg-paper-2 text-ink text-sm rounded-sm px-3 py-2"
-                    value={transactionTypeFilter}
-                    onChange={(e) => setTransactionTypeFilter(e.target.value)}
+                    value={txnTypeFilter}
+                    onChange={(e) => setTxnTypeFilter(e.target.value)}
                   >
                     <option value="">All types</option>
-                    {Object.keys(typeLabels).map((type) => (
-                      <option key={type} value={type}>
-                        {typeLabels[type]}
+                    {Object.keys(typeLabels).map((key) => (
+                      <option key={key} value={key}>
+                        {typeLabels[key]}
                       </option>
                     ))}
                   </select>
                 </div>
-
                 <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
                   <label className="flex items-center gap-2 text-sm text-ink-soft">
                     <input
                       type="checkbox"
                       checked={allTransactionsSelected}
-                      onChange={toggleSelectAllTransactions}
+                      onChange={() => {
+                        if (allTransactionsSelected) {
+                          setSelectedTxnIds(new Set())
+                        } else {
+                          setSelectedTxnIds(new Set(selectableTransactions.map((t) => t.transaction_id)))
+                        }
+                      }}
                     />
                     Select all
                   </label>
-
-                  {selectedTransactionIds.size > 0 && (
+                  {selectedTxnIds.size > 0 && (
                     <div className="flex gap-2">
-                      <button
-                        className="bg-ink text-paper px-3 py-1.5 rounded-sm text-sm"
-                        onClick={bulkApproveTransactions}
-                      >
-                        Approve {selectedTransactionIds.size}
+                      <button className="bg-ink text-paper px-3 py-1.5 rounded-sm text-sm" onClick={bulkApproveTransactions}>
+                        Approve {selectedTxnIds.size}
                       </button>
-                      <button
-                        className="border border-hairline px-3 py-1.5 rounded-sm text-sm"
-                        onClick={bulkRejectTransactions}
-                      >
-                        Reject {selectedTransactionIds.size}
+                      <button className="border border-hairline px-3 py-1.5 rounded-sm text-sm" onClick={bulkRejectTransactions}>
+                        Reject {selectedTxnIds.size}
                       </button>
                     </div>
                   )}
@@ -526,71 +485,55 @@ export default function AdminPage() {
             )}
 
             <div className="mt-3 space-y-3">
-              {filteredTransactions.map((transaction) => (
-                <div
-                  key={transaction.transaction_id}
-                  className="bg-paper-2 border border-hairline rounded-md p-4 flex items-start gap-3"
-                >
-                  {transaction.classification !== "Member Withdrawal" && (
+              {filteredTransactions.map((t) => (
+                <div key={t.transaction_id} className="bg-paper-2 border border-hairline rounded-md p-4 flex items-start gap-3">
+                  {t.classification !== "Member Withdrawal" && (
                     <input
                       type="checkbox"
                       className="mt-1"
-                      checked={selectedTransactionIds.has(transaction.transaction_id)}
-                      onChange={() => toggleTransactionSelection(transaction.transaction_id)}
+                      checked={selectedTxnIds.has(t.transaction_id)}
+                      onChange={() => {
+                        setSelectedTxnIds((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(t.transaction_id)) next.delete(t.transaction_id)
+                          else next.add(t.transaction_id)
+                          return next
+                        })
+                      }}
                     />
                   )}
                   <div className="flex-1">
-                    <p className="font-display font-medium">
-                      {transaction.members?.name || "Fund"}
-                    </p>
-                    {transaction.submitted_by_member && (
+                    <p className="font-display font-medium">{t.members?.name || "Fund"}</p>
+                    {t.submitted_by_member && (
                       <p className="text-[11px] text-gold font-mono">
-                        Recorded by {transaction.submitted_by_member.name}
+                        Recorded by {t.submitted_by_member.name}
                       </p>
                     )}
-                    <p className="text-sm font-mono">
-                      ₱{fmt(Math.abs(transaction.amount))}
-                    </p>
+                    <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
+                    <p className="text-sm text-ink-soft">Type: {typeLabels[t.classification] || t.classification}</p>
                     <p className="text-sm text-ink-soft">
-                      Type: {typeLabels[transaction.classification] || transaction.classification}
+                      Bank: {t.bank_accounts?.account_name || t.bank_accounts?.bank_name || "None"}
                     </p>
-                    <p className="text-sm text-ink-soft">
-                      Bank:{" "}
-                      {
-                        transaction.bank_accounts?.account_name ||
-                        transaction.bank_accounts?.bank_name ||
-                        "None"
-                      }
-                    </p>
-                    {transaction.description && (
-                      <p className="text-sm text-ink-soft mt-1">
-                        {transaction.description}
-                      </p>
-                    )}
-
-                    {transaction.receipt_url && (
+                    {t.description && <p className="text-sm text-ink-soft mt-1">{t.description}</p>}
+                    {t.receipt_url && (
                       <button
                         type="button"
-                        onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
+                        onClick={() => setOpenReceiptUrl(t.receipt_url)}
                         className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
                       >
                         🧾 View Receipt
                       </button>
                     )}
-
-                    {transaction.classification === "Member Withdrawal" && (
+                    {t.classification === "Member Withdrawal" && (
                       <div className="mt-3">
                         <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
                           Withdraw from bank
                         </label>
                         <select
                           className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
-                          value={withdrawalBankChoice[transaction.transaction_id] || ""}
+                          value={withdrawalBankSelections[t.transaction_id] || ""}
                           onChange={(e) =>
-                            setWithdrawalBankChoice((prev) => ({
-                              ...prev,
-                              [transaction.transaction_id]: e.target.value
-                            }))
+                            setWithdrawalBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
                           }
                         >
                           <option value="">Select a bank</option>
@@ -602,21 +545,17 @@ export default function AdminPage() {
                         </select>
                       </div>
                     )}
-
                     <div className="mt-4 flex gap-2">
                       <button
                         className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50"
-                        onClick={() => approveTransaction(transaction.transaction_id)}
-                        disabled={
-                          transaction.classification === "Member Withdrawal" &&
-                          !withdrawalBankChoice[transaction.transaction_id]
-                        }
+                        onClick={() => approveTransaction(t.transaction_id)}
+                        disabled={t.classification === "Member Withdrawal" && !withdrawalBankSelections[t.transaction_id]}
                       >
                         Approve
                       </button>
                       <button
                         className="border border-hairline px-4 py-2 rounded-sm text-sm"
-                        onClick={() => rejectTransaction(transaction.transaction_id)}
+                        onClick={() => rejectTransaction(t.transaction_id)}
                       >
                         Reject
                       </button>
@@ -624,29 +563,18 @@ export default function AdminPage() {
                   </div>
                 </div>
               ))}
-
               {pendingTransactions.length === 0 && !loadError && (
-                <p className="text-sm text-ink-soft">
-                  No pending transactions
-                </p>
+                <p className="text-sm text-ink-soft">No pending transactions</p>
               )}
-
               {pendingTransactions.length > 0 && filteredTransactions.length === 0 && (
-                <p className="text-sm text-ink-soft">
-                  No matches for current search/filter
-                </p>
+                <p className="text-sm text-ink-soft">No matches for current search/filter</p>
               )}
             </div>
           </section>
         </div>
       </main>
 
-      {openReceiptUrl && (
-        <ReceiptModal
-          url={openReceiptUrl}
-          onClose={() => setOpenReceiptUrl(null)}
-        />
-      )}
+      {openReceiptUrl && <ReceiptModal url={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
   )
 }

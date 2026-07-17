@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
-import { distributeBankInterest } from "@/lib/bankInterest"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -159,7 +158,7 @@ export default function NewTransactionPage() {
     withdrawal: "You're requesting money to be sent to you. No receipt needed yet.",
     loan_request: "You're requesting to borrow from the fund. No receipt needed yet.",
     loan_payment: "You've already sent this repayment. Attach proof of deposit.",
-    bank_interest: "Recording interest earned by a bank account. Goes straight in as approved.",
+    bank_interest: "Recording interest earned by a bank account. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
     expense: "Recording money spent out of the fund. Goes straight in as approved.",
     bank_transfer: "Moving money between two of the fund's own banks. Doesn't affect total contributions or cash — it's just internal."
   }
@@ -353,7 +352,10 @@ export default function NewTransactionPage() {
 
     if (isAdminEntry) {
       // Expenses are cash going out, so the ledger stores them negative.
-      const { data: newTransaction, error } = await supabase
+      // Bank Interest rows default to interest_distributed = false and sit
+      // there until an admin manually distributes them from /admin --
+      // this is no longer automatic.
+      const { error } = await supabase
         .from("transactions")
         .insert({
           member_id: null,
@@ -364,20 +366,12 @@ export default function NewTransactionPage() {
           receipt_url: null,
           status: "approved"
         })
-        .select()
-        .single()
 
       setSubmitting(false)
 
       if (error) {
         setMessage(error.message)
         return
-      }
-
-      // Bank interest gets split across members immediately, proportional
-      // to their balance right now — no manual step needed.
-      if (selectedType === "bank_interest" && newTransaction) {
-        await distributeBankInterest(newTransaction.transaction_id)
       }
 
       router.push("/transactions")
