@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
+import { SkeletonCardList } from "@/app/components/Skeleton"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 import {
   getPendingBankInterestGroups,
@@ -230,7 +231,11 @@ export default function AdminPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink p-6 font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+            <SkeletonCardList rows={3} />
+          </div>
+        </main>
       </>
     )
   }

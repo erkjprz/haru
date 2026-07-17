@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 import { useAuth } from "@/app/auth-context"
+import { SkeletonPanel } from "@/app/components/Skeleton"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -436,7 +437,11 @@ export default function NewTransactionPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
+            <SkeletonPanel />
+          </div>
+        </main>
       </>
     )
   }

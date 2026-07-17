@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
+import { SkeletonCardList } from "@/app/components/Skeleton"
 
 const CUTOVER_DATE = "2026-07-16"
 
@@ -164,7 +165,11 @@ export default function AdminBanksPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+            <SkeletonCardList rows={3} />
+          </div>
+        </main>
       </>
     )
   }

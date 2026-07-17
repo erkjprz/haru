@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { SkeletonCardList } from "@/app/components/Skeleton"
 
 type MemberRow = {
   member_id: string
@@ -141,7 +142,11 @@ export default function FundBreakdownPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+            <SkeletonCardList rows={4} />
+          </div>
+        </main>
       </>
     )
   }

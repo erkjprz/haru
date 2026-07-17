@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
+import { SkeletonPanel } from "@/app/components/Skeleton"
 
 type FundSummary = {
   total_cash: number
@@ -182,7 +183,11 @@ export default function DashboardPage() {
     return (
       <>
         <Navbar />
-        <main className="p-6 bg-paper min-h-screen text-ink font-sans" />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+            <SkeletonPanel />
+          </div>
+        </main>
       </>
     )
   }
