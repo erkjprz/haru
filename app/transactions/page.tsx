@@ -119,6 +119,29 @@ function transferDirectionLabel(transaction: any, allTransactions: any[]): strin
   return `${fromLeg.bank} → ${toLeg.bank}`
 }
 
+// Legacy transfers are two separate DB rows (see findTransferPair above) --
+// correct as source-of-truth data, but showing both as separate cards
+// duplicates the same real-world event in the list. Collapse each pair
+// down to one card: keep the negative ("from") leg since Math.abs() at
+// render time already turns it into a plain magnitude, and drop its paired
+// positive ("to") leg. New single-row transfers (bank_account_id set)
+// never match this and pass through untouched. Nothing in the database
+// changes -- both original rows still exist exactly as migrated.
+function dedupeLegacyTransferPairs(rows: any[]): any[] {
+  const skipIds = new Set<string>()
+
+  for (const row of rows) {
+    if (row.classification !== "Internal Transfer") continue
+    if (row.bank_account_id || row.to_bank_account_id) continue
+    if (Number(row.amount) <= 0) continue
+
+    const pair = findTransferPair(row, rows)
+    if (pair) skipIds.add(row.transaction_id)
+  }
+
+  return rows.filter((row) => !skipIds.has(row.transaction_id))
+}
+
 export default function TransactionsPage() {
   const router = useRouter()
   const [transactions, setTransactions] = useState<any[]>([])
@@ -196,8 +219,22 @@ export default function TransactionsPage() {
     }
 
     setLoadError("")
-    setTransactions(data ?? [])
-    setTotalCount(count ?? (data?.length ?? 0))
+
+    const rawRows = data ?? []
+
+    // Compute each transfer's from->to label while both legacy legs are
+    // still present (dedupeLegacyTransferPairs below removes one of them,
+    // and findTransferPair can't locate a partner that's already gone).
+    const withTransferLabels = rawRows.map((row) =>
+      row.classification === "Internal Transfer"
+        ? { ...row, _transferLabel: transferDirectionLabel(row, rawRows) }
+        : row
+    )
+
+    const deduped = dedupeLegacyTransferPairs(withTransferLabels)
+
+    setTransactions(deduped)
+    setTotalCount(deduped.length)
   }
 
   async function loadMembers() {
