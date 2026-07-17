@@ -50,6 +50,15 @@ function effectiveDate(transaction: any): Date {
 // carries information beyond "this belongs to that member" -- e.g. Fund-level
 // rows (Tax, Bank Interest, Internal Transfer, Investment) where it's the
 // only content, or the rare genuine note.
+// Some non-Contribution/Withdrawal rows (e.g. Investment) can still end up
+// with a description that's just the linked member's name. Kept as a
+// fallback safety net even though the four classifications below are now
+// hidden unconditionally.
+function isRedundantDescription(description: string | null, memberName: string | null): boolean {
+  if (!description || !memberName) return false
+  return description.trim().toLowerCase() === memberName.trim().toLowerCase()
+}
+
 // Tax and Bank Interest rows have no member -- their description ("tax",
 // "interest", "maya interest") was the only way to tell them apart from
 // each other and to see which bank they belonged to. Now that the type
@@ -570,7 +579,7 @@ export default function TransactionsPage() {
                             transaction.classification
                           }
                         </span>
-                        {transaction.bank && (
+                        {transaction.bank && !isTransferTxn && (
                           <span className="
                             text-[9px]
                             uppercase
@@ -602,11 +611,21 @@ export default function TransactionsPage() {
                         font-medium
                         mt-2
                       ">
-                        {memberName || "Fund"}
+                        {displayName}
                       </div>
                       {transaction.submitted_by_member && (
                         <p className="text-[11px] text-gold font-mono mt-0.5">
                           Recorded by {transaction.submitted_by_member.name}
+                        </p>
+                      )}
+                      {isLoanTxn && loanName && (
+                        <p className="text-xs text-ink-soft mt-1 font-mono">
+                          {loanName}
+                        </p>
+                      )}
+                      {isTransferTxn && transferLabel && (
+                        <p className="text-xs text-ink-soft mt-1 font-mono">
+                          {transferLabel}
                         </p>
                       )}
                       {showDescription && (
