@@ -55,6 +55,17 @@ function isRedundantDescription(description: string | null, memberName: string |
   return description.trim().toLowerCase() === memberName.trim().toLowerCase()
 }
 
+// Tax and Bank Interest rows have no member -- their description ("tax",
+// "interest", "maya interest") was the only way to tell them apart from
+// each other and to see which bank they belonged to. Now that the type
+// badge already says TAX / BANK INTEREST and the bank pill already shows
+// BDO / Maya, that description adds nothing, so hide it for these two
+// classifications specifically.
+const CLASSIFICATIONS_WITH_REDUNDANT_DESCRIPTION = new Set([
+  "Tax",
+  "Bank Interest"
+])
+
 export default function TransactionsPage() {
   const router = useRouter()
   const [transactions, setTransactions] = useState<any[]>([])
@@ -459,7 +470,8 @@ export default function TransactionsPage() {
               const memberName = transaction.members?.name || null
               const showDescription =
                 transaction.description &&
-                !isRedundantDescription(transaction.description, memberName)
+                !isRedundantDescription(transaction.description, memberName) &&
+                !CLASSIFICATIONS_WITH_REDUNDANT_DESCRIPTION.has(transaction.classification)
 
               return (
                 <div
