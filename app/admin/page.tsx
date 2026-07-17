@@ -6,7 +6,11 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
-import { distributeBankInterest } from "@/lib/bankInterest"
+import {
+  getPendingBankInterestGroups,
+  distributeBankInterestGroup,
+  type PendingBankInterestGroup
+} from "@/lib/bankInterest"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -26,7 +30,7 @@ export default function AdminPage() {
   const [memberCount, setMemberCount] = useState(0)
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([])
-  const [pendingBankInterest, setPendingBankInterest] = useState<any[]>([])
+  const [pendingBankInterestGroups, setPendingBankInterestGroups] = useState<PendingBankInterestGroup[]>([])
   const [banks, setBanks] = useState<any[]>([])
   const [withdrawalBankSelections, setWithdrawalBankSelections] = useState<Record<string, string>>({})
 
@@ -40,7 +44,7 @@ export default function AdminPage() {
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
   const [selectedTxnIds, setSelectedTxnIds] = useState<Set<string>>(new Set())
 
-  const [distributingId, setDistributingId] = useState<string | null>(null)
+  const [distributingKey, setDistributingKey] = useState<string | null>(null)
 
   async function loadData() {
     const { count } = await supabase
@@ -90,28 +94,11 @@ export default function AdminPage() {
     }
 
     // Bank Interest transactions that have been approved but not yet had
-    // their per-member split run -- distribution is now a separate manual
-    // step from this page instead of happening automatically on insert.
-    const { data: pendingInterest } = await supabase
-      .from("transactions")
-      .select(
-        `
-        transaction_id,
-        amount,
-        description,
-        txn_date,
-        created_at,
-        bank,
-        bank_accounts!transactions_bank_account_id_fkey (
-          bank_name,
-          account_name
-        )
-      `
-      )
-      .eq("classification", "Bank Interest")
-      .eq("interest_distributed", false)
-      .order("txn_date", { ascending: false, nullsFirst: false })
-    setPendingBankInterest(pendingInterest ?? [])
+    // their lump-sum split run -- grouped by (year, bank), matching the
+    // historical distribution pattern exactly (one event per calendar
+    // year per bank, not per individual transaction).
+    const groups = await getPendingBankInterestGroups()
+    setPendingBankInterestGroups(groups)
 
     setSelectedMemberIds(new Set())
     setSelectedTxnIds(new Set())
@@ -182,10 +169,11 @@ export default function AdminPage() {
     loadData()
   }
 
-  async function handleDistribute(transactionId: string) {
-    setDistributingId(transactionId)
-    await distributeBankInterest(transactionId)
-    setDistributingId(null)
+  async function handleDistribute(group: PendingBankInterestGroup) {
+    const key = `${group.year}-${group.bank}`
+    setDistributingKey(key)
+    await distributeBankInterestGroup(group)
+    setDistributingKey(null)
     loadData()
   }
 
@@ -306,43 +294,43 @@ export default function AdminPage() {
             ))}
           </div>
 
-          {/* Bank interest pending distribution -- new manual step. */}
+          {/* Bank interest pending distribution -- new manual step, grouped
+              by (year, bank) to match the historical lump-sum pattern. */}
           <section className="mt-10">
             <div className="flex items-baseline justify-between">
               <h2 className="font-display text-2xl font-semibold">Bank Interest — Pending Distribution</h2>
-              <span className="text-xs text-ink-soft font-mono">{pendingBankInterest.length}</span>
+              <span className="text-xs text-ink-soft font-mono">{pendingBankInterestGroups.length}</span>
             </div>
 
-            {pendingBankInterest.length === 0 && (
+            {pendingBankInterestGroups.length === 0 && (
               <p className="mt-3 text-sm text-ink-soft">
                 No bank interest waiting to be split across members.
               </p>
             )}
 
             <div className="mt-3 space-y-3">
-              {pendingBankInterest.map((t) => {
-                const bankLabel = t.bank || t.bank_accounts?.account_name || t.bank_accounts?.bank_name || "Unknown bank"
-                const date = t.txn_date || t.created_at?.slice(0, 10)
+              {pendingBankInterestGroups.map((group) => {
+                const key = `${group.year}-${group.bank}`
                 return (
                   <div
-                    key={t.transaction_id}
+                    key={key}
                     className="bg-paper-2 border border-hairline rounded-md p-4 flex items-center justify-between gap-3"
                   >
                     <div>
-                      <p className="font-display font-medium">₱{fmt(Math.abs(Number(t.amount)))}</p>
+                      <p className="font-display font-medium">₱{fmt(Math.abs(group.totalAmount))}</p>
                       <p className="text-sm text-ink-soft">
-                        {bankLabel} · {date}
+                        {group.bank} · {group.year}
                       </p>
-                      {t.description && (
-                        <p className="text-xs text-ink-soft mt-1">{t.description}</p>
-                      )}
+                      <p className="text-xs text-ink-soft mt-1">
+                        {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined into one lump sum
+                      </p>
                     </div>
                     <button
                       className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50 shrink-0"
-                      onClick={() => handleDistribute(t.transaction_id)}
-                      disabled={distributingId === t.transaction_id}
+                      onClick={() => handleDistribute(group)}
+                      disabled={distributingKey === key}
                     >
-                      {distributingId === t.transaction_id ? "Distributing..." : "Distribute"}
+                      {distributingKey === key ? "Distributing..." : "Distribute"}
                     </button>
                   </div>
                 )

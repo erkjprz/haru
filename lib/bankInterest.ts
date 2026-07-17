@@ -11,65 +11,85 @@ function dateOnly(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
+export interface PendingBankInterestGroup {
+  year: number
+  bank: string
+  transactionIds: string[]
+  totalAmount: number
+  transactionCount: number
+}
+
 /**
- * Distributes a single Bank Interest transaction's amount across all
- * gain-sharing-eligible members and marks that transaction as distributed.
+ * Groups all not-yet-distributed Bank Interest transactions by (year, bank)
+ * -- this is the exact granularity the historical bank_interest_allocations
+ * data uses: one lump-sum distribution per calendar year per bank (e.g.
+ * 2025 has two separate events, BDO and Maya, each split across all 10
+ * members), not one event per individual transaction.
+ */
+export async function getPendingBankInterestGroups(): Promise<PendingBankInterestGroup[]> {
+  const { data: pendingTxns } = await supabase
+    .from("transactions")
+    .select(
+      `
+      transaction_id, amount, txn_date, created_at, bank, bank_account_id,
+      bank_accounts!transactions_bank_account_id_fkey ( bank_name )
+    `
+    )
+    .eq("classification", "Bank Interest")
+    .eq("interest_distributed", false)
+
+  const groups = new Map<string, PendingBankInterestGroup>()
+
+  for (const t of pendingTxns ?? []) {
+    const bank = t.bank || (t as any).bank_accounts?.bank_name || "Unknown"
+    const year = effectiveDate(t).getFullYear()
+    const key = `${year}-${bank}`
+
+    const existing = groups.get(key)
+    if (existing) {
+      existing.transactionIds.push(t.transaction_id)
+      existing.totalAmount = Number((existing.totalAmount + Number(t.amount)).toFixed(2))
+      existing.transactionCount += 1
+    } else {
+      groups.set(key, {
+        year,
+        bank,
+        transactionIds: [t.transaction_id],
+        totalAmount: Number(t.amount),
+        transactionCount: 1
+      })
+    }
+  }
+
+  return Array.from(groups.values()).sort((a, b) => b.year - a.year || a.bank.localeCompare(b.bank))
+}
+
+/**
+ * Distributes one (year, bank) group's combined Bank Interest total across
+ * all gain-sharing-eligible members in a single lump sum, then marks every
+ * transaction in that group as distributed.
  *
  * Matches the documented methodology of the original (pre-existing)
  * bank_interest_allocations data:
- * - "Current value" for this purpose is net contribution/withdrawal balance
- *   ONLY, dated on or before the interest transaction's own date --
- *   investment allocations are deliberately excluded (same reasoning as
- *   the loan-gain methodology: a flat investment credit isn't capital that
- *   was actually sitting in the fund earning this interest).
- * - Unlike loan-gain sharing, a member with zero (or negative, floored to
- *   zero) balance still gets a row, just for ₱0 -- they are not excluded
- *   from the list, only from receiving a positive share. This matches the
- *   existing historical rows, which give a member with no contribution
- *   balance a ₱0 entry with an explanatory note rather than omitting them.
- * - Rounding residual is absorbed by the largest-share member, consistent
- *   with the loan-gain allocation convention, so the allocated total ties
- *   to the transaction's exact amount, to the peso.
+ * - One row per member per (year, bank) -- not per individual transaction.
+ * - "Current value" for the split is net contribution/withdrawal balance
+ *   ONLY, dated on or before the distribution date -- investment
+ *   allocations are deliberately excluded (same reasoning as the loan-gain
+ *   methodology: a flat investment credit isn't capital that was actually
+ *   sitting in the fund earning this interest).
+ * - A member with zero (or negative, floored to zero) balance still gets a
+ *   row, just for ₱0 -- not excluded, unlike loan-gain sharing.
+ * - Rounding residual is absorbed by the largest-share member so the
+ *   allocated total ties to the group's exact combined amount, to the peso.
  *
- * Writes to bank_interest_allocations (member_id, bank, allocation_date,
- * amount, notes) -- NOT investment_allocations, which has no
- * year/category columns and was the source of a bug where every call to
- * this function silently failed to record anything in a structured ledger
- * table (the "Gain Allocation" transactions still got created, which is
- * why it looked like it was working).
+ * The historical rows are dated at that year's actual year-end crediting
+ * (Dec 30); a manually-triggered distribution instead uses the date it's
+ * actually run, since there's no fixed crediting date to anchor to until
+ * the fund owner decides to close out the year.
  */
-export async function distributeBankInterest(transactionId: string) {
-  const { data: sourceTxn } = await supabase
-    .from("transactions")
-    .select("transaction_id, amount, txn_date, created_at, bank, bank_account_id")
-    .eq("transaction_id", transactionId)
-    .single()
-
-  if (!sourceTxn) return
-
-  const interestAmount = Number(sourceTxn.amount)
-  const creditDate = dateOnly(effectiveDate(sourceTxn))
-
-  // Resolve which bank this interest came from: new-model rows carry
-  // bank_account_id (FK to bank_accounts), legacy rows carry the plain
-  // `bank` text column directly.
-  let bankLabel = sourceTxn.bank as string | null
-  if (!bankLabel && sourceTxn.bank_account_id) {
-    const { data: bankAccount } = await supabase
-      .from("bank_accounts")
-      .select("bank_name")
-      .eq("id", sourceTxn.bank_account_id)
-      .single()
-    bankLabel = bankAccount?.bank_name ?? null
-  }
-
-  if (interestAmount === 0 || !bankLabel) {
-    await supabase
-      .from("transactions")
-      .update({ interest_distributed: true })
-      .eq("transaction_id", transactionId)
-    return
-  }
+export async function distributeBankInterestGroup(group: PendingBankInterestGroup) {
+  const distributionDate = dateOnly(new Date())
+  const interestAmount = group.totalAmount
 
   const { data: allMembers } = await supabase
     .from("members")
@@ -86,8 +106,7 @@ export async function distributeBankInterest(transactionId: string) {
   const balances = eligibleMembers.map((member) => {
     const netContribution = (contributionTxns ?? [])
       .filter(
-        (t) =>
-          t.member_id === member.member_id && dateOnly(effectiveDate(t)) <= creditDate
+        (t) => t.member_id === member.member_id && dateOnly(effectiveDate(t)) <= distributionDate
       )
       .reduce((sum, t) => sum + Number(t.amount), 0)
 
@@ -105,8 +124,6 @@ export async function distributeBankInterest(transactionId: string) {
     amount: totalBalance > 0 ? Number(((b.balance / totalBalance) * interestAmount).toFixed(2)) : 0
   }))
 
-  // Rounding residual absorbed by the largest-share member so the
-  // allocated total ties to interestAmount exactly, to the peso.
   if (totalBalance > 0) {
     const allocatedTotal = shares.reduce((sum, s) => sum + s.amount, 0)
     const residual = Number((interestAmount - allocatedTotal).toFixed(2))
@@ -116,17 +133,15 @@ export async function distributeBankInterest(transactionId: string) {
     }
   }
 
-  const year = effectiveDate(sourceTxn).getFullYear()
-
   const bankInterestRows = shares.map((s) => ({
     member_id: s.member_id,
-    bank: bankLabel,
-    allocation_date: creditDate,
+    bank: group.bank,
+    allocation_date: distributionDate,
     amount: s.amount,
     notes:
       s.balance > 0
-        ? `${s.memberName} balance ₱${s.balance.toFixed(2)} / total ₱${totalBalance.toFixed(2)} of ₱${interestAmount.toFixed(2)} ${bankLabel} interest credited ${creditDate}`
-        : `No contribution balance in the fund as of ${creditDate}`
+        ? `${s.memberName} balance ₱${s.balance.toFixed(2)} / total ₱${totalBalance.toFixed(2)} of ₱${interestAmount.toFixed(2)} ${group.bank} interest for ${group.year} distributed ${distributionDate}`
+        : `No contribution balance in the fund as of ${distributionDate}`
   }))
 
   await supabase.from("bank_interest_allocations").insert(bankInterestRows)
@@ -139,7 +154,7 @@ export async function distributeBankInterest(transactionId: string) {
       classification: "Gain Allocation",
       affects_cash: 0,
       amount: s.amount,
-      description: `Share of ${year} bank interest`,
+      description: `Share of ${group.year} ${group.bank} bank interest`,
       status: "approved"
     }))
 
@@ -150,5 +165,5 @@ export async function distributeBankInterest(transactionId: string) {
   await supabase
     .from("transactions")
     .update({ interest_distributed: true })
-    .eq("transaction_id", transactionId)
+    .in("transaction_id", group.transactionIds)
 }
