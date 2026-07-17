@@ -26,8 +26,21 @@ export default function FundBreakdownPage() {
       .select("member_id, amount, allocation_type")
 
 
-    if (memberError || ledgerError || allocationError) {
-      console.error(memberError || ledgerError || allocationError)
+    const { data: bankInterest, error: bankInterestError } = await supabase
+      .from("bank_interest_allocations")
+      .select("member_id, amount")
+
+
+    // Loan gain allocations: distributed to eligible members (excluding the
+    // borrower of that specific loan) at the moment each loan closes, in
+    // proportion to each member's current value at that point in time.
+    const { data: loanGains, error: loanGainError } = await supabase
+      .from("loan_gain_allocations")
+      .select("member_id, amount")
+
+
+    if (memberError || ledgerError || allocationError || bankInterestError || loanGainError) {
+      console.error(memberError || ledgerError || allocationError || bankInterestError || loanGainError)
     }
 
 
@@ -51,6 +64,28 @@ export default function FundBreakdownPage() {
 
       investmentByMember[item.member_id] =
         (investmentByMember[item.member_id] ?? 0) + value
+
+    })
+
+
+    const bankInterestByMember: Record<string, number> = {}
+
+
+    bankInterest?.forEach((item: any) => {
+
+      bankInterestByMember[item.member_id] =
+        (bankInterestByMember[item.member_id] ?? 0) + Number(item.amount)
+
+    })
+
+
+    const loanGainByMember: Record<string, number> = {}
+
+
+    loanGains?.forEach((item: any) => {
+
+      loanGainByMember[item.member_id] =
+        (loanGainByMember[item.member_id] ?? 0) + Number(item.amount)
 
     })
 
@@ -81,8 +116,16 @@ export default function FundBreakdownPage() {
           investmentByMember[member.member_id] ?? 0
 
 
+        const bankInterestTotal =
+          bankInterestByMember[member.member_id] ?? 0
+
+
+        const loanGainTotal =
+          loanGainByMember[member.member_id] ?? 0
+
+
         const currentValue =
-          netContribution + investmentGainLoss
+          netContribution + investmentGainLoss + bankInterestTotal + loanGainTotal
 
 
 
@@ -97,6 +140,10 @@ export default function FundBreakdownPage() {
           netContribution,
 
           investmentGainLoss,
+
+          bankInterestTotal,
+
+          loanGainTotal,
 
           currentValue
 
@@ -193,7 +240,7 @@ export default function FundBreakdownPage() {
 
 
           <p className="text-sm text-ink-soft mt-2">
-            Ownership based on net contribution and investment performance.
+            Ownership based on net contribution, investment performance, bank interest, and loan gain share.
           </p>
 
 
@@ -282,6 +329,34 @@ export default function FundBreakdownPage() {
                       {fmt(
                         Math.abs(member.investmentGainLoss)
                       )}
+                    </span>
+
+                  </div>
+
+
+                  <div className="flex justify-between">
+
+                    <span className="text-ink-soft">
+                      Bank Interest
+                    </span>
+
+
+                    <span className="text-sage">
+                      +₱{fmt(member.bankInterestTotal)}
+                    </span>
+
+                  </div>
+
+
+                  <div className="flex justify-between">
+
+                    <span className="text-ink-soft">
+                      Loan Gain Share
+                    </span>
+
+
+                    <span className="text-sage">
+                      +₱{fmt(member.loanGainTotal)}
                     </span>
 
                   </div>
