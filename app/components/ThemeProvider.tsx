@@ -27,6 +27,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (!mounted) return
     document.documentElement.classList.toggle("dark", theme === "dark")
     localStorage.setItem("haru-theme", theme)
+
+    const meta = document.querySelector('meta[name="theme-color"]')
+    meta?.setAttribute("content", theme === "dark" ? "#0a0a0a" : "#ffffff")
   }, [theme, mounted])
 
   function toggleTheme() {
