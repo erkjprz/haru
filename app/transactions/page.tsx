@@ -624,6 +624,21 @@ export default function TransactionsPage() {
                             {transaction.bank}
                           </span>
                         )}
+                        {isTransferTxn && transferLabel && (
+                          <span className="
+                            text-[9px]
+                            uppercase
+                            tracking-widest
+                            font-mono
+                            border
+                            border-hairline
+                            text-ink-soft
+                            rounded-full
+                            px-2 py-0.5
+                          ">
+                            {transferLabel}
+                          </span>
+                        )}
                         <span className="
                           text-xs
                           text-ink-soft
@@ -651,11 +666,6 @@ export default function TransactionsPage() {
                       {isLoanTxn && loanName && (
                         <p className="text-xs text-ink-soft mt-1 font-mono">
                           {loanName}
-                        </p>
-                      )}
-                      {isTransferTxn && transferLabel && (
-                        <p className="text-xs text-ink-soft mt-1 font-mono">
-                          {transferLabel}
                         </p>
                       )}
                       {showDescription && (
