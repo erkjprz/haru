@@ -234,9 +234,7 @@ export default function AdminPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink p-6 font-sans">
-          Checking admin access...
-        </main>
+        <main className="min-h-screen bg-paper text-ink p-6 font-sans" />
       </>
     )
   }

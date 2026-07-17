@@ -53,13 +53,7 @@ export default function LoginPage() {
   }
 
   if (checkingSession) {
-    return (
-      <main className="min-h-screen bg-paper flex items-center justify-center">
-        <p className="text-ink-soft">
-          Loading...
-        </p>
-      </main>
-    )
+    return <main className="min-h-screen bg-paper" />
   }
 
   return (
