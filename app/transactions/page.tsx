@@ -150,6 +150,7 @@ export default function TransactionsPage() {
   const [selectedMemberId, setSelectedMemberId] = useState("")
   const [selectedType, setSelectedType] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
   const [showFilters, setShowFilters] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
@@ -339,11 +340,29 @@ export default function TransactionsPage() {
               .toString() === selectedYear
           : true
 
+const searchMatch =
+  searchQuery.trim() === "" ||
+  [
+    t.members?.name,
+    t.description,
+    t.bank,
+    t.classification,
+    typeLabels[t.classification],
+    t.loans?.name,
+    t.loans?.borrowers?.name,
+    t._transferLabel
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(searchQuery.toLowerCase())
+
       return (
-        memberMatch &&
-        typeMatch &&
-        yearMatch
-      )
+  memberMatch &&
+  typeMatch &&
+  yearMatch &&
+  searchMatch
+)
     })
 
   const fmt = (n:number)=>
@@ -397,6 +416,28 @@ export default function TransactionsPage() {
               Couldn't load transactions: {loadError}
             </p>
           )}
+
+          <div className="mt-6">
+  <input
+    type="text"
+    placeholder="Search transactions..."
+    value={searchQuery}
+    onChange={(e)=>setSearchQuery(e.target.value)}
+    className="
+      w-full
+      border
+      border-hairline
+      bg-paper-2
+      text-ink
+      rounded-sm
+      px-4
+      py-3
+      text-sm
+      placeholder:text-ink-soft
+      focus:outline-none
+    "
+  />
+</div>
 
           <button
             className="
@@ -651,6 +692,7 @@ export default function TransactionsPage() {
             font-mono
           ">
             Showing {filteredTransactions.length} of {totalCount}
+{searchQuery && ` matching "${searchQuery}"`}
           </div>
 
           <div className="mt-6 space-y-3">
