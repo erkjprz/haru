@@ -50,21 +50,49 @@ function effectiveDate(transaction: any): Date {
 // carries information beyond "this belongs to that member" -- e.g. Fund-level
 // rows (Tax, Bank Interest, Internal Transfer, Investment) where it's the
 // only content, or the rare genuine note.
-function isRedundantDescription(description: string | null, memberName: string | null): boolean {
-  if (!description || !memberName) return false
-  return description.trim().toLowerCase() === memberName.trim().toLowerCase()
-}
-
 // Tax and Bank Interest rows have no member -- their description ("tax",
 // "interest", "maya interest") was the only way to tell them apart from
 // each other and to see which bank they belonged to. Now that the type
 // badge already says TAX / BANK INTEREST and the bank pill already shows
-// BDO / Maya, that description adds nothing, so hide it for these two
-// classifications specifically.
-const CLASSIFICATIONS_WITH_REDUNDANT_DESCRIPTION = new Set([
-  "Tax",
-  "Bank Interest"
+// BDO / Maya, that description adds nothing. Member Contribution and
+// Member Withdrawal descriptions are, in practice, always just the
+// member's name (raw or aliased) -- redundant with the card title -- so
+// they're hidden unconditionally too rather than only when they happen to
+// match. Loan Release/Repayment and Internal Transfer get their own
+// richer displays below instead of the raw description.
+const CLASSIFICATIONS_WITH_HIDDEN_DESCRIPTION = new Set([
+  "Member Contribution",
+  "Member Withdrawal",
+  "Bank Interest",
+  "Tax"
 ])
+
+// Each bank transfer is stored as two legs (a negative-amount row on the
+// source bank, a positive-amount row on the destination bank, same date,
+// same absolute amount) rather than one row with a from/to pair -- see
+// project notes on Internal Transfer. To show "BDO -> Maya" on either leg,
+// find its counterpart leg among the already-loaded transactions.
+function findTransferPair(transaction: any, allTransactions: any[]): any | null {
+  return (
+    allTransactions.find(
+      (other) =>
+        other.transaction_id !== transaction.transaction_id &&
+        other.classification === "Internal Transfer" &&
+        other.txn_date === transaction.txn_date &&
+        Number(other.amount) === -Number(transaction.amount)
+    ) ?? null
+  )
+}
+
+function transferDirectionLabel(transaction: any, allTransactions: any[]): string | null {
+  const pair = findTransferPair(transaction, allTransactions)
+  if (!pair || !transaction.bank || !pair.bank) return null
+
+  const fromLeg = Number(transaction.amount) < 0 ? transaction : pair
+  const toLeg = Number(transaction.amount) < 0 ? pair : transaction
+
+  return `${fromLeg.bank} → ${toLeg.bank}`
+}
 
 export default function TransactionsPage() {
   const router = useRouter()
@@ -107,6 +135,12 @@ export default function TransactionsPage() {
         ),
         submitted_by_member:members!transactions_submitted_by_fkey (
           name
+        ),
+        loans!transactions_loan_id_fkey (
+          name,
+          borrowers!loans_borrower_id_fkey (
+            name
+          )
         )
       `,
         { count: "exact" }
@@ -468,10 +502,28 @@ export default function TransactionsPage() {
           <div className="mt-6 space-y-3">
             {filteredTransactions.map((transaction)=>{
               const memberName = transaction.members?.name || null
+              const isLoanTxn =
+                transaction.classification === "Loan Release" ||
+                transaction.classification === "Loan Repayment"
+              const isTransferTxn = transaction.classification === "Internal Transfer"
+
+              const loanName = transaction.loans?.name || null
+              const borrowerName = transaction.loans?.borrowers?.name || null
+              const transferLabel = isTransferTxn
+                ? transferDirectionLabel(transaction, transactions)
+                : null
+
+              // Borrower-only loans (e.g. Joy, who isn't a fund member) have
+              // no member_id, so fall back to the borrower's name as the
+              // card title instead of leaving it as generic "Fund".
+              const displayName = memberName || (isLoanTxn ? borrowerName : null) || "Fund"
+
               const showDescription =
                 transaction.description &&
                 !isRedundantDescription(transaction.description, memberName) &&
-                !CLASSIFICATIONS_WITH_REDUNDANT_DESCRIPTION.has(transaction.classification)
+                !CLASSIFICATIONS_WITH_HIDDEN_DESCRIPTION.has(transaction.classification) &&
+                !isLoanTxn &&
+                !isTransferTxn
 
               return (
                 <div
