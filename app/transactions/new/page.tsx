@@ -64,10 +64,10 @@ function Segmented({
           key={o.key}
           type="button"
           onClick={() => onChange(o.key)}
-          className={`px-2.5 py-1.5 rounded border text-xs transition-colors ${
+          className={`px-2 py-1 rounded border text-[11px] leading-tight transition-colors ${
             value === o.key
               ? "border-gold bg-gold/10 text-ink font-semibold"
-              : "border-hairline bg-paper text-ink-soft font-medium"
+              : "border-hairline bg-paper text-ink-soft"
           }`}
         >
           {o.label}
@@ -824,11 +824,11 @@ export default function NewTransactionPage() {
             </div>
           </div>
           <button
-            className="shrink-0 bg-ink text-paper px-5 py-3.5 rounded-md text-base font-semibold disabled:opacity-50"
+            className="shrink-0 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
             onClick={handleSubmit}
             disabled={submitting}
           >
-            {submitting ? "Submitting..." : "Submit"}
+            {submitting ? "Submitting…" : "Submit"}
           </button>
         </div>
         {message && (
