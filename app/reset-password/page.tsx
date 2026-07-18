@@ -14,6 +14,7 @@ export default function ResetPasswordPage() {
   const [message, setMessage] = useState("")
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   // The recovery link Supabase emails redirects here with a token in the
   // URL; supabase-js parses it and fires PASSWORD_RECOVERY once the
@@ -110,29 +111,48 @@ export default function ResetPasswordPage() {
                 <label className="block text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-2">
                   New Password
                 </label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="
-                    w-full
-                    rounded-md
-                    border
-                    border-hairline
-                    bg-paper
-                    px-4
-                    py-3
-                    text-sm
-                    text-ink
-                    placeholder:text-ink-soft
-                    outline-none
-                    transition-all
-                    focus:border-gold
-                    focus:ring-2
-                    focus:ring-gold/20
-                  "
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="
+                      w-full
+                      rounded-md
+                      border
+                      border-hairline
+                      bg-paper
+                      px-4
+                      py-3
+                      pr-16
+                      text-base
+                      text-ink
+                      placeholder:text-ink-soft
+                      outline-none
+                      transition-all
+                      focus:border-gold
+                      focus:ring-2
+                      focus:ring-gold/20
+                    "
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="
+                      absolute
+                      right-3
+                      top-1/2
+                      -translate-y-1/2
+                      text-xs
+                      font-medium
+                      text-gold
+                      hover:text-ink
+                    "
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -140,7 +160,7 @@ export default function ResetPasswordPage() {
                   Confirm Password
                 </label>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -155,7 +175,7 @@ export default function ResetPasswordPage() {
                     bg-paper
                     px-4
                     py-3
-                    text-sm
+                    text-base
                     text-ink
                     placeholder:text-ink-soft
                     outline-none

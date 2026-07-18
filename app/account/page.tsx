@@ -104,7 +104,7 @@ export default function AccountPage() {
                 placeholder="new@email.com"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full text-sm"
+                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full text-base"
               />
 
               {emailMessage && (
@@ -139,7 +139,7 @@ export default function AccountPage() {
                   placeholder="New password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="border border-hairline bg-paper px-3 py-2 pr-14 rounded-md w-full text-sm"
+                  className="border border-hairline bg-paper px-3 py-2 pr-14 rounded-md w-full text-base"
                 />
                 <button
                   type="button"
@@ -158,7 +158,7 @@ export default function AccountPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") changePassword()
                 }}
-                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full text-sm"
+                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full text-base"
               />
 
               {passwordMessage && (

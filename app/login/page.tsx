@@ -100,7 +100,7 @@ export default function LoginPage() {
                   bg-paper
                   px-4
                   py-3
-                  text-sm
+                  text-base
                   text-ink
                   placeholder:text-ink-soft
                   outline-none
@@ -151,7 +151,7 @@ export default function LoginPage() {
                     px-4
                     py-3
                     pr-16
-                    text-sm
+                    text-base
                     text-ink
                     placeholder:text-ink-soft
                     outline-none

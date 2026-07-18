@@ -104,7 +104,7 @@ export default function ForgotPasswordPage() {
                     bg-paper
                     px-4
                     py-3
-                    text-sm
+                    text-base
                     text-ink
                     placeholder:text-ink-soft
                     outline-none
