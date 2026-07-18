@@ -391,7 +391,7 @@ export default function TransactionsPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(7rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(8rem+env(safe-area-inset-bottom))]">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Full History
           </div>
@@ -593,19 +593,19 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {/* Fixed viewport modal instead of a panel anchored under the pill --
-            the pill lives inside a horizontally-scrolling row, and a panel
-            positioned absolute under it was getting clipped by that row's
-            own scroll bounds (nothing visibly happened on tap even though
-            the state was toggling correctly). A fixed, viewport-level
-            bottom sheet can't be clipped by anything upstream. */}
+        {/* Fixed viewport modal, capped at 85% of the viewport height and
+            scrollable internally. iOS's native date-wheel picker expands
+            inline underneath whichever input is focused, which can make
+            this sheet's natural content height taller than the screen --
+            without a cap the Clear/Done row could get pushed out of reach
+            entirely instead of just requiring a scroll to see it. */}
         {dateFilterOpen && (
           <div
             className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
             onClick={() => setDateFilterOpen(false)}
           >
             <div
-              className="w-full sm:w-80 bg-paper-2 border border-hairline rounded-t-xl sm:rounded-xl p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:pb-5"
+              className="w-full sm:w-80 max-h-[85vh] overflow-y-auto bg-paper-2 border border-hairline rounded-t-xl sm:rounded-xl p-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:pb-5"
               onClick={(e) => e.stopPropagation()}
             >
               <p className="text-sm font-semibold text-ink mb-4">Date range</p>
@@ -651,16 +651,22 @@ export default function TransactionsPage() {
         )}
 
         {/* Sticky thumb-reach action bar, matching the Dashboard page.
-            Extra buffer (0.75rem) beyond the safe-area inset keeps the
-            button clear of the home-indicator swipe-up gesture zone on
-            iPhones, instead of sitting flush against it. */}
+            The bottom clearance no longer depends solely on
+            env(safe-area-inset-bottom) -- if this app's viewport meta tag
+            doesn't include viewport-fit=cover, that env() value silently
+            resolves to 0, so the button would sit flush against the home
+            indicator regardless of how it's calc()'d. A fixed 1.5rem floor
+            is added on top of whatever the safe-area actually reports, so
+            there's real clearance either way. Button padding is bumped
+            back up too, since it visually shrank once the bar around it
+            grew taller. */}
         <div className="fixed bottom-0 left-0 right-0 bg-paper border-t border-hairline">
-          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
             <button
               onClick={() => router.push("/transactions/new")}
-              className="w-full bg-gold text-ink px-4 py-3 rounded-md text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
+              className="w-full bg-gold text-ink px-4 py-4 rounded-md text-base font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
             >
-              <span className="text-lg leading-none">+</span>
+              <span className="text-xl leading-none">+</span>
               New Transaction
             </button>
           </div>
