@@ -519,6 +519,14 @@ export default function TransactionsPage() {
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div className="min-w-0">
+                        {/* Badges and date are two separate lines instead of
+                            one wrapping flex row -- when they shared a row,
+                            the date would sit inline after the badges on
+                            cards with few/short badges but get pushed to its
+                            own wrapped line on cards with more of them (bank
+                            pill, transfer label), so its position visibly
+                            jumped card to card. Its own line, every time,
+                            fixes that. */}
                         <div className="flex items-center gap-2 flex-wrap">
                           <span
                             className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
@@ -537,11 +545,11 @@ export default function TransactionsPage() {
                               {transferLabel}
                             </span>
                           )}
-                          <span className="text-xs text-ink-soft font-mono">
-                            {effectiveDate(transaction).toLocaleDateString()}
-                          </span>
                         </div>
-                        <div className="font-display text-lg font-medium mt-2">{displayName}</div>
+                        <div className="text-xs text-ink-soft font-mono mt-1.5">
+                          {effectiveDate(transaction).toLocaleDateString()}
+                        </div>
+                        <div className="font-display text-lg font-medium mt-1.5">{displayName}</div>
                         {transaction.submitted_by_member && (
                           <p className="text-[11px] text-gold font-mono mt-0.5">
                             Recorded by {transaction.submitted_by_member.name}
@@ -610,6 +618,10 @@ export default function TransactionsPage() {
             >
               <p className="text-sm font-semibold text-ink mb-4">Date range</p>
 
+              {/* Fixed height (h-11) and appearance-none so both fields
+                  render as a consistent, evenly-boxed pair instead of
+                  leaning on the browser's own (inconsistent) native sizing
+                  for a date input's text. */}
               <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">
                 From
               </label>
@@ -617,7 +629,7 @@ export default function TransactionsPage() {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full bg-paper border border-hairline rounded-md px-3 py-2.5 text-sm text-ink focus:outline-none [color-scheme:dark]"
+                className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
               />
 
               <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1 mt-4">
@@ -627,7 +639,7 @@ export default function TransactionsPage() {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full bg-paper border border-hairline rounded-md px-3 py-2.5 text-sm text-ink focus:outline-none [color-scheme:dark]"
+                className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
               />
 
               <div className="flex justify-between items-center pt-5">
@@ -651,20 +663,17 @@ export default function TransactionsPage() {
         )}
 
         {/* Sticky thumb-reach action bar, matching the Dashboard page.
-            The bottom clearance no longer depends solely on
-            env(safe-area-inset-bottom) -- if this app's viewport meta tag
-            doesn't include viewport-fit=cover, that env() value silently
-            resolves to 0, so the button would sit flush against the home
-            indicator regardless of how it's calc()'d. A fixed 1.5rem floor
-            is added on top of whatever the safe-area actually reports, so
-            there's real clearance either way. Button padding is bumped
-            back up too, since it visually shrank once the bar around it
-            grew taller. */}
+            Switched from a solid gold fill to the same outlined-pill
+            language used everywhere else in the app (type badges, filter
+            pills) -- a full block of solid color at the bottom of every
+            screen read as louder than anything else on the page. The
+            outline keeps it identifiable as the primary action without
+            being the single loudest thing in the UI. */}
         <div className="fixed bottom-0 left-0 right-0 bg-paper border-t border-hairline">
           <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
             <button
               onClick={() => router.push("/transactions/new")}
-              className="w-full bg-gold text-ink px-4 py-4 rounded-md text-base font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
+              className="w-full border-2 border-gold text-gold px-4 py-3.5 rounded-md text-base font-semibold flex items-center justify-center gap-1.5 hover:bg-gold/10 transition-colors"
             >
               <span className="text-xl leading-none">+</span>
               New Transaction
