@@ -157,7 +157,7 @@ export default function SignupPage() {
                   bg-paper
                   px-4
                   py-3
-                  text-sm
+                  text-base
                   text-ink
                   outline-none
                   transition-all
@@ -196,7 +196,7 @@ export default function SignupPage() {
                     bg-paper
                     px-4
                     py-3
-                    text-sm
+                    text-base
                     text-ink
                     placeholder:text-ink-soft
                     outline-none
@@ -236,7 +236,7 @@ export default function SignupPage() {
                   bg-paper
                   px-4
                   py-3
-                  text-sm
+                  text-base
                   text-ink
                   placeholder:text-ink-soft
                   outline-none
@@ -279,7 +279,7 @@ export default function SignupPage() {
                     px-4
                     py-3
                     pr-16
-                    text-sm
+                    text-base
                     text-ink
                     placeholder:text-ink-soft
                     outline-none
