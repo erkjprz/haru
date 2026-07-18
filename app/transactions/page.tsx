@@ -382,18 +382,17 @@ export default function TransactionsPage() {
     <>
       <Navbar />
 
-      {/* Option C: top-right icon button, opposite the hamburger.
-          NOTE: positioned with a fixed guess (env(safe-area-inset-top) +
-          20px) since Navbar's own height/padding isn't in this file -- if
-          it doesn't line up exactly with the hamburger row once you drop
-          this in, nudge that offset (or better, move this button inside
-          Navbar itself so it shares the exact same row by construction). */}
+      {/* Top-right button, opposite the hamburger. Offset is a guess
+          (env(safe-area-inset-top) + 20px) since Navbar's own
+          height/padding isn't in this file -- nudge it if it doesn't line
+          up exactly with the hamburger row. */}
       <button
         onClick={() => router.push("/transactions/new")}
         aria-label="New Transaction"
-        className="fixed top-[calc(env(safe-area-inset-top)+20px)] right-5 z-40 w-9 h-9 rounded-full bg-gold text-ink flex items-center justify-center text-lg font-semibold shadow-sm hover:opacity-90 transition-opacity"
+        className="fixed top-[calc(env(safe-area-inset-top)+20px)] right-5 z-40 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
       >
-        +
+        <span className="text-lg leading-none">+</span>
+        New
       </button>
 
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
