@@ -37,26 +37,6 @@ const typeColor: Record<string, string> = {
   "Bank Write-off": "text-rust border-rust"
 }
 
-// Left-edge accent stripe on each card so the transaction type reads at a
-// glance without having to parse the pill text -- same semantic colors as
-// typeColor, just applied as a border instead of text/outline. The card
-// only rounds on its right side (rounded-r-md, not rounded-md) so this
-// stripe stays a flush rectangle instead of getting rounded end-caps that
-// make it look like a separate floating pill.
-const typeBorderColor: Record<string, string> = {
-  "Member Contribution": "border-l-sage",
-  "Member Withdrawal": "border-l-rust",
-  "Expense": "border-l-rust",
-  "Loan Release": "border-l-gold",
-  "Loan Repayment": "border-l-gold",
-  "Gain Allocation": "border-l-ink-soft",
-  "Bank Interest": "border-l-sage",
-  "Investment Return": "border-l-sage",
-  "Investment": "border-l-gold",
-  "Tax": "border-l-rust",
-  "Bank Write-off": "border-l-rust"
-}
-
 const statusColor: Record<string, string> = {
   pending: "text-gold",
   rejected: "text-rust"
@@ -484,6 +464,7 @@ export default function TransactionsPage() {
               const loanName = transaction.loans?.name || null
               const borrowerName = transaction.loans?.borrowers?.name || null
               const transferLabel = isTransferTxn ? transaction._transferLabel ?? null : null
+              const hasSecondaryBadge = (transaction.bank && !isTransferTxn) || (isTransferTxn && transferLabel)
 
               // Borrower-only loans (e.g. Joy, who isn't a fund member) have
               // no member_id, so fall back to the borrower's name as the
@@ -513,21 +494,21 @@ export default function TransactionsPage() {
                   )}
 
                   <div
-                    className={`bg-paper-2 border border-hairline border-l-4 rounded-r-md ${
-                      typeBorderColor[transaction.classification] ?? "border-l-hairline"
-                    } p-4 ${showMonthHeader ? "" : "mt-3"}`}
+                    className={`bg-paper-2 border border-hairline rounded-md p-4 ${
+                      showMonthHeader ? "" : "mt-3"
+                    }`}
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div className="min-w-0">
-                        {/* Badges and date are two separate lines instead of
-                            one wrapping flex row -- when they shared a row,
-                            the date would sit inline after the badges on
-                            cards with few/short badges but get pushed to its
-                            own wrapped line on cards with more of them (bank
-                            pill, transfer label), so its position visibly
-                            jumped card to card. Its own line, every time,
-                            fixes that. */}
-                        <div className="flex items-center gap-2 flex-wrap">
+                        {/* Type + date together on the primary line -- the
+                            two things you actually scan for -- with bank/
+                            transfer detail demoted to its own secondary
+                            line below. Previously bank sat between them and
+                            pushed date onto a wrapped second line only on
+                            cards that had it, so date's position visibly
+                            jumped from card to card; keeping this line to
+                            just two short items means it fits every time. */}
+                        <div className="flex items-center gap-2">
                           <span
                             className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
                               typeColor[transaction.classification] ?? "text-ink-soft border-hairline"
@@ -535,20 +516,26 @@ export default function TransactionsPage() {
                           >
                             {typeLabels[transaction.classification] || transaction.classification}
                           </span>
-                          {transaction.bank && !isTransferTxn && (
-                            <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                              {transaction.bank}
-                            </span>
-                          )}
-                          {isTransferTxn && transferLabel && (
-                            <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                              {transferLabel}
-                            </span>
-                          )}
+                          <span className="text-xs text-ink-soft font-mono">
+                            {effectiveDate(transaction).toLocaleDateString()}
+                          </span>
                         </div>
-                        <div className="text-xs text-ink-soft font-mono mt-1.5">
-                          {effectiveDate(transaction).toLocaleDateString()}
-                        </div>
+
+                        {hasSecondaryBadge && (
+                          <div className="mt-1.5">
+                            {transaction.bank && !isTransferTxn && (
+                              <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
+                                {transaction.bank}
+                              </span>
+                            )}
+                            {isTransferTxn && transferLabel && (
+                              <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
+                                {transferLabel}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="font-display text-lg font-medium mt-1.5">{displayName}</div>
                         {transaction.submitted_by_member && (
                           <p className="text-[11px] text-gold font-mono mt-0.5">
@@ -618,10 +605,6 @@ export default function TransactionsPage() {
             >
               <p className="text-sm font-semibold text-ink mb-4">Date range</p>
 
-              {/* Fixed height (h-11) and appearance-none so both fields
-                  render as a consistent, evenly-boxed pair instead of
-                  leaning on the browser's own (inconsistent) native sizing
-                  for a date input's text. */}
               <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">
                 From
               </label>
@@ -663,19 +646,16 @@ export default function TransactionsPage() {
         )}
 
         {/* Sticky thumb-reach action bar, matching the Dashboard page.
-            Switched from a solid gold fill to the same outlined-pill
-            language used everywhere else in the app (type badges, filter
-            pills) -- a full block of solid color at the bottom of every
-            screen read as louder than anything else on the page. The
-            outline keeps it identifiable as the primary action without
-            being the single loudest thing in the UI. */}
+            Solid fill kept, but sized down and centered instead of
+            stretched full-width -- reads as a normal-weight primary action
+            rather than a wall of color spanning the screen. */}
         <div className="fixed bottom-0 left-0 right-0 bg-paper border-t border-hairline">
-          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] flex justify-center">
             <button
               onClick={() => router.push("/transactions/new")}
-              className="w-full border-2 border-gold text-gold px-4 py-3.5 rounded-md text-base font-semibold flex items-center justify-center gap-1.5 hover:bg-gold/10 transition-colors"
+              className="bg-gold text-ink px-6 py-2.5 rounded-md text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
             >
-              <span className="text-xl leading-none">+</span>
+              <span className="text-base leading-none">+</span>
               New Transaction
             </button>
           </div>
