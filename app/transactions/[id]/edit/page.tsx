@@ -370,6 +370,13 @@ export default function EditTransactionPage() {
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans">
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-48">
+          <button
+            type="button"
+            onClick={() => router.push("/transactions")}
+            className="text-sm text-gold font-semibold mb-4"
+          >
+            ← Back to Transactions
+          </button>
           <div className="text-xs tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Editing Entry
           </div>
