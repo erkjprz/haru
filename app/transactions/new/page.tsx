@@ -20,7 +20,35 @@ const ENTRY_TYPES = [
 
 const MEMBER_LINKED_TYPES = ["contribution", "withdrawal", "loan_request", "loan_payment"]
 const MEMBER_TYPES = ENTRY_TYPES.filter((t) => !t.adminOnly)
-const ADMIN_TYPES = ENTRY_TYPES.filter((t) => t.adminOnly)
+
+// Direction the fund's cash moves for each entry type -- "in" (member pays
+// the fund), "out" (fund pays a member/expense), or "neutral" (moves
+// between the fund's own banks, doesn't change the total).
+const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = {
+  contribution: { arrow: "↑", tone: "in" },
+  withdrawal: { arrow: "↓", tone: "out" },
+  loan_request: { arrow: "↓", tone: "out" },
+  loan_payment: { arrow: "↑", tone: "in" },
+  bank_interest: { arrow: "↑", tone: "in" },
+  expense: { arrow: "↓", tone: "out" },
+  bank_transfer: { arrow: "⇄", tone: "neutral" }
+}
+
+function FlowBadge({ type }: { type: string }) {
+  const flow = FLOW[type] ?? { arrow: "•", tone: "neutral" }
+  const toneClass =
+    flow.tone === "in"
+      ? "text-sage bg-sage/10"
+      : flow.tone === "out"
+      ? "text-rust bg-rust/10"
+      : "text-gold bg-gold/10"
+
+  return (
+    <span className={`w-7 h-7 rounded flex items-center justify-center text-sm font-bold shrink-0 ${toneClass}`}>
+      {flow.arrow}
+    </span>
+  )
+}
 
 // A number input is "valid" here if it's not empty, parses to a real
 // number (not NaN -- e.g. a stray non-numeric paste), and clears the given
@@ -45,34 +73,67 @@ function SectionLabel({ children, first }: { children: React.ReactNode; first?: 
   )
 }
 
-// Compact tags rather than full-size buttons -- with seven entry types to
-// show at once, boxes padded like primary actions read as heavier and
-// more cluttered than the choice itself warrants.
-function Segmented({
+// Collapsed by default -- just the current selection -- and expands in
+// place into the full list on tap. Admin-only entries sit inline with an
+// "Admin" tag rather than a separate section, since the tag travels with
+// the item wherever it sorts.
+function TypeSelector({
   options,
   value,
   onChange
 }: {
-  options: { key: string; label: string }[]
+  options: { key: string; label: string; adminOnly: boolean }[]
   value: string
   onChange: (key: string) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const selected = options.find((o) => o.key === value)
+
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((o) => (
-        <button
-          key={o.key}
-          type="button"
-          onClick={() => onChange(o.key)}
-          className={`px-2.5 py-1.5 rounded border text-xs transition-colors ${
-            value === o.key
-              ? "border-gold bg-gold/10 text-ink font-semibold"
-              : "border-hairline bg-paper text-ink-soft font-medium"
-          }`}
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between gap-3 border border-hairline bg-paper rounded-md px-3.5 py-3"
+      >
+        <span className="flex items-center gap-2.5 min-w-0">
+          <FlowBadge type={value} />
+          <span className="text-base font-semibold text-ink truncate">{selected?.label}</span>
+        </span>
+        <span
+          className={`text-ink-soft text-xs shrink-0 motion-safe:transition-transform ${open ? "rotate-180" : ""}`}
         >
-          {o.label}
-        </button>
-      ))}
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-1.5 border border-hairline rounded-md overflow-hidden">
+          {options.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => {
+                onChange(o.key)
+                setOpen(false)
+              }}
+              className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 text-sm text-left border-b border-hairline last:border-b-0 transition-colors ${
+                o.key === value ? "bg-gold/10 text-ink font-semibold" : "bg-paper text-ink-soft"
+              }`}
+            >
+              <span className="flex items-center gap-2.5 min-w-0">
+                <FlowBadge type={o.key} />
+                <span className="truncate">{o.label}</span>
+              </span>
+              {o.adminOnly && (
+                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-gold border border-gold/40 rounded-full px-2 py-0.5">
+                  Admin
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -528,17 +589,11 @@ export default function NewTransactionPage() {
 
           <div className="mt-8 bg-paper-2 border border-hairline rounded-md p-5">
               <SectionLabel first>① Entry type</SectionLabel>
-              <Segmented options={MEMBER_TYPES} value={selectedType} onChange={handleTypeChange} />
-
-              {isAdmin && ADMIN_TYPES.length > 0 && (
-                <>
-                  <p className="flex items-start gap-1.5 text-xs font-bold uppercase tracking-wide text-ink-soft font-mono mt-3 mb-2">
-                    <span className="w-[5px] h-[5px] rounded-full bg-gold inline-block mt-[5px] shrink-0" />
-                    <span>Admin only — recorded directly, no approval step</span>
-                  </p>
-                  <Segmented options={ADMIN_TYPES} value={selectedType} onChange={handleTypeChange} />
-                </>
-              )}
+              <TypeSelector
+                options={isAdmin ? ENTRY_TYPES : MEMBER_TYPES}
+                value={selectedType}
+                onChange={handleTypeChange}
+              />
 
               <p className="text-sm text-ink-soft mt-3">
                 {helperText[selectedType]}
@@ -824,11 +879,11 @@ export default function NewTransactionPage() {
             </div>
           </div>
           <button
-            className="shrink-0 bg-ink text-paper px-5 py-3.5 rounded-md text-base font-semibold disabled:opacity-50"
+            className="shrink-0 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
             onClick={handleSubmit}
             disabled={submitting}
           >
-            {submitting ? "Submitting..." : "Submit"}
+            {submitting ? "Submitting…" : "Submit"}
           </button>
         </div>
         {message && (
