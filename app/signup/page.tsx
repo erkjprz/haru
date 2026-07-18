@@ -67,7 +67,7 @@ export default function SignupPage() {
           return
         }
 
-        router.push("/dashboard")
+        window.location.href = "/dashboard"
         return
       }
 
