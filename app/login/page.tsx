@@ -118,9 +118,18 @@ export default function LoginPage() {
 
             <div>
 
-              <label className="block text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-2">
-                Password
-              </label>
+              <div className="flex items-baseline justify-between mb-2">
+                <label className="block text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono">
+                  Password
+                </label>
+
+                <Link
+                  href="/forgot-password"
+                  className="text-[11px] text-gold hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
 
 
               <div className="relative">
