@@ -58,6 +58,17 @@ function monthLabel(transaction: any): string {
   })
 }
 
+// Fixed "05 Jan" shape regardless of locale, instead of a raw
+// toLocaleDateString() that silently flips between D/M/Y and M/D/Y
+// depending on the device's region settings. The month header above each
+// group already carries the year, so day + short month is enough here.
+function cardDate(transaction: any): string {
+  return effectiveDate(transaction).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short"
+  })
+}
+
 // yyyy-mm-dd (as stored in the date-input state) -> "18 Jul" for the pill
 // label. Parsed with an explicit time to avoid the UTC-midnight-rolls-back-
 // a-day issue plain `new Date("2026-07-18")` has in some timezones.
@@ -370,8 +381,23 @@ export default function TransactionsPage() {
   return (
     <>
       <Navbar />
+
+      {/* Option C: top-right icon button, opposite the hamburger.
+          NOTE: positioned with a fixed guess (env(safe-area-inset-top) +
+          20px) since Navbar's own height/padding isn't in this file -- if
+          it doesn't line up exactly with the hamburger row once you drop
+          this in, nudge that offset (or better, move this button inside
+          Navbar itself so it shares the exact same row by construction). */}
+      <button
+        onClick={() => router.push("/transactions/new")}
+        aria-label="New Transaction"
+        className="fixed top-[calc(env(safe-area-inset-top)+20px)] right-5 z-40 w-9 h-9 rounded-full bg-gold text-ink flex items-center justify-center text-lg font-semibold shadow-sm hover:opacity-90 transition-opacity"
+      >
+        +
+      </button>
+
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-10">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Full History
           </div>
@@ -464,7 +490,6 @@ export default function TransactionsPage() {
               const loanName = transaction.loans?.name || null
               const borrowerName = transaction.loans?.borrowers?.name || null
               const transferLabel = isTransferTxn ? transaction._transferLabel ?? null : null
-              const hasSecondaryBadge = (transaction.bank && !isTransferTxn) || (isTransferTxn && transferLabel)
 
               // Borrower-only loans (e.g. Joy, who isn't a fund member) have
               // no member_id, so fall back to the borrower's name as the
@@ -495,20 +520,19 @@ export default function TransactionsPage() {
                     </p>
                   )}
 
-                  {/* Two-column grid: left column is always "what it is"
-                      (type/bank badges, name, loan/description detail),
-                      right column is always "the facts" (date, amount,
-                      receipt) -- each pair shares a row so both columns
-                      read straight down. Receipt is a small icon next to
-                      the amount rather than a full pill below it, so a
-                      card with a receipt doesn't take noticeably more
-                      vertical space than one without. */}
+                  {/* Two-column grid: left column is "what it is" (type +
+                      bank badges together, name, loan/description detail),
+                      right column is "the facts" (date, amount, receipt).
+                      Bank sits next to the type tag on the same line, not
+                      demoted to its own row -- they're both short labels
+                      describing the transaction and read naturally as a
+                      pair. */}
                   <div
                     className={`grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 items-center bg-paper-2 border border-hairline rounded-md px-4 py-3.5 ${
                       showMonthHeader ? "" : "mt-3"
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                       <span
                         className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
                           typeColor[transaction.classification] ?? "text-ink-soft border-hairline"
@@ -516,9 +540,19 @@ export default function TransactionsPage() {
                       >
                         {typeLabels[transaction.classification] || transaction.classification}
                       </span>
+                      {transaction.bank && !isTransferTxn && (
+                        <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
+                          {transaction.bank}
+                        </span>
+                      )}
+                      {isTransferTxn && transferLabel && (
+                        <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
+                          {transferLabel}
+                        </span>
+                      )}
                     </div>
                     <div className="justify-self-end text-xs text-ink-soft font-mono whitespace-nowrap">
-                      {effectiveDate(transaction).toLocaleDateString()}
+                      {cardDate(transaction)}
                     </div>
 
                     <div className="font-display text-lg font-medium truncate">{displayName}</div>
@@ -537,21 +571,6 @@ export default function TransactionsPage() {
                         </button>
                       )}
                     </div>
-
-                    {hasSecondaryBadge && (
-                      <div className="col-span-2 flex items-center gap-1.5 flex-wrap">
-                        {transaction.bank && !isTransferTxn && (
-                          <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                            {transaction.bank}
-                          </span>
-                        )}
-                        {isTransferTxn && transferLabel && (
-                          <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                            {transferLabel}
-                          </span>
-                        )}
-                      </div>
-                    )}
 
                     {transaction.submitted_by_member && (
                       <p className="col-span-2 text-[11px] text-gold font-mono">
@@ -642,17 +661,6 @@ export default function TransactionsPage() {
             </div>
           </div>
         )}
-
-        {/* Floating "+" (Option D): reachable one-handed, doesn't compete
-            with the hamburger menu, and doesn't dock a full bar across the
-            bottom of every screen. Same position/size on Dashboard. */}
-        <button
-          onClick={() => router.push("/transactions/new")}
-          aria-label="New Transaction"
-          className="fixed right-5 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full bg-gold text-ink shadow-lg flex items-center justify-center text-2xl font-semibold hover:opacity-90 transition-opacity"
-        >
-          +
-        </button>
       </main>
 
       {openReceiptUrl && <ReceiptModal url={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
