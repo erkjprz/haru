@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
+import { useAuth } from "@/app/auth-context"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -36,6 +37,28 @@ const typeColor: Record<string, string> = {
   "Bank Write-off": "text-rust border-rust"
 }
 
+// Left-edge accent stripe on each card so the transaction type reads at a
+// glance without having to parse the pill text -- same semantic colors as
+// typeColor, just applied as a border instead of text/outline.
+const typeBorderColor: Record<string, string> = {
+  "Member Contribution": "border-l-sage",
+  "Member Withdrawal": "border-l-rust",
+  "Expense": "border-l-rust",
+  "Loan Release": "border-l-gold",
+  "Loan Repayment": "border-l-gold",
+  "Gain Allocation": "border-l-ink-soft",
+  "Bank Interest": "border-l-sage",
+  "Investment Return": "border-l-sage",
+  "Investment": "border-l-gold",
+  "Tax": "border-l-rust",
+  "Bank Write-off": "border-l-rust"
+}
+
+const statusColor: Record<string, string> = {
+  pending: "text-gold",
+  rejected: "text-rust"
+}
+
 // A transaction's real-world date is txn_date. created_at is a row-insert
 // audit timestamp and only happens to match txn_date for migrated rows
 // because the migration script set it that way -- it's not guaranteed to
@@ -43,6 +66,13 @@ const typeColor: Record<string, string> = {
 // falling back to created_at only for rows that genuinely have no txn_date.
 function effectiveDate(transaction: any): Date {
   return new Date(transaction.txn_date ?? transaction.created_at)
+}
+
+function monthLabel(transaction: any): string {
+  return effectiveDate(transaction).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric"
+  })
 }
 
 // ~75% of rows have a description that's just the member's name typed back
@@ -131,15 +161,9 @@ function dedupeLegacyTransferPairs(rows: any[]): any[] {
   return rows.filter((row) => !skipIds.has(row.transaction_id))
 }
 
-type MemberAllocations = {
-  bankInterest: number
-  investmentGainLoss: number
-  loanGain: number
-  bankWriteoff: number
-}
-
 export default function TransactionsPage() {
   const router = useRouter()
+  const { member } = useAuth()
   const [transactions, setTransactions] = useState<any[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [members, setMembers] = useState<any[]>([])
@@ -147,10 +171,13 @@ export default function TransactionsPage() {
   const [selectedType, setSelectedType] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
-  const [showFilters, setShowFilters] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
-  const [memberAllocations, setMemberAllocations] = useState<MemberAllocations | null>(null)
+
+  // Default the member filter to whoever's logged in, once, the first time
+  // their member record becomes available. After that we leave the filter
+  // alone so switching to "All members" (or anyone else) sticks.
+  const defaultMemberAppliedRef = useRef(false)
 
   async function loadTransactions() {
     // members needs an explicit FK hint: transactions has two FKs into
@@ -241,44 +268,12 @@ export default function TransactionsPage() {
     loadMembers()
   }, [])
 
-  // Investment/bank-interest/loan-gain figures live in v_member_performance
-  // -- the same view Dashboard and Fund Breakdown already read from -- so
-  // pulling from it here instead of re-aggregating investment_allocations /
-  // bank_interest_allocations / loan_gain_allocations by hand means this
-  // panel can never drift from what those two pages show for the same
-  // member.
   useEffect(() => {
-    async function loadMemberAllocations() {
-      if (!selectedMemberId) {
-        setMemberAllocations(null)
-        return
-      }
-
-      const { data, error } = await supabase
-        .from("v_member_performance")
-        .select("bank_interest, investment_gain_loss, loan_gain, bank_writeoff")
-        .eq("member_id", selectedMemberId)
-        .single()
-
-      if (error || !data) {
-        setMemberAllocations(null)
-        return
-      }
-
-      setMemberAllocations({
-        bankInterest: Number(data.bank_interest),
-        investmentGainLoss: Number(data.investment_gain_loss),
-        loanGain: Number(data.loan_gain),
-        bankWriteoff: Number(data.bank_writeoff)
-      })
+    if (member && !defaultMemberAppliedRef.current) {
+      setSelectedMemberId(member.member_id)
+      defaultMemberAppliedRef.current = true
     }
-
-    loadMemberAllocations()
-  }, [selectedMemberId])
-
-  function closeFilters() {
-    setShowFilters(false)
-  }
+  }, [member])
 
   function clearFilters() {
     setSelectedYear("")
@@ -302,94 +297,56 @@ export default function TransactionsPage() {
           .toString()
       )
     )
-  )
-    .sort((a,b)=>Number(b)-Number(a))
+  ).sort((a, b) => Number(b) - Number(a))
 
-  const selectedMember =
-    members.find(
-      (m)=>m.member_id === selectedMemberId
-    )
+  const filteredTransactions = transactions.filter((t) => {
+    const memberMatch = selectedMemberId ? t.member_id === selectedMemberId : true
+    const typeMatch = selectedType ? t.classification === selectedType : true
+    const yearMatch = selectedYear
+      ? effectiveDate(t).getFullYear().toString() === selectedYear
+      : true
 
-  const filteredTransactions =
-    transactions.filter((t)=>{
-      const memberMatch =
-        selectedMemberId
-          ? t.member_id === selectedMemberId
-          : true
+    const searchMatch =
+      searchQuery.trim() === "" ||
+      [
+        t.members?.name,
+        t.description,
+        t.bank,
+        t.classification,
+        typeLabels[t.classification],
+        t.loans?.name,
+        t.loans?.borrowers?.name,
+        t._transferLabel,
+        t.txn_date,
+        effectiveDate(t).toLocaleDateString()
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase())
 
-      const typeMatch =
-        selectedType
-          ? t.classification === selectedType
-          : true
+    return memberMatch && typeMatch && yearMatch && searchMatch
+  })
 
-      const yearMatch =
-        selectedYear
-          ? effectiveDate(t)
-              .getFullYear()
-              .toString() === selectedYear
-          : true
-
-      const searchMatch =
-        searchQuery.trim() === "" ||
-        [
-          t.members?.name,
-          t.description,
-          t.bank,
-          t.classification,
-          typeLabels[t.classification],
-          t.loans?.name,
-          t.loans?.borrowers?.name,
-          t._transferLabel,
-          t.txn_date,
-          effectiveDate(t).toLocaleDateString()
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase())
-
-      return (
-        memberMatch &&
-        typeMatch &&
-        yearMatch &&
-        searchMatch
-      )
+  const fmt = (n: number) =>
+    Number(n).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     })
 
-  const fmt = (n:number)=>
-    Number(n).toLocaleString(undefined,{
-      minimumFractionDigits:2,
-      maximumFractionDigits:2
-    })
-
-  // Same helpers Dashboard and Fund Breakdown use for every signed figure --
-  // reused here instead of the panel hand-rolling its own "+"/sage-or-rust
-  // logic (which previously always rendered "+" for Bank Interest/Loan Gain
-  // regardless of actual sign).
-  const signed = (n: number) => `${n < 0 ? "-" : "+"}₱${fmt(Math.abs(n))}`
-  const tone = (n: number) => (n > 0 ? "text-sage" : n < 0 ? "text-rust" : "text-ink-soft")
+  const hasActiveFilters = Boolean(selectedYear || selectedMemberId || selectedType)
 
   return (
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-24">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Full History
           </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink">
-              Transactions
-            </h1>
-            <button
-              className="w-full sm:w-auto sm:shrink-0 bg-gold text-ink px-5 py-3 rounded-md text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
-              onClick={() => router.push("/transactions/new")}
-            >
-              <span className="text-lg leading-none">+</span>
-              New Transaction
-            </button>
-          </div>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink">
+            Transactions
+          </h1>
 
           {loadError && (
             <p className="mt-4 text-sm text-rust">
@@ -407,187 +364,68 @@ export default function TransactionsPage() {
             />
           </div>
 
-          <button
-            className="mt-6 md:hidden w-full border border-hairline bg-paper-2 rounded-md px-4 py-3 text-sm text-left"
-            onClick={() =>
-              setShowFilters(!showFilters)
-            }
-          >
-            Filters
-            <span className="float-right">
-              {showFilters ? "−" : "+"}
-            </span>
-          </button>
-
-          <div
-            className={`
-              mt-3
-              gap-3
-              ${
-                showFilters
-                  ? "flex flex-col"
-                  : "hidden"
-              }
-              md:flex
-              md:flex-row
-              md:flex-wrap
-            `}
-          >
+          {/* Single scrollable row of compact pill selects -- always visible,
+              no expand/collapse step, and each select's own selected value
+              (e.g. "2026") already shows what's active, so a separate row of
+              removable chips underneath would just repeat the same state
+              twice. One "Clear" pill appears only once something's set. */}
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <select
-              className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-3 w-full md:w-auto"
+              className="shrink-0 border border-hairline bg-paper-2 text-ink text-sm rounded-full px-4 py-2 focus:outline-none"
               value={selectedYear}
-              onChange={(e)=>{
-                setSelectedYear(e.target.value)
-                closeFilters()
-              }}
+              onChange={(e) => setSelectedYear(e.target.value)}
             >
-              <option value="">
-                All years
-              </option>
-              {yearOptions.map((year)=>(
-                <option
-                  key={year}
-                  value={year}
-                >
+              <option value="">All years</option>
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
                   {year}
                 </option>
               ))}
             </select>
 
             <select
-              className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-3 w-full md:w-auto"
+              className="shrink-0 max-w-[10rem] border border-hairline bg-paper-2 text-ink text-sm rounded-full px-4 py-2 focus:outline-none"
               value={selectedMemberId}
-              onChange={(e)=>{
-                setSelectedMemberId(e.target.value)
-                closeFilters()
-              }}
+              onChange={(e) => setSelectedMemberId(e.target.value)}
             >
-              <option value="">
-                All members
-              </option>
-              {members.map((member)=>(
-                <option
-                  key={member.member_id}
-                  value={member.member_id}
-                >
-                  {member.name}
+              <option value="">All members</option>
+              {members.map((m) => (
+                <option key={m.member_id} value={m.member_id}>
+                  {m.member_id === member?.member_id ? "You" : m.name}
                 </option>
               ))}
             </select>
 
             <select
-              className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-3 w-full md:w-auto"
+              className="shrink-0 border border-hairline bg-paper-2 text-ink text-sm rounded-full px-4 py-2 focus:outline-none"
               value={selectedType}
-              onChange={(e)=>{
-                setSelectedType(e.target.value)
-                closeFilters()
-              }}
+              onChange={(e) => setSelectedType(e.target.value)}
             >
-              <option value="">
-                All types
-              </option>
-              {typeOptions.map((type)=>(
-                <option
-                  key={type}
-                  value={type}
-                >
+              <option value="">All types</option>
+              {typeOptions.map((type) => (
+                <option key={type} value={type}>
                   {typeLabels[type] || type}
                 </option>
               ))}
             </select>
 
-            <button
-              className="border border-hairline rounded-md px-3 py-3 text-sm w-full md:w-auto"
-              onClick={clearFilters}
-            >
-              Clear Filters
-            </button>
+            {hasActiveFilters && (
+              <button
+                className="shrink-0 border border-hairline rounded-full px-4 py-2 text-sm text-ink-soft"
+                onClick={clearFilters}
+              >
+                Clear
+              </button>
+            )}
           </div>
-
-          {(selectedYear ||
-            selectedMemberId ||
-            selectedType) && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {selectedYear && (
-                <button
-                  className="border border-hairline bg-paper-2 rounded-full px-3 py-1 text-xs font-mono"
-                  onClick={()=>{
-                    setSelectedYear("")
-                  }}
-                >
-                  Year: {selectedYear} ×
-                </button>
-              )}
-              {selectedMemberId && (
-                <button
-                  className="border border-hairline bg-paper-2 rounded-full px-3 py-1 text-xs font-mono"
-                  onClick={()=>{
-                    setSelectedMemberId("")
-                  }}
-                >
-                  Member: {selectedMember?.name} ×
-                </button>
-              )}
-              {selectedType && (
-                <button
-                  className="border border-hairline bg-paper-2 rounded-full px-3 py-1 text-xs font-mono"
-                  onClick={()=>{
-                    setSelectedType("")
-                  }}
-                >
-                  Type: {typeLabels[selectedType] || selectedType} ×
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Member Allocations -- InfoBox pattern matching Dashboard/Fund
-              Breakdown, sourced from v_member_performance. */}
-          {selectedMemberId && memberAllocations && (
-            <div className="mt-4 bg-paper-2 border border-hairline rounded-md p-1">
-              <div className="bg-paper rounded-lg px-4 py-3.5">
-                <p className="text-[10px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-2">
-                  {selectedMember?.name} — Allocations
-                </p>
-                <div className="space-y-1.5">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-[12.5px] text-ink-soft">Bank Interest</span>
-                    <span className={`font-mono [font-variant-numeric:tabular-nums] text-[12.5px] font-medium whitespace-nowrap ${tone(memberAllocations.bankInterest)}`}>
-                      {signed(memberAllocations.bankInterest)}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-[12.5px] text-ink-soft">Investment Gain/Loss</span>
-                    <span className={`font-mono [font-variant-numeric:tabular-nums] text-[12.5px] font-medium whitespace-nowrap ${tone(memberAllocations.investmentGainLoss)}`}>
-                      {signed(memberAllocations.investmentGainLoss)}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-[12.5px] text-ink-soft">Loan Gain Share</span>
-                    <span className={`font-mono [font-variant-numeric:tabular-nums] text-[12.5px] font-medium whitespace-nowrap ${tone(memberAllocations.loanGain)}`}>
-                      {signed(memberAllocations.loanGain)}
-                    </span>
-                  </div>
-                  {memberAllocations.bankWriteoff !== 0 && (
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-[12.5px] text-ink-soft">Bank Write-off Share</span>
-                      <span className={`font-mono [font-variant-numeric:tabular-nums] text-[12.5px] font-medium whitespace-nowrap ${tone(memberAllocations.bankWriteoff)}`}>
-                        {signed(memberAllocations.bankWriteoff)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="mt-4 text-xs text-ink-soft font-mono [font-variant-numeric:tabular-nums]">
             Showing {filteredTransactions.length} of {totalCount}
             {searchQuery && ` matching "${searchQuery}"`}
           </div>
 
-          <div className="mt-6 space-y-3">
-            {filteredTransactions.map((transaction)=>{
+          <div className="mt-6">
+            {filteredTransactions.map((transaction, idx) => {
               const memberName = transaction.members?.name || null
               const isLoanTxn =
                 transaction.classification === "Loan Release" ||
@@ -610,100 +448,113 @@ export default function TransactionsPage() {
                 !isLoanTxn &&
                 !isTransferTxn
 
+              const label = monthLabel(transaction)
+              const showMonthHeader = idx === 0 || label !== monthLabel(filteredTransactions[idx - 1])
+
               return (
-                <div
-                  key={transaction.transaction_id}
-                  className="bg-paper-2 border border-hairline rounded-md p-4"
-                >
-                  <div className="flex justify-between items-start gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
-                            typeColor[transaction.classification] ?? "text-ink-soft border-hairline"
-                          }`}
-                        >
-                          {
-                            typeLabels[transaction.classification]
-                            ||
-                            transaction.classification
-                          }
-                        </span>
-                        {transaction.bank && !isTransferTxn && (
-                          <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                            {transaction.bank}
-                          </span>
-                        )}
-                        {isTransferTxn && transferLabel && (
-                          <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                            {transferLabel}
-                          </span>
-                        )}
-                        <span className="text-xs text-ink-soft font-mono">
-                          {
-                            effectiveDate(transaction)
-                              .toLocaleDateString()
-                          }
-                        </span>
-                      </div>
-                      <div className="font-display text-lg font-medium mt-2">
-                        {displayName}
-                      </div>
-                      {transaction.submitted_by_member && (
-                        <p className="text-[11px] text-gold font-mono mt-0.5">
-                          Recorded by {transaction.submitted_by_member.name}
-                        </p>
-                      )}
-                      {isLoanTxn && loanName && (
-                        <p className="text-xs text-ink-soft mt-1 font-mono">
-                          {loanName}
-                        </p>
-                      )}
-                      {showDescription && (
-                        <p className="text-xs text-ink-soft mt-1 break-words">
-                          {transaction.description}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <div className="font-mono [font-variant-numeric:tabular-nums] text-xl font-semibold">
-                        ₱{fmt(Math.abs(transaction.amount))}
-                      </div>
-                      <div className="text-[10px] uppercase text-ink-soft font-mono mt-1">
-                        {transaction.status}
-                      </div>
-                    </div>
-                  </div>
-
-                  {transaction.receipt_url && (
-                    <button
-                      type="button"
-                      onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
-                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
-                    >
-                      🧾 View Receipt
-                    </button>
+                <div key={transaction.transaction_id}>
+                  {showMonthHeader && (
+                    <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 mt-6 first:mt-0">
+                      {label}
+                    </p>
                   )}
+
+                  <div
+                    className={`bg-paper-2 border border-hairline border-l-4 ${
+                      typeBorderColor[transaction.classification] ?? "border-l-hairline"
+                    } rounded-md p-4 mt-3 first:mt-0`}
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
+                              typeColor[transaction.classification] ?? "text-ink-soft border-hairline"
+                            }`}
+                          >
+                            {typeLabels[transaction.classification] || transaction.classification}
+                          </span>
+                          {transaction.bank && !isTransferTxn && (
+                            <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
+                              {transaction.bank}
+                            </span>
+                          )}
+                          {isTransferTxn && transferLabel && (
+                            <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
+                              {transferLabel}
+                            </span>
+                          )}
+                          <span className="text-xs text-ink-soft font-mono">
+                            {effectiveDate(transaction).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="font-display text-lg font-medium mt-2">{displayName}</div>
+                        {transaction.submitted_by_member && (
+                          <p className="text-[11px] text-gold font-mono mt-0.5">
+                            Recorded by {transaction.submitted_by_member.name}
+                          </p>
+                        )}
+                        {isLoanTxn && loanName && (
+                          <p className="text-xs text-ink-soft mt-1 font-mono">{loanName}</p>
+                        )}
+                        {showDescription && (
+                          <p className="text-xs text-ink-soft mt-1 break-words">
+                            {transaction.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <div className="font-mono [font-variant-numeric:tabular-nums] text-xl font-semibold">
+                          ₱{fmt(Math.abs(transaction.amount))}
+                        </div>
+                        {transaction.status !== "approved" && (
+                          <div
+                            className={`text-[10px] uppercase font-mono mt-1 ${
+                              statusColor[transaction.status] ?? "text-ink-soft"
+                            }`}
+                          >
+                            {transaction.status}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {transaction.receipt_url && (
+                      <button
+                        type="button"
+                        onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
+                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
+                      >
+                        🧾 View Receipt
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
 
             {filteredTransactions.length === 0 && !loadError && (
-              <p className="py-8 text-sm text-ink-soft text-center">
-                No transactions found.
-              </p>
+              <p className="py-8 text-sm text-ink-soft text-center">No transactions found.</p>
             )}
+          </div>
+        </div>
+
+        {/* Sticky thumb-reach action bar, matching the Dashboard page. */}
+        <div className="fixed bottom-0 left-0 right-0 bg-paper border-t border-hairline pb-[env(safe-area-inset-bottom)]">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 py-3">
+            <button
+              onClick={() => router.push("/transactions/new")}
+              className="w-full bg-gold text-ink px-4 py-3 rounded-md text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
+            >
+              <span className="text-lg leading-none">+</span>
+              New Transaction
+            </button>
           </div>
         </div>
       </main>
 
-      {openReceiptUrl && (
-        <ReceiptModal
-          url={openReceiptUrl}
-          onClose={() => setOpenReceiptUrl(null)}
-        />
-      )}
+      {openReceiptUrl && <ReceiptModal url={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
   )
 }
