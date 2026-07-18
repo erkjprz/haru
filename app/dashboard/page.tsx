@@ -203,20 +203,6 @@ export default function DashboardPage() {
     <>
       <Navbar />
 
-      {/* Top-right button, opposite the hamburger -- same position/size as
-          Transactions so it's a fixed spot regardless of page. Offset is a
-          guess (env(safe-area-inset-top) + 20px) since Navbar's own
-          height/padding isn't in this file -- nudge it if it doesn't land
-          exactly on the hamburger's row. */}
-      <button
-        onClick={() => router.push("/transactions/new")}
-        aria-label="New Transaction"
-        className="fixed top-[calc(env(safe-area-inset-top)+20px)] right-5 z-40 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-      >
-        <span className="text-lg leading-none">+</span>
-        New
-      </button>
-
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-10">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">

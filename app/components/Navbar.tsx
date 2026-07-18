@@ -44,6 +44,8 @@ export default function Navbar() {
     return best.path === path
   }
 
+  const onNewTransactionPage = pathname.startsWith("/transactions/new")
+
   return (
     <>
       <nav className="border-b border-hairline bg-paper sticky top-0 z-40">
@@ -66,6 +68,19 @@ export default function Navbar() {
           <div className="w-9 h-9" />
         </div>
       </nav>
+
+      {/* Fixed top-right button, opposite the hamburger, so it shows in the
+          same spot on every page regardless of that page's own layout. */}
+      {!onNewTransactionPage && (
+        <button
+          onClick={() => router.push("/transactions/new")}
+          aria-label="New Transaction"
+          className="fixed top-[calc(env(safe-area-inset-top)+20px)] right-5 z-40 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+        >
+          <span className="text-lg leading-none">+</span>
+          New
+        </button>
+      )}
 
       {isOpen && (
         <div
