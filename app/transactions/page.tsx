@@ -371,7 +371,7 @@ export default function TransactionsPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(8rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))]">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Full History
           </div>
@@ -478,6 +478,8 @@ export default function TransactionsPage() {
                 !isLoanTxn &&
                 !isTransferTxn
 
+              const showStatus = transaction.status !== "approved"
+
               const label = monthLabel(transaction)
               const showMonthHeader = idx === 0 || label !== monthLabel(filteredTransactions[idx - 1])
 
@@ -493,89 +495,85 @@ export default function TransactionsPage() {
                     </p>
                   )}
 
+                  {/* Two-column grid: left column is always "what it is"
+                      (type/bank badges, name, loan/description detail),
+                      right column is always "the facts" (date, amount,
+                      receipt) -- each pair shares a row so both columns
+                      read straight down. Receipt is a small icon next to
+                      the amount rather than a full pill below it, so a
+                      card with a receipt doesn't take noticeably more
+                      vertical space than one without. */}
                   <div
-                    className={`bg-paper-2 border border-hairline rounded-md p-4 ${
+                    className={`grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 items-center bg-paper-2 border border-hairline rounded-md px-4 py-3.5 ${
                       showMonthHeader ? "" : "mt-3"
                     }`}
                   >
-                    <div className="flex justify-between items-start gap-3">
-                      <div className="min-w-0">
-                        {/* Type + date together on the primary line -- the
-                            two things you actually scan for -- with bank/
-                            transfer detail demoted to its own secondary
-                            line below. Previously bank sat between them and
-                            pushed date onto a wrapped second line only on
-                            cards that had it, so date's position visibly
-                            jumped from card to card; keeping this line to
-                            just two short items means it fits every time. */}
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
-                              typeColor[transaction.classification] ?? "text-ink-soft border-hairline"
-                            }`}
-                          >
-                            {typeLabels[transaction.classification] || transaction.classification}
-                          </span>
-                          <span className="text-xs text-ink-soft font-mono">
-                            {effectiveDate(transaction).toLocaleDateString()}
-                          </span>
-                        </div>
-
-                        {hasSecondaryBadge && (
-                          <div className="mt-1.5">
-                            {transaction.bank && !isTransferTxn && (
-                              <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                                {transaction.bank}
-                              </span>
-                            )}
-                            {isTransferTxn && transferLabel && (
-                              <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                                {transferLabel}
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="font-display text-lg font-medium mt-1.5">{displayName}</div>
-                        {transaction.submitted_by_member && (
-                          <p className="text-[11px] text-gold font-mono mt-0.5">
-                            Recorded by {transaction.submitted_by_member.name}
-                          </p>
-                        )}
-                        {isLoanTxn && loanName && (
-                          <p className="text-xs text-ink-soft mt-1 font-mono">{loanName}</p>
-                        )}
-                        {showDescription && (
-                          <p className="text-xs text-ink-soft mt-1 break-words">
-                            {transaction.description}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <div className="font-mono [font-variant-numeric:tabular-nums] text-xl font-semibold">
-                          ₱{fmt(Math.abs(transaction.amount))}
-                        </div>
-                        {transaction.status !== "approved" && (
-                          <div
-                            className={`text-[10px] uppercase font-mono mt-1 ${
-                              statusColor[transaction.status] ?? "text-ink-soft"
-                            }`}
-                          >
-                            {transaction.status}
-                          </div>
-                        )}
-                      </div>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span
+                        className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
+                          typeColor[transaction.classification] ?? "text-ink-soft border-hairline"
+                        }`}
+                      >
+                        {typeLabels[transaction.classification] || transaction.classification}
+                      </span>
+                    </div>
+                    <div className="justify-self-end text-xs text-ink-soft font-mono whitespace-nowrap">
+                      {effectiveDate(transaction).toLocaleDateString()}
                     </div>
 
-                    {transaction.receipt_url && (
-                      <button
-                        type="button"
-                        onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
-                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
+                    <div className="font-display text-lg font-medium truncate">{displayName}</div>
+                    <div className="justify-self-end flex items-center gap-2">
+                      <span className="font-mono [font-variant-numeric:tabular-nums] text-lg font-semibold whitespace-nowrap">
+                        ₱{fmt(Math.abs(transaction.amount))}
+                      </span>
+                      {transaction.receipt_url && (
+                        <button
+                          type="button"
+                          onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
+                          aria-label="View receipt"
+                          className="shrink-0 w-7 h-7 rounded-full border border-gold text-gold text-xs flex items-center justify-center"
+                        >
+                          🧾
+                        </button>
+                      )}
+                    </div>
+
+                    {hasSecondaryBadge && (
+                      <div className="col-span-2 flex items-center gap-1.5 flex-wrap">
+                        {transaction.bank && !isTransferTxn && (
+                          <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
+                            {transaction.bank}
+                          </span>
+                        )}
+                        {isTransferTxn && transferLabel && (
+                          <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
+                            {transferLabel}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {transaction.submitted_by_member && (
+                      <p className="col-span-2 text-[11px] text-gold font-mono">
+                        Recorded by {transaction.submitted_by_member.name}
+                      </p>
+                    )}
+                    {isLoanTxn && loanName && (
+                      <p className="col-span-2 text-xs text-ink-soft font-mono">{loanName}</p>
+                    )}
+                    {showDescription && (
+                      <p className="col-span-2 text-xs text-ink-soft break-words">
+                        {transaction.description}
+                      </p>
+                    )}
+                    {showStatus && (
+                      <div
+                        className={`col-span-2 justify-self-end text-[10px] uppercase font-mono ${
+                          statusColor[transaction.status] ?? "text-ink-soft"
+                        }`}
                       >
-                        🧾 View Receipt
-                      </button>
+                        {transaction.status}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -645,21 +643,16 @@ export default function TransactionsPage() {
           </div>
         )}
 
-        {/* Sticky thumb-reach action bar, matching the Dashboard page.
-            Solid fill kept, but sized down and centered instead of
-            stretched full-width -- reads as a normal-weight primary action
-            rather than a wall of color spanning the screen. */}
-        <div className="fixed bottom-0 left-0 right-0 bg-paper border-t border-hairline">
-          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] flex justify-center">
-            <button
-              onClick={() => router.push("/transactions/new")}
-              className="bg-gold text-ink px-6 py-2.5 rounded-md text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
-            >
-              <span className="text-base leading-none">+</span>
-              New Transaction
-            </button>
-          </div>
-        </div>
+        {/* Floating "+" (Option D): reachable one-handed, doesn't compete
+            with the hamburger menu, and doesn't dock a full bar across the
+            bottom of every screen. Same position/size on Dashboard. */}
+        <button
+          onClick={() => router.push("/transactions/new")}
+          aria-label="New Transaction"
+          className="fixed right-5 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full bg-gold text-ink shadow-lg flex items-center justify-center text-2xl font-semibold hover:opacity-90 transition-opacity"
+        >
+          +
+        </button>
       </main>
 
       {openReceiptUrl && <ReceiptModal url={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
