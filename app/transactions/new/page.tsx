@@ -8,17 +8,6 @@ import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 
-const typeLabels: Record<string, string> = {
-  "Member Contribution": "Contribution",
-  "Member Withdrawal": "Withdrawal",
-  "Expense": "Expense",
-  "Loan Release": "Loan Disbursement",
-  "Loan Repayment": "Loan Repayment",
-  "Gain Allocation": "Investment Allocation",
-  "Bank Interest": "Bank Interest",
-  "Internal Transfer": "Bank Transfer"
-}
-
 const ENTRY_TYPES = [
   { key: "contribution", label: "Contribution", adminOnly: false },
   { key: "withdrawal", label: "Withdrawal Request", adminOnly: false },
@@ -47,7 +36,7 @@ function isValidPositiveNumber(value: string, allowZero = false): boolean {
 function SectionLabel({ children, first }: { children: React.ReactNode; first?: boolean }) {
   return (
     <p
-      className={`text-[11px] font-bold uppercase tracking-wide text-ink font-mono mb-3 ${
+      className={`text-xs font-bold uppercase tracking-wide text-ink font-mono mb-3 ${
         first ? "" : "mt-6 pt-[18px] border-t border-hairline"
       }`}
     >
@@ -56,6 +45,9 @@ function SectionLabel({ children, first }: { children: React.ReactNode; first?: 
   )
 }
 
+// Compact tags rather than full-size buttons -- with seven entry types to
+// show at once, boxes padded like primary actions read as heavier and
+// more cluttered than the choice itself warrants.
 function Segmented({
   options,
   value,
@@ -66,14 +58,16 @@ function Segmented({
   onChange: (key: string) => void
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {options.map((o) => (
         <button
           key={o.key}
           type="button"
           onClick={() => onChange(o.key)}
-          className={`px-3 py-2.5 rounded-sm border text-xs font-semibold transition-colors ${
-            value === o.key ? "border-gold bg-gold/10 text-ink" : "border-hairline bg-paper-2 text-ink-soft"
+          className={`px-2.5 py-1.5 rounded border text-xs transition-colors ${
+            value === o.key
+              ? "border-gold bg-gold/10 text-ink font-semibold"
+              : "border-hairline bg-paper text-ink-soft font-medium"
           }`}
         >
           {o.label}
@@ -86,7 +80,7 @@ function Segmented({
 function Chip({ done, children }: { done?: boolean; children: React.ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-[3px] rounded-full border whitespace-nowrap ${
+      className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border whitespace-nowrap ${
         done ? "text-sage border-sage/40" : "text-ink-soft border-hairline"
       }`}
     >
@@ -104,7 +98,6 @@ export default function NewTransactionPage() {
   const isAdmin = member?.role === "admin"
   const [banks, setBanks] = useState<any[]>([])
   const [allMembers, setAllMembers] = useState<any[]>([])
-  const [recent, setRecent] = useState<any[]>([])
   const [myLoans, setMyLoans] = useState<any[]>([])
 
   const [selectedType, setSelectedType] = useState("contribution")
@@ -123,17 +116,6 @@ export default function NewTransactionPage() {
   const [termMonths, setTermMonths] = useState("")
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
   const [selectedLoanId, setSelectedLoanId] = useState("")
-
-  async function loadRecent(id: string) {
-    const { data } = await supabase
-      .from("transactions")
-      .select("transaction_id, classification, amount, description, status, created_at")
-      .eq("member_id", id)
-      .order("created_at", { ascending: false })
-      .limit(5)
-
-    setRecent(data ?? [])
-  }
 
   async function loadLoansFor(id: string) {
     const { data } = await supabase
@@ -178,7 +160,6 @@ export default function NewTransactionPage() {
         setAllMembers(memberList ?? [])
       }
 
-      await loadRecent(member.member_id)
       await loadLoansFor(member.member_id)
       setDataLoading(false)
     }
@@ -538,10 +519,10 @@ export default function NewTransactionPage() {
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans">
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-48">
-          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
+          <div className="text-xs tracking-[0.18em] uppercase text-gold font-mono mb-2">
             New Entry
           </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink">
+          <h1 className="font-display text-4xl sm:text-5xl font-semibold text-ink">
             New Transaction
           </h1>
 
@@ -551,15 +532,15 @@ export default function NewTransactionPage() {
 
               {isAdmin && ADMIN_TYPES.length > 0 && (
                 <>
-                  <p className="flex items-start gap-1.5 text-[10px] font-bold uppercase tracking-wide text-ink-soft font-mono mt-3 mb-2">
-                    <span className="w-[5px] h-[5px] rounded-full bg-gold inline-block mt-[3px] shrink-0" />
+                  <p className="flex items-start gap-1.5 text-xs font-bold uppercase tracking-wide text-ink-soft font-mono mt-3 mb-2">
+                    <span className="w-[5px] h-[5px] rounded-full bg-gold inline-block mt-[5px] shrink-0" />
                     <span>Admin only — recorded directly, no approval step</span>
                   </p>
                   <Segmented options={ADMIN_TYPES} value={selectedType} onChange={handleTypeChange} />
                 </>
               )}
 
-              <p className="text-xs text-ink-soft mt-3">
+              <p className="text-sm text-ink-soft mt-3">
                 {helperText[selectedType]}
               </p>
 
@@ -568,11 +549,11 @@ export default function NewTransactionPage() {
               <div className="space-y-4">
               {isAdmin && isMemberLinkedType && (
                 <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                     On behalf of
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
                     value={onBehalfOfId}
                     onChange={(e) => handleOnBehalfChange(e.target.value)}
                   >
@@ -586,7 +567,7 @@ export default function NewTransactionPage() {
                       ))}
                   </select>
                   {onBehalfOfId && (
-                    <p className="text-xs text-gold mt-2">
+                    <p className="text-sm text-gold mt-2">
                       This will be recorded as approved immediately for {allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.
                     </p>
                   )}
@@ -595,16 +576,16 @@ export default function NewTransactionPage() {
 
               {isLoanPayment && (
                 <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                     Which loan
                   </label>
                   {myLoans.filter((l) => l.status === "active").length === 0 ? (
-                    <p className="text-xs text-rust">
+                    <p className="text-sm text-rust">
                       No active loans to pay against.
                     </p>
                   ) : (
                     <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
+                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
                       value={selectedLoanId}
                       onChange={(e) => setSelectedLoanId(e.target.value)}
                     >
@@ -622,11 +603,11 @@ export default function NewTransactionPage() {
               )}
 
               <div>
-                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                   {isLoanRequest ? "Amount to borrow" : "Amount"}
                 </label>
                 <input
-                  className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                   type="number"
                   min="0.01"
                   step="0.01"
@@ -639,11 +620,11 @@ export default function NewTransactionPage() {
               {isLoanRequest && (
                 <>
                   <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                       Interest rate (%)
                     </label>
                     <input
-                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                       type="number"
                       min="0"
                       step="0.01"
@@ -654,11 +635,11 @@ export default function NewTransactionPage() {
                   </div>
 
                   <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                       Term (months)
                     </label>
                     <input
-                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                       type="number"
                       min="1"
                       step="1"
@@ -669,11 +650,11 @@ export default function NewTransactionPage() {
                   </div>
 
                   <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                       Repayment mode
                     </label>
                     <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
+                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
                       value={repaymentFrequency}
                       onChange={(e) => setRepaymentFrequency(e.target.value)}
                     >
@@ -684,14 +665,14 @@ export default function NewTransactionPage() {
 
                   {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
                     <div className="border border-hairline rounded-md p-4 bg-paper">
-                      <p className="text-xs text-ink-soft font-mono mb-2">
+                      <p className="text-sm text-ink-soft font-mono mb-2">
                         Estimated repayment
                       </p>
-                      <div className="flex justify-between text-sm font-mono [font-variant-numeric:tabular-nums]">
+                      <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
                         <span className="text-ink-soft">Total repayable</span>
                         <span>₱{fmt(previewTotalRepayable)}</span>
                       </div>
-                      <div className="flex justify-between text-sm font-mono [font-variant-numeric:tabular-nums] mt-1">
+                      <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
                         <span className="text-ink-soft">
                           {repaymentFrequency === "monthly"
                             ? `Per month × ${termMonths}`
@@ -708,11 +689,11 @@ export default function NewTransactionPage() {
 
               {needsBank && (
                 <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                     {isBankTransfer ? "From bank" : "Bank"}
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
                     value={bankId}
                     onChange={(e) => setBankId(e.target.value)}
                   >
@@ -728,11 +709,11 @@ export default function NewTransactionPage() {
 
               {isBankTransfer && (
                 <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                     To bank
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
                     value={toBankId}
                     onChange={(e) => setToBankId(e.target.value)}
                   >
@@ -747,11 +728,11 @@ export default function NewTransactionPage() {
               )}
 
               <div>
-                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                   Description
                 </label>
                 <input
-                  className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
+                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
                   placeholder="Add a note"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -760,7 +741,7 @@ export default function NewTransactionPage() {
 
               {needsReceipt && (
                 <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
                     Receipt
                   </label>
 
@@ -780,10 +761,10 @@ export default function NewTransactionPage() {
                       `}
                     >
                       <span className="text-2xl">📎</span>
-                      <span className="text-sm text-ink">
+                      <span className="text-base text-ink">
                         Tap to upload, or drag a photo here
                       </span>
-                      <span className="text-xs text-ink-soft">
+                      <span className="text-sm text-ink-soft">
                         Screenshot or photo of your deposit slip
                       </span>
                       <input
@@ -801,17 +782,17 @@ export default function NewTransactionPage() {
                         className="w-16 h-16 object-cover rounded-md border border-hairline"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-ink truncate">
+                        <p className="text-base text-ink truncate">
                           {receipt?.name}
                         </p>
-                        <p className="text-xs text-ink-soft">
+                        <p className="text-sm text-ink-soft">
                           {receipt ? `${(receipt.size / 1024).toFixed(0)} KB` : ""}
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setReceiptFile(null)}
-                        className="text-xs text-rust border border-rust rounded-full px-2 py-1 shrink-0"
+                        className="text-sm text-rust border border-rust rounded-full px-2.5 py-1 shrink-0"
                       >
                         Remove
                       </button>
@@ -821,69 +802,29 @@ export default function NewTransactionPage() {
               )}
               </div>
           </div>
-
-          {recent.length > 0 && (
-            <div className="mt-10">
-              <h2 className="font-display text-lg font-medium text-ink mb-3">
-                Your Recent Activity
-              </h2>
-              <div className="bg-paper-2 border border-hairline rounded-md px-5">
-                  {recent.map((t, i) => (
-                    <div
-                      key={t.transaction_id}
-                      className={`py-3 flex justify-between items-center gap-3 ${
-                        i !== recent.length - 1 ? "border-b border-dashed border-hairline" : ""
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm text-ink">
-                          {typeLabels[t.classification] || t.classification}
-                          <span className="text-ink-soft font-mono text-xs ml-2">
-                            {new Date(t.created_at).toLocaleDateString()}
-                          </span>
-                        </p>
-                        {t.description && (
-                          <p className="text-xs text-ink-soft truncate">
-                            {t.description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-mono [font-variant-numeric:tabular-nums] text-sm text-ink">
-                          ₱{fmt(Math.abs(t.amount))}
-                        </p>
-                        <p className="text-[10px] uppercase text-ink-soft font-mono">
-                          {t.status}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
         </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline">
-        <div
-          className="max-w-lg mx-auto px-4 sm:px-5 pt-3 flex items-center gap-3"
-          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
-        >
+      <div
+        className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline"
+        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+      >
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4 flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">
+            <div className="text-xs uppercase tracking-wide text-ink-soft font-mono">
               Amount
             </div>
-            <div className="font-mono [font-variant-numeric:tabular-nums] text-lg font-bold text-ink truncate">
+            <div className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink truncate">
               ₱{isValidPositiveNumber(amount) ? fmt(Number(amount)) : "0.00"}
             </div>
-            <div className="flex flex-wrap gap-1.5 mt-1.5">
+            <div className="flex flex-wrap gap-1.5 mt-2">
               {chips.map((chip, i) => (
                 <Chip key={i} done={chip.done}>{chip.text}</Chip>
               ))}
             </div>
           </div>
           <button
-            className="shrink-0 bg-ink text-paper px-5 py-3 rounded-md font-medium disabled:opacity-50"
+            className="shrink-0 bg-ink text-paper px-5 py-3.5 rounded-md text-base font-semibold disabled:opacity-50"
             onClick={handleSubmit}
             disabled={submitting}
           >
@@ -891,8 +832,8 @@ export default function NewTransactionPage() {
           </button>
         </div>
         {message && (
-          <div className="max-w-lg mx-auto px-4 sm:px-5 pb-3">
-            <p className="text-xs text-rust">{message}</p>
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-2">
+            <p className="text-sm text-rust">{message}</p>
           </div>
         )}
       </div>
