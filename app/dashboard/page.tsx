@@ -184,7 +184,7 @@ export default function DashboardPage() {
       <>
         <Navbar />
         <main className="min-h-screen bg-paper text-ink font-sans">
-          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))]">
             <SkeletonPanel />
           </div>
         </main>
@@ -203,7 +203,7 @@ export default function DashboardPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))]">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Welcome back
           </div>
@@ -441,24 +441,17 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Sticky thumb-reach action bar */}
-        <div className="fixed bottom-0 left-0 right-0 bg-paper border-t border-hairline pb-[env(safe-area-inset-bottom)]">
-          <div className="max-w-3xl mx-auto px-4 sm:px-5 py-3 grid grid-cols-2 gap-3">
-            <button
-              onClick={() => router.push("/transactions")}
-              className="border border-hairline rounded-md px-4 py-3 text-sm font-medium text-ink hover:bg-paper-2 transition-colors"
-            >
-              View Transactions
-            </button>
-            <button
-              onClick={() => router.push("/transactions/new")}
-              className="bg-gold text-ink px-4 py-3 rounded-md text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
-            >
-              <span className="text-lg leading-none">+</span>
-              New Transaction
-            </button>
-          </div>
-        </div>
+        {/* Floating "+" (Option D) -- same position/size as Transactions,
+            so the primary action is in a fixed, muscle-memory spot no
+            matter which page you're on. "View Transactions" is dropped;
+            the hamburger nav is the way to get there instead. */}
+        <button
+          onClick={() => router.push("/transactions/new")}
+          aria-label="New Transaction"
+          className="fixed right-5 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full bg-gold text-ink shadow-lg flex items-center justify-center text-2xl font-semibold hover:opacity-90 transition-opacity"
+        >
+          +
+        </button>
       </main>
     </>
   )
