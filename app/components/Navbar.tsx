@@ -30,6 +30,7 @@ export default function Navbar() {
     { label: "Investments", path: "/investment" },
     { label: "Banks", path: "/bank" },
     { label: "Transactions", path: "/transactions" },
+    { label: "Account", path: "/account" },
     ...(isAdmin ? [{ label: "Admin", path: "/admin" }] : [])
   ]
 
