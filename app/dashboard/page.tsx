@@ -184,7 +184,7 @@ export default function DashboardPage() {
       <>
         <Navbar />
         <main className="min-h-screen bg-paper text-ink font-sans">
-          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-10">
             <SkeletonPanel />
           </div>
         </main>
@@ -202,8 +202,23 @@ export default function DashboardPage() {
   return (
     <>
       <Navbar />
+
+      {/* Option C: top-right icon button, opposite the hamburger -- same
+          position/size as Transactions so it's a fixed spot regardless of
+          page. NOTE: offset is a guess (env(safe-area-inset-top) + 20px)
+          since Navbar's own height/padding isn't in this file -- nudge it
+          if it doesn't land exactly on the hamburger's row, or move it
+          into Navbar itself so both share the row by construction. */}
+      <button
+        onClick={() => router.push("/transactions/new")}
+        aria-label="New Transaction"
+        className="fixed top-[calc(env(safe-area-inset-top)+20px)] right-5 z-40 w-9 h-9 rounded-full bg-gold text-ink flex items-center justify-center text-lg font-semibold shadow-sm hover:opacity-90 transition-opacity"
+      >
+        +
+      </button>
+
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-10">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Welcome back
           </div>
@@ -440,18 +455,6 @@ export default function DashboardPage() {
             </section>
           )}
         </div>
-
-        {/* Floating "+" (Option D) -- same position/size as Transactions,
-            so the primary action is in a fixed, muscle-memory spot no
-            matter which page you're on. "View Transactions" is dropped;
-            the hamburger nav is the way to get there instead. */}
-        <button
-          onClick={() => router.push("/transactions/new")}
-          aria-label="New Transaction"
-          className="fixed right-5 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full bg-gold text-ink shadow-lg flex items-center justify-center text-2xl font-semibold hover:opacity-90 transition-opacity"
-        >
-          +
-        </button>
       </main>
     </>
   )
