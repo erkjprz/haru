@@ -78,6 +78,16 @@ function monthLabel(transaction: any): string {
   })
 }
 
+// yyyy-mm-dd (as stored in the date-input state) -> "18 Jul" for the pill
+// label. Parsed with an explicit time to avoid the UTC-midnight-rolls-back-
+// a-day issue plain `new Date("2026-07-18")` has in some timezones.
+function formatShort(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short"
+  })
+}
+
 // ~75% of rows have a description that's just the member's name typed back
 // (sometimes via an old alias like "Ekai"/"Ketty"/"Bors" -- member_id is
 // already resolved correctly for those, so the raw text adds nothing once
@@ -166,9 +176,12 @@ function dedupeLegacyTransferPairs(rows: any[]): any[] {
 
 // A filter pill that visibly changes appearance once it holds a real value
 // (gold border/tint instead of the neutral default) and grows a small ×
-// badge in its corner to clear just that one filter -- so it's obvious at
-// a glance which filters are active and how to remove any one of them
-// without hunting for a single shared "Clear" button.
+// next to it to clear just that one filter. The × is a normal in-flow
+// sibling (nudged on top with negative margins) rather than an
+// absolutely-positioned overlay -- an absolute badge sitting on top of a
+// <select> or <input> competes with that control's own hit-testing and,
+// on mobile Safari in particular, the control wins and swallows the tap.
+// As a real DOM sibling painted after it, the × reliably gets the tap.
 function FilterPill({
   active,
   onClear,
@@ -179,14 +192,14 @@ function FilterPill({
   children: React.ReactNode
 }) {
   return (
-    <div className="relative shrink-0">
+    <div className="flex items-start shrink-0">
       {children}
       {active && (
         <button
           type="button"
           onClick={onClear}
           aria-label="Clear filter"
-          className="absolute -right-1.5 -top-1.5 z-10 w-4 h-4 rounded-full bg-ink text-paper text-[10px] leading-4 text-center"
+          className="-ml-3 mt-[-6px] w-4 h-4 rounded-full bg-ink text-paper text-[10px] leading-4 text-center shrink-0"
         >
           ×
         </button>
@@ -205,6 +218,7 @@ export default function TransactionsPage() {
   const [selectedType, setSelectedType] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  const [dateFilterOpen, setDateFilterOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
@@ -361,10 +375,19 @@ export default function TransactionsPage() {
       maximumFractionDigits: 2
     })
 
-  const hasActiveFilters = Boolean(selectedMemberId || selectedType || dateFrom || dateTo)
+  const hasDateFilter = Boolean(dateFrom || dateTo)
+  const hasActiveFilters = Boolean(selectedMemberId || selectedType || hasDateFilter)
   const pillBase = "shrink-0 border text-sm rounded-full px-4 py-2 focus:outline-none"
   const pillTone = (active: boolean) =>
     active ? "border-gold bg-gold/10 text-ink" : "border-hairline bg-paper-2 text-ink-soft"
+
+  const dateRangeLabel = !hasDateFilter
+    ? "Date range"
+    : dateFrom && dateTo
+    ? `${formatShort(dateFrom)} – ${formatShort(dateTo)}`
+    : dateFrom
+    ? `From ${formatShort(dateFrom)}`
+    : `Until ${formatShort(dateTo)}`
 
   return (
     <>
@@ -394,12 +417,10 @@ export default function TransactionsPage() {
             />
           </div>
 
-          {/* Each pill turns gold and grows a × badge once it holds a real
-              value, so it's clear at a glance what's filtering the list and
-              how to undo any one of them individually. Extra right padding
-              on the row keeps the last pill from looking clipped by the
-              screen edge while scrolling. */}
-          <div className="mt-4 flex gap-3 overflow-x-auto pb-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Each pill turns gold and grows a × once it holds a real value,
+              so it's clear at a glance what's filtering the list and how to
+              undo any one of them individually. */}
+          <div className="mt-4 flex items-start gap-3 overflow-x-auto pb-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <FilterPill active={Boolean(selectedMemberId)} onClear={() => setSelectedMemberId("")}>
               <select
                 className={`${pillBase} max-w-[10rem] ${pillTone(Boolean(selectedMemberId))}`}
@@ -430,29 +451,67 @@ export default function TransactionsPage() {
               </select>
             </FilterPill>
 
-            <FilterPill active={Boolean(dateFrom)} onClear={() => setDateFrom("")}>
-              <div className={`${pillBase} flex items-center gap-1.5 ${pillTone(Boolean(dateFrom))}`}>
-                <span className="text-[11px] uppercase tracking-wide">From</span>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="bg-transparent focus:outline-none [color-scheme:dark]"
-                />
-              </div>
-            </FilterPill>
+            {/* Single entry point for both ends of the range -- browsers
+                don't offer a native two-handed date-range picker, so this
+                opens a small panel with both fields together instead of
+                scattering "From" and "To" as two separate pills. */}
+            <div className="relative shrink-0">
+              <FilterPill active={hasDateFilter} onClear={() => { setDateFrom(""); setDateTo("") }}>
+                <button
+                  type="button"
+                  onClick={() => setDateFilterOpen((open) => !open)}
+                  className={`${pillBase} ${pillTone(hasDateFilter)}`}
+                >
+                  {dateRangeLabel}
+                </button>
+              </FilterPill>
 
-            <FilterPill active={Boolean(dateTo)} onClear={() => setDateTo("")}>
-              <div className={`${pillBase} flex items-center gap-1.5 ${pillTone(Boolean(dateTo))}`}>
-                <span className="text-[11px] uppercase tracking-wide">To</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="bg-transparent focus:outline-none [color-scheme:dark]"
-                />
-              </div>
-            </FilterPill>
+              {dateFilterOpen && (
+                <>
+                  {/* Full-screen invisible backdrop: tapping anywhere
+                      outside the panel closes it. */}
+                  <div className="fixed inset-0 z-30" onClick={() => setDateFilterOpen(false)} />
+                  <div className="absolute left-0 top-[calc(100%+0.5rem)] z-40 w-64 bg-paper-2 border border-hairline rounded-md p-4 shadow-lg">
+                    <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">
+                      From
+                    </label>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="w-full bg-paper border border-hairline rounded-md px-3 py-2 text-sm text-ink focus:outline-none [color-scheme:dark]"
+                    />
+
+                    <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1 mt-3">
+                      To
+                    </label>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="w-full bg-paper border border-hairline rounded-md px-3 py-2 text-sm text-ink focus:outline-none [color-scheme:dark]"
+                    />
+
+                    <div className="flex justify-between items-center pt-4">
+                      <button
+                        type="button"
+                        onClick={() => { setDateFrom(""); setDateTo("") }}
+                        className="text-xs text-ink-soft"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDateFilterOpen(false)}
+                        className="text-xs font-semibold text-gold"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
 
             {hasActiveFilters && (
               <button
