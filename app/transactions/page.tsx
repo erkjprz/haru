@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
@@ -198,7 +197,6 @@ function FilterPill({
 }
 
 export default function TransactionsPage() {
-  const router = useRouter()
   const { member } = useAuth()
   const [transactions, setTransactions] = useState<any[]>([])
   const [totalCount, setTotalCount] = useState(0)
@@ -381,19 +379,6 @@ export default function TransactionsPage() {
   return (
     <>
       <Navbar />
-
-      {/* Top-right button, opposite the hamburger. Offset is a guess
-          (env(safe-area-inset-top) + 20px) since Navbar's own
-          height/padding isn't in this file -- nudge it if it doesn't line
-          up exactly with the hamburger row. */}
-      <button
-        onClick={() => router.push("/transactions/new")}
-        aria-label="New Transaction"
-        className="fixed top-[calc(env(safe-area-inset-top)+20px)] right-5 z-40 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-      >
-        <span className="text-lg leading-none">+</span>
-        New
-      </button>
 
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-10">
