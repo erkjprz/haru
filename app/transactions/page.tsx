@@ -39,7 +39,10 @@ const typeColor: Record<string, string> = {
 
 // Left-edge accent stripe on each card so the transaction type reads at a
 // glance without having to parse the pill text -- same semantic colors as
-// typeColor, just applied as a border instead of text/outline.
+// typeColor, just applied as a border instead of text/outline. The card
+// only rounds on its right side (rounded-r-md, not rounded-md) so this
+// stripe stays a flush rectangle instead of getting rounded end-caps that
+// make it look like a separate floating pill.
 const typeBorderColor: Record<string, string> = {
   "Member Contribution": "border-l-sage",
   "Member Withdrawal": "border-l-rust",
@@ -161,6 +164,37 @@ function dedupeLegacyTransferPairs(rows: any[]): any[] {
   return rows.filter((row) => !skipIds.has(row.transaction_id))
 }
 
+// A filter pill that visibly changes appearance once it holds a real value
+// (gold border/tint instead of the neutral default) and grows a small ×
+// badge in its corner to clear just that one filter -- so it's obvious at
+// a glance which filters are active and how to remove any one of them
+// without hunting for a single shared "Clear" button.
+function FilterPill({
+  active,
+  onClear,
+  children
+}: {
+  active: boolean
+  onClear: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="relative shrink-0">
+      {children}
+      {active && (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Clear filter"
+          className="absolute -right-1.5 -top-1.5 z-10 w-4 h-4 rounded-full bg-ink text-paper text-[10px] leading-4 text-center"
+        >
+          ×
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function TransactionsPage() {
   const router = useRouter()
   const { member } = useAuth()
@@ -169,7 +203,8 @@ export default function TransactionsPage() {
   const [members, setMembers] = useState<any[]>([])
   const [selectedMemberId, setSelectedMemberId] = useState("")
   const [selectedType, setSelectedType] = useState("")
-  const [selectedYear, setSelectedYear] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
@@ -276,9 +311,10 @@ export default function TransactionsPage() {
   }, [member])
 
   function clearFilters() {
-    setSelectedYear("")
     setSelectedMemberId("")
     setSelectedType("")
+    setDateFrom("")
+    setDateTo("")
   }
 
   // Built from what's actually in the loaded data rather than the full
@@ -289,22 +325,13 @@ export default function TransactionsPage() {
     (a, b) => (typeLabels[a] || a).localeCompare(typeLabels[b] || b)
   )
 
-  const yearOptions = Array.from(
-    new Set(
-      transactions.map((t) =>
-        effectiveDate(t)
-          .getFullYear()
-          .toString()
-      )
-    )
-  ).sort((a, b) => Number(b) - Number(a))
-
   const filteredTransactions = transactions.filter((t) => {
     const memberMatch = selectedMemberId ? t.member_id === selectedMemberId : true
     const typeMatch = selectedType ? t.classification === selectedType : true
-    const yearMatch = selectedYear
-      ? effectiveDate(t).getFullYear().toString() === selectedYear
-      : true
+
+    const ts = effectiveDate(t).getTime()
+    const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
+    const toMatch = dateTo ? ts <= new Date(`${dateTo}T23:59:59`).getTime() : true
 
     const searchMatch =
       searchQuery.trim() === "" ||
@@ -325,7 +352,7 @@ export default function TransactionsPage() {
         .toLowerCase()
         .includes(searchQuery.toLowerCase())
 
-    return memberMatch && typeMatch && yearMatch && searchMatch
+    return memberMatch && typeMatch && fromMatch && toMatch && searchMatch
   })
 
   const fmt = (n: number) =>
@@ -334,7 +361,10 @@ export default function TransactionsPage() {
       maximumFractionDigits: 2
     })
 
-  const hasActiveFilters = Boolean(selectedYear || selectedMemberId || selectedType)
+  const hasActiveFilters = Boolean(selectedMemberId || selectedType || dateFrom || dateTo)
+  const pillBase = "shrink-0 border text-sm rounded-full px-4 py-2 focus:outline-none"
+  const pillTone = (active: boolean) =>
+    active ? "border-gold bg-gold/10 text-ink" : "border-hairline bg-paper-2 text-ink-soft"
 
   return (
     <>
@@ -364,57 +394,72 @@ export default function TransactionsPage() {
             />
           </div>
 
-          {/* Single scrollable row of compact pill selects -- always visible,
-              no expand/collapse step, and each select's own selected value
-              (e.g. "2026") already shows what's active, so a separate row of
-              removable chips underneath would just repeat the same state
-              twice. One "Clear" pill appears only once something's set. */}
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <select
-              className="shrink-0 border border-hairline bg-paper-2 text-ink text-sm rounded-full px-4 py-2 focus:outline-none"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-            >
-              <option value="">All years</option>
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
+          {/* Each pill turns gold and grows a × badge once it holds a real
+              value, so it's clear at a glance what's filtering the list and
+              how to undo any one of them individually. Extra right padding
+              on the row keeps the last pill from looking clipped by the
+              screen edge while scrolling. */}
+          <div className="mt-4 flex gap-3 overflow-x-auto pb-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <FilterPill active={Boolean(selectedMemberId)} onClear={() => setSelectedMemberId("")}>
+              <select
+                className={`${pillBase} max-w-[10rem] ${pillTone(Boolean(selectedMemberId))}`}
+                value={selectedMemberId}
+                onChange={(e) => setSelectedMemberId(e.target.value)}
+              >
+                <option value="">All members</option>
+                {members.map((m) => (
+                  <option key={m.member_id} value={m.member_id}>
+                    {m.member_id === member?.member_id ? "You" : m.name}
+                  </option>
+                ))}
+              </select>
+            </FilterPill>
 
-            <select
-              className="shrink-0 max-w-[10rem] border border-hairline bg-paper-2 text-ink text-sm rounded-full px-4 py-2 focus:outline-none"
-              value={selectedMemberId}
-              onChange={(e) => setSelectedMemberId(e.target.value)}
-            >
-              <option value="">All members</option>
-              {members.map((m) => (
-                <option key={m.member_id} value={m.member_id}>
-                  {m.member_id === member?.member_id ? "You" : m.name}
-                </option>
-              ))}
-            </select>
+            <FilterPill active={Boolean(selectedType)} onClear={() => setSelectedType("")}>
+              <select
+                className={`${pillBase} ${pillTone(Boolean(selectedType))}`}
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+              >
+                <option value="">All types</option>
+                {typeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {typeLabels[type] || type}
+                  </option>
+                ))}
+              </select>
+            </FilterPill>
 
-            <select
-              className="shrink-0 border border-hairline bg-paper-2 text-ink text-sm rounded-full px-4 py-2 focus:outline-none"
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-            >
-              <option value="">All types</option>
-              {typeOptions.map((type) => (
-                <option key={type} value={type}>
-                  {typeLabels[type] || type}
-                </option>
-              ))}
-            </select>
+            <FilterPill active={Boolean(dateFrom)} onClear={() => setDateFrom("")}>
+              <div className={`${pillBase} flex items-center gap-1.5 ${pillTone(Boolean(dateFrom))}`}>
+                <span className="text-[11px] uppercase tracking-wide">From</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="bg-transparent focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+            </FilterPill>
+
+            <FilterPill active={Boolean(dateTo)} onClear={() => setDateTo("")}>
+              <div className={`${pillBase} flex items-center gap-1.5 ${pillTone(Boolean(dateTo))}`}>
+                <span className="text-[11px] uppercase tracking-wide">To</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="bg-transparent focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+            </FilterPill>
 
             {hasActiveFilters && (
               <button
                 className="shrink-0 border border-hairline rounded-full px-4 py-2 text-sm text-ink-soft"
                 onClick={clearFilters}
               >
-                Clear
+                Clear all
               </button>
             )}
           </div>
@@ -424,7 +469,7 @@ export default function TransactionsPage() {
             {searchQuery && ` matching "${searchQuery}"`}
           </div>
 
-          <div className="mt-6">
+          <div className="mt-4">
             {filteredTransactions.map((transaction, idx) => {
               const memberName = transaction.members?.name || null
               const isLoanTxn =
@@ -454,15 +499,19 @@ export default function TransactionsPage() {
               return (
                 <div key={transaction.transaction_id}>
                   {showMonthHeader && (
-                    <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 mt-6 first:mt-0">
+                    <p
+                      className={`text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 ${
+                        idx === 0 ? "mt-0" : "mt-6"
+                      }`}
+                    >
                       {label}
                     </p>
                   )}
 
                   <div
-                    className={`bg-paper-2 border border-hairline border-l-4 ${
+                    className={`bg-paper-2 border border-hairline border-l-4 rounded-r-md ${
                       typeBorderColor[transaction.classification] ?? "border-l-hairline"
-                    } rounded-md p-4 mt-3 first:mt-0`}
+                    } p-4 ${showMonthHeader ? "" : "mt-3"}`}
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div className="min-w-0">
