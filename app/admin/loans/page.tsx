@@ -52,6 +52,7 @@ export default function AdminLoansPage() {
       .select("loan_id, classification, amount, status")
       .not("loan_id", "is", null)
       .neq("status", "rejected")
+      .neq("status", "cancelled")
 
     const withProgress = (loanList ?? []).map((loan) => {
       const related = (allTransactions ?? []).filter((t) => t.loan_id === loan.loan_id)
@@ -117,6 +118,7 @@ export default function AdminLoansPage() {
       .update({ status: "approved", bank_account_id: bankId })
       .eq("loan_id", loan.loan_id)
       .eq("classification", "Loan Release")
+      .eq("status", "pending")
 
     setApprovingId(null)
     loadLoans()
