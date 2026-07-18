@@ -7,37 +7,59 @@ import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 
-// Only these three classifications are editable here. Loan Release is
-// paired with a "loans" row that has no equivalent "cancelled" state of
-// its own, so editing/cancelling it isn't safe to expose yet -- see the
-// list page's canEdit check, which already excludes it.
+// Member-submitted types: editable by the member who owns the row, only
+// while it's still pending. Loan Release is excluded -- it's paired with a
+// "loans" row that has no equivalent "cancelled" state of its own.
+const MEMBER_EDITABLE = ["Member Contribution", "Member Withdrawal", "Loan Repayment"]
+
+// Admin-entered types: always inserted already-approved with no owning
+// member, so "pending" never applies -- editable by an admin at any time
+// (short of already being cancelled).
+const ADMIN_EDITABLE = ["Bank Interest", "Expense", "Internal Transfer"]
+
 const TYPE_LABEL: Record<string, string> = {
   "Member Contribution": "Contribution",
   "Member Withdrawal": "Withdrawal Request",
-  "Loan Repayment": "Loan Payment"
+  "Loan Repayment": "Loan Payment",
+  "Bank Interest": "Bank Interest",
+  "Expense": "Expense",
+  "Internal Transfer": "Bank Transfer"
 }
 
 const HELPER_TEXT: Record<string, string> = {
   "Member Contribution": "You've already sent this money. Attach proof of deposit.",
   "Member Withdrawal": "You're requesting money to be sent to you. No receipt needed yet.",
-  "Loan Repayment": "You've already sent this repayment. Attach proof of deposit."
+  "Loan Repayment": "You've already sent this repayment. Attach proof of deposit.",
+  "Bank Interest": "Recording interest earned by a bank account. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
+  "Expense": "Recording money spent out of the fund. Goes straight in as approved.",
+  "Internal Transfer": "Moving money between two of the fund's own banks. Doesn't affect total contributions or cash — it's just internal."
 }
 
-const FLOW: Record<string, { arrow: string; tone: "in" | "out" }> = {
+const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = {
   "Member Contribution": { arrow: "↑", tone: "in" },
   "Member Withdrawal": { arrow: "↓", tone: "out" },
-  "Loan Repayment": { arrow: "↑", tone: "in" }
+  "Loan Repayment": { arrow: "↑", tone: "in" },
+  "Bank Interest": { arrow: "↑", tone: "in" },
+  "Expense": { arrow: "↓", tone: "out" },
+  "Internal Transfer": { arrow: "⇄", tone: "neutral" }
 }
 
 function FlowBadge({ classification }: { classification: string }) {
   const flow = FLOW[classification] ?? { arrow: "•", tone: "in" }
-  const toneClass = flow.tone === "in" ? "text-sage bg-sage/10" : "text-rust bg-rust/10"
+  const toneClass =
+    flow.tone === "in" ? "text-sage bg-sage/10" : flow.tone === "out" ? "text-rust bg-rust/10" : "text-gold bg-gold/10"
 
   return (
     <span className={`w-7 h-7 rounded flex items-center justify-center text-sm font-bold shrink-0 ${toneClass}`}>
       {flow.arrow}
     </span>
   )
+}
+
+const STATUS_TONE: Record<string, string> = {
+  pending: "text-gold border-gold/40",
+  approved: "text-sage border-sage/40",
+  rejected: "text-rust border-rust/40"
 }
 
 function isValidPositiveNumber(value: string): boolean {
@@ -52,6 +74,7 @@ export default function EditTransactionPage() {
   const transactionId = params?.id as string
 
   const { loading: authLoading, member } = useAuth()
+  const isAdmin = member?.role === "admin"
   const [dataLoading, setDataLoading] = useState(true)
   const checkingAccess = authLoading || dataLoading
   const [notFound, setNotFound] = useState(false)
@@ -60,7 +83,9 @@ export default function EditTransactionPage() {
   const [myLoans, setMyLoans] = useState<any[]>([])
 
   const [classification, setClassification] = useState("")
+  const [status, setStatus] = useState("")
   const [bankId, setBankId] = useState("")
+  const [toBankId, setToBankId] = useState("")
   const [loanId, setLoanId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
@@ -102,12 +127,14 @@ export default function EditTransactionPage() {
         .eq("transaction_id", transactionId)
         .single()
 
+      const isAdminType = txn ? ADMIN_EDITABLE.includes(txn.classification) : false
+      const isMemberType = txn ? MEMBER_EDITABLE.includes(txn.classification) : false
+
       const editable =
         txn &&
         !error &&
-        txn.member_id === member.member_id &&
-        txn.status === "pending" &&
-        txn.classification in TYPE_LABEL
+        ((isMemberType && txn.member_id === member.member_id && txn.status === "pending") ||
+          (isAdminType && isAdmin && txn.status !== "cancelled"))
 
       if (!editable) {
         setNotFound(true)
@@ -116,7 +143,9 @@ export default function EditTransactionPage() {
       }
 
       setClassification(txn.classification)
+      setStatus(txn.status)
       setBankId(txn.bank_account_id ?? "")
+      setToBankId(txn.to_bank_account_id ?? "")
       setLoanId(txn.loan_id ?? "")
       setAmount(String(Math.abs(Number(txn.amount))))
       setDescription(txn.description ?? "")
@@ -139,9 +168,15 @@ export default function EditTransactionPage() {
     load()
   }, [authLoading, member, router, transactionId])
 
-  const needsBank = classification === "Member Contribution" || classification === "Loan Repayment"
-  const needsReceipt = classification === "Member Contribution" || classification === "Loan Repayment"
+  const isBankTransfer = classification === "Internal Transfer"
   const isLoanPayment = classification === "Loan Repayment"
+  const needsBank =
+    classification === "Member Contribution" ||
+    classification === "Loan Repayment" ||
+    classification === "Bank Interest" ||
+    classification === "Expense" ||
+    isBankTransfer
+  const needsReceipt = classification === "Member Contribution" || classification === "Loan Repayment"
 
   function setReceiptFile(file: File | null) {
     setReceipt(file)
@@ -158,8 +193,19 @@ export default function EditTransactionPage() {
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+  function bankLabel(id: string) {
+    const bank = banks.find((b) => b.id === id)
+    return bank ? bank.account_name || bank.bank_name : "Bank"
+  }
+
   const chips: { done: boolean; text: string }[] = []
-  if (needsBank) {
+  if (isBankTransfer) {
+    chips.push(
+      bankId && toBankId
+        ? { done: true, text: `✓ ${bankLabel(bankId)} → ${bankLabel(toBankId)}` }
+        : { done: false, text: "Select both banks" }
+    )
+  } else if (needsBank) {
     chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
   }
   if (needsReceipt) {
@@ -185,7 +231,17 @@ export default function EditTransactionPage() {
     }
 
     if (needsBank && !bankId) {
-      setMessage("Select a bank.")
+      setMessage(isBankTransfer ? "Select a source bank." : "Select a bank.")
+      return
+    }
+
+    if (isBankTransfer && !toBankId) {
+      setMessage("Select a destination bank.")
+      return
+    }
+
+    if (isBankTransfer && bankId === toBankId) {
+      setMessage("Source and destination banks must be different.")
       return
     }
 
@@ -220,15 +276,18 @@ export default function EditTransactionPage() {
       receiptUrl = urlData.publicUrl
     }
 
-    // Withdrawals are cash going out, so the ledger stores them negative --
-    // matches the sign convention handleSubmit uses on /transactions/new.
-    const signedAmount = classification === "Member Withdrawal" ? -Number(amount) : Number(amount)
+    // Withdrawals and expenses are cash going out, so the ledger stores
+    // them negative -- matches the sign convention handleSubmit uses on
+    // /transactions/new.
+    const signedAmount =
+      classification === "Member Withdrawal" || classification === "Expense" ? -Number(amount) : Number(amount)
 
     const { error } = await supabase
       .from("transactions")
       .update({
         amount: signedAmount,
         bank_account_id: needsBank ? bankId : null,
+        to_bank_account_id: isBankTransfer ? toBankId : null,
         loan_id: isLoanPayment ? loanId : null,
         description,
         receipt_url: receiptUrl
@@ -246,7 +305,11 @@ export default function EditTransactionPage() {
   }
 
   async function handleCancelEntry() {
-    if (!confirm("Cancel this pending entry? It'll be marked cancelled and removed from your transaction list -- this can't be undone from the app.")) {
+    if (
+      !confirm(
+        "Cancel this entry? It'll be marked cancelled and removed from the transaction list -- this can't be undone from the app."
+      )
+    ) {
       return
     }
 
@@ -314,8 +377,12 @@ export default function EditTransactionPage() {
             <h1 className="font-display text-4xl sm:text-5xl font-semibold text-ink">
               Edit Transaction
             </h1>
-            <span className="text-[10px] font-bold uppercase tracking-wide text-gold border border-gold/40 rounded-full px-2.5 py-1 font-mono">
-              Pending
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2.5 py-1 font-mono ${
+                STATUS_TONE[status] ?? "text-ink-soft border-hairline"
+              }`}
+            >
+              {status}
             </span>
           </div>
 
@@ -386,12 +453,32 @@ export default function EditTransactionPage() {
               {needsBank && (
                 <div>
                   <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
-                    Bank
+                    {isBankTransfer ? "From bank" : "Bank"}
                   </label>
                   <select
                     className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
                     value={bankId}
                     onChange={(e) => setBankId(e.target.value)}
+                  >
+                    <option value="">Select a bank</option>
+                    {banks.map((bank) => (
+                      <option key={bank.id} value={bank.id}>
+                        {bank.account_name || bank.bank_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {isBankTransfer && (
+                <div>
+                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                    To bank
+                  </label>
+                  <select
+                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                    value={toBankId}
+                    onChange={(e) => setToBankId(e.target.value)}
                   >
                     <option value="">Select a bank</option>
                     {banks.map((bank) => (

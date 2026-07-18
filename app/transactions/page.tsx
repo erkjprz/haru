@@ -200,6 +200,7 @@ function FilterPill({
 export default function TransactionsPage() {
   const router = useRouter()
   const { member } = useAuth()
+  const isAdmin = member?.role === "admin"
   const [transactions, setTransactions] = useState<any[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [members, setMembers] = useState<any[]>([])
@@ -502,13 +503,19 @@ export default function TransactionsPage() {
 
               const showStatus = transaction.status !== "approved"
 
-              // Loan Release is excluded -- it's paired with a loans row
-              // that has no equivalent "cancelled" state of its own, so
-              // editing/cancelling it isn't safe to expose yet.
+              // Member-submitted entries: editable by their owner while
+              // still pending. Loan Release is excluded -- it's paired
+              // with a loans row that has no equivalent "cancelled" state
+              // of its own. Admin entries (Bank Interest/Expense/Bank
+              // Transfer) are always inserted already-approved with no
+              // owning member, so they're editable by an admin instead,
+              // any time.
               const canEdit =
-                transaction.status === "pending" &&
-                transaction.member_id === member?.member_id &&
-                transaction.classification !== "Loan Release"
+                (transaction.status === "pending" &&
+                  transaction.member_id === member?.member_id &&
+                  transaction.classification !== "Loan Release") ||
+                (isAdmin &&
+                  ["Bank Interest", "Expense", "Internal Transfer"].includes(transaction.classification))
 
               const label = monthLabel(transaction)
               const showMonthHeader = idx === 0 || label !== monthLabel(filteredTransactions[idx - 1])
@@ -590,19 +597,21 @@ export default function TransactionsPage() {
                         {transaction.description}
                       </p>
                     )}
-                    {showStatus && (
+                    {(showStatus || canEdit) && (
                       <div
                         className={`col-span-2 flex items-center gap-2 ${
-                          canEdit ? "justify-between" : "justify-end"
+                          canEdit && showStatus ? "justify-between" : "justify-end"
                         }`}
                       >
-                        <span
-                          className={`text-[10px] uppercase font-mono ${
-                            statusColor[transaction.status] ?? "text-ink-soft"
-                          }`}
-                        >
-                          {transaction.status}
-                        </span>
+                        {showStatus && (
+                          <span
+                            className={`text-[10px] uppercase font-mono ${
+                              statusColor[transaction.status] ?? "text-ink-soft"
+                            }`}
+                          >
+                            {transaction.status}
+                          </span>
+                        )}
                         {canEdit && (
                           <button
                             type="button"
