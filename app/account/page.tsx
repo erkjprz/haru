@@ -18,6 +18,7 @@ export default function AccountPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [passwordMessage, setPasswordMessage] = useState("")
   const [passwordLoading, setPasswordLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -132,16 +133,25 @@ export default function AccountPage() {
             </h2>
 
             <div className="mt-4 space-y-3">
-              <input
-                type="password"
-                placeholder="New password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full text-sm"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="New password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="border border-hairline bg-paper px-3 py-2 pr-14 rounded-md w-full text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gold hover:text-ink"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
 
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="Confirm new password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
