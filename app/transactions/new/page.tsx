@@ -72,7 +72,7 @@ function Segmented({
           key={o.key}
           type="button"
           onClick={() => onChange(o.key)}
-          className={`px-3 py-2 rounded-sm border text-xs font-semibold transition-colors ${
+          className={`px-3 py-2.5 rounded-sm border text-xs font-semibold transition-colors ${
             value === o.key ? "border-gold bg-gold/10 text-ink" : "border-hairline bg-paper-2 text-ink-soft"
           }`}
         >
@@ -537,7 +537,7 @@ export default function NewTransactionPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans">
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-40">
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-48">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             New Entry
           </div>
@@ -551,9 +551,9 @@ export default function NewTransactionPage() {
 
               {isAdmin && ADMIN_TYPES.length > 0 && (
                 <>
-                  <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-ink-soft font-mono mt-3 mb-2">
-                    <span className="w-[5px] h-[5px] rounded-full bg-gold inline-block" />
-                    Admin only — recorded directly, no approval step
+                  <p className="flex items-start gap-1.5 text-[10px] font-bold uppercase tracking-wide text-ink-soft font-mono mt-3 mb-2">
+                    <span className="w-[5px] h-[5px] rounded-full bg-gold inline-block mt-[3px] shrink-0" />
+                    <span>Admin only — recorded directly, no approval step</span>
                   </p>
                   <Segmented options={ADMIN_TYPES} value={selectedType} onChange={handleTypeChange} />
                 </>

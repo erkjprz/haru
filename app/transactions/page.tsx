@@ -475,6 +475,16 @@ export default function TransactionsPage() {
               const borrowerName = transaction.loans?.borrowers?.name || null
               const transferLabel = isTransferTxn ? transaction._transferLabel ?? null : null
 
+              // Legacy migrated rows carry the bank as plain text in `bank`.
+              // Rows created through the app instead link a real bank
+              // account via bank_account_id, so fall back to that embed's
+              // name when there's no legacy text -- otherwise every
+              // app-submitted Contribution/Loan Payment/Bank
+              // Interest/Expense silently loses its bank badge.
+              const bankBadge = !isTransferTxn
+                ? transaction.bank || bankAccountLabel(transaction.from_bank_account)
+                : null
+
               // Borrower-only loans (e.g. Joy, who isn't a fund member) have
               // no member_id, so fall back to the borrower's name as the
               // card title instead of leaving it as generic "Fund".
@@ -524,9 +534,9 @@ export default function TransactionsPage() {
                       >
                         {typeLabels[transaction.classification] || transaction.classification}
                       </span>
-                      {transaction.bank && !isTransferTxn && (
+                      {bankBadge && (
                         <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                          {transaction.bank}
+                          {bankBadge}
                         </span>
                       )}
                       {isTransferTxn && transferLabel && (
