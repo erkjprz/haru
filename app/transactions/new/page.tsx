@@ -30,6 +30,8 @@ const ENTRY_TYPES = [
 ]
 
 const MEMBER_LINKED_TYPES = ["contribution", "withdrawal", "loan_request", "loan_payment"]
+const MEMBER_TYPES = ENTRY_TYPES.filter((t) => !t.adminOnly)
+const ADMIN_TYPES = ENTRY_TYPES.filter((t) => t.adminOnly)
 
 // A number input is "valid" here if it's not empty, parses to a real
 // number (not NaN -- e.g. a stray non-numeric paste), and clears the given
@@ -40,6 +42,57 @@ function isValidPositiveNumber(value: string, allowZero = false): boolean {
   const n = Number(value)
   if (Number.isNaN(n)) return false
   return allowZero ? n >= 0 : n > 0
+}
+
+function SectionLabel({ children, first }: { children: React.ReactNode; first?: boolean }) {
+  return (
+    <p
+      className={`text-[11px] font-bold uppercase tracking-wide text-ink font-mono mb-3 ${
+        first ? "" : "mt-6 pt-[18px] border-t border-hairline"
+      }`}
+    >
+      {children}
+    </p>
+  )
+}
+
+function Segmented({
+  options,
+  value,
+  onChange
+}: {
+  options: { key: string; label: string }[]
+  value: string
+  onChange: (key: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          onClick={() => onChange(o.key)}
+          className={`px-3 py-2 rounded-sm border text-xs font-semibold transition-colors ${
+            value === o.key ? "border-gold bg-gold/10 text-ink" : "border-hairline bg-paper-2 text-ink-soft"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Chip({ done, children }: { done?: boolean; children: React.ReactNode }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-[3px] rounded-full border whitespace-nowrap ${
+        done ? "text-sage border-sage/40" : "text-ink-soft border-hairline"
+      }`}
+    >
+      {children}
+    </span>
+  )
 }
 
 export default function NewTransactionPage() {
@@ -133,7 +186,6 @@ export default function NewTransactionPage() {
     checkAccess()
   }, [authLoading, member, router])
 
-  const visibleTypes = ENTRY_TYPES.filter((t) => !t.adminOnly || isAdmin)
   const isMemberLinkedType = MEMBER_LINKED_TYPES.includes(selectedType)
   const effectiveMemberId =
     isAdmin && isMemberLinkedType && onBehalfOfId ? onBehalfOfId : memberId
@@ -433,6 +485,41 @@ export default function NewTransactionPage() {
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+  function bankLabel(id: string) {
+    const bank = banks.find((b) => b.id === id)
+    return bank ? bank.account_name || bank.bank_name : "Bank"
+  }
+
+  // Readiness chips for the sticky summary bar -- one branch per entry
+  // type's actual requirements, mirroring the validation in handleSubmit.
+  const chips: { done: boolean; text: string }[] = []
+
+  if (selectedType === "contribution" || isLoanPayment) {
+    chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
+    chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
+    if (isLoanPayment) {
+      chips.push(selectedLoanId ? { done: true, text: "✓ Loan matched" } : { done: false, text: "Select a loan" })
+    }
+  } else if (selectedType === "withdrawal") {
+    chips.push({ done: false, text: "No receipt needed" })
+  } else if (isLoanRequest) {
+    chips.push(
+      previewTotalRepayable > 0
+        ? { done: true, text: `Total ₱${fmt(previewTotalRepayable)}` }
+        : { done: false, text: "Enter rate & term" }
+    )
+  } else if (isBankTransfer) {
+    chips.push(
+      bankId && toBankId
+        ? { done: true, text: `✓ ${bankLabel(bankId)} → ${bankLabel(toBankId)}` }
+        : { done: false, text: "Select both banks" }
+    )
+    chips.push({ done: true, text: "Doesn't affect cash total" })
+  } else if (selectedType === "bank_interest" || selectedType === "expense") {
+    chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
+    chips.push({ done: true, text: "Posts as approved" })
+  }
+
   if (checkingAccess) {
     return (
       <>
@@ -450,7 +537,7 @@ export default function NewTransactionPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans">
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-40">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             New Entry
           </div>
@@ -458,27 +545,27 @@ export default function NewTransactionPage() {
             New Transaction
           </h1>
 
-          <div className="mt-8 bg-paper-2 border border-hairline rounded-md p-5 space-y-4">
-              <div>
-                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                  Type
-                </label>
-                <select
-                  className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-3 w-full"
-                  value={selectedType}
-                  onChange={(e) => handleTypeChange(e.target.value)}
-                >
-                  {visibleTypes.map((t) => (
-                    <option key={t.key} value={t.key}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-ink-soft mt-2">
-                  {helperText[selectedType]}
-                </p>
-              </div>
+          <div className="mt-8 bg-paper-2 border border-hairline rounded-md p-5">
+              <SectionLabel first>① Entry type</SectionLabel>
+              <Segmented options={MEMBER_TYPES} value={selectedType} onChange={handleTypeChange} />
 
+              {isAdmin && ADMIN_TYPES.length > 0 && (
+                <>
+                  <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-ink-soft font-mono mt-3 mb-2">
+                    <span className="w-[5px] h-[5px] rounded-full bg-gold inline-block" />
+                    Admin only — recorded directly, no approval step
+                  </p>
+                  <Segmented options={ADMIN_TYPES} value={selectedType} onChange={handleTypeChange} />
+                </>
+              )}
+
+              <p className="text-xs text-ink-soft mt-3">
+                {helperText[selectedType]}
+              </p>
+
+              <SectionLabel>② Amount &amp; details</SectionLabel>
+
+              <div className="space-y-4">
               {isAdmin && isMemberLinkedType && (
                 <div>
                   <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
@@ -732,20 +819,7 @@ export default function NewTransactionPage() {
                   )}
                 </div>
               )}
-
-              <button
-                className="bg-ink text-paper px-4 py-3 rounded-md w-full font-medium disabled:opacity-50"
-                onClick={handleSubmit}
-                disabled={submitting}
-              >
-                {submitting ? "Submitting..." : "Submit"}
-              </button>
-
-              {message && (
-                <p className="text-sm text-rust">
-                  {message}
-                </p>
-              )}
+              </div>
           </div>
 
           {recent.length > 0 && (
@@ -789,6 +863,39 @@ export default function NewTransactionPage() {
           )}
         </div>
       </main>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline">
+        <div
+          className="max-w-lg mx-auto px-4 sm:px-5 pt-3 flex items-center gap-3"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">
+              Amount
+            </div>
+            <div className="font-mono [font-variant-numeric:tabular-nums] text-lg font-bold text-ink truncate">
+              ₱{isValidPositiveNumber(amount) ? fmt(Number(amount)) : "0.00"}
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {chips.map((chip, i) => (
+                <Chip key={i} done={chip.done}>{chip.text}</Chip>
+              ))}
+            </div>
+          </div>
+          <button
+            className="shrink-0 bg-ink text-paper px-5 py-3 rounded-md font-medium disabled:opacity-50"
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? "Submitting..." : "Submit"}
+          </button>
+        </div>
+        {message && (
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pb-3">
+            <p className="text-xs text-rust">{message}</p>
+          </div>
+        )}
+      </div>
     </>
   )
 }
