@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
@@ -197,6 +198,7 @@ function FilterPill({
 }
 
 export default function TransactionsPage() {
+  const router = useRouter()
   const { member } = useAuth()
   const [transactions, setTransactions] = useState<any[]>([])
   const [totalCount, setTotalCount] = useState(0)
@@ -260,6 +262,7 @@ export default function TransactionsPage() {
         )
       `
       )
+      .neq("status", "cancelled")
       .order("txn_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .range(0, 4999)
@@ -499,6 +502,14 @@ export default function TransactionsPage() {
 
               const showStatus = transaction.status !== "approved"
 
+              // Loan Release is excluded -- it's paired with a loans row
+              // that has no equivalent "cancelled" state of its own, so
+              // editing/cancelling it isn't safe to expose yet.
+              const canEdit =
+                transaction.status === "pending" &&
+                transaction.member_id === member?.member_id &&
+                transaction.classification !== "Loan Release"
+
               const label = monthLabel(transaction)
               const showMonthHeader = idx === 0 || label !== monthLabel(filteredTransactions[idx - 1])
 
@@ -581,11 +592,26 @@ export default function TransactionsPage() {
                     )}
                     {showStatus && (
                       <div
-                        className={`col-span-2 justify-self-end text-[10px] uppercase font-mono ${
-                          statusColor[transaction.status] ?? "text-ink-soft"
+                        className={`col-span-2 flex items-center gap-2 ${
+                          canEdit ? "justify-between" : "justify-end"
                         }`}
                       >
-                        {transaction.status}
+                        <span
+                          className={`text-[10px] uppercase font-mono ${
+                            statusColor[transaction.status] ?? "text-ink-soft"
+                          }`}
+                        >
+                          {transaction.status}
+                        </span>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/transactions/${transaction.transaction_id}/edit`)}
+                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gold font-mono"
+                          >
+                            ✎ Edit
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
