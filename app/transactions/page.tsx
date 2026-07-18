@@ -174,14 +174,12 @@ function dedupeLegacyTransferPairs(rows: any[]): any[] {
   return rows.filter((row) => !skipIds.has(row.transaction_id))
 }
 
-// A filter pill that visibly changes appearance once it holds a real value
-// (gold border/tint instead of the neutral default) and grows a small ×
-// next to it to clear just that one filter. The × is a normal in-flow
-// sibling (nudged on top with negative margins) rather than an
-// absolutely-positioned overlay -- an absolute badge sitting on top of a
-// <select> or <input> competes with that control's own hit-testing and,
-// on mobile Safari in particular, the control wins and swallows the tap.
-// As a real DOM sibling painted after it, the × reliably gets the tap.
+// A filter pill with its own separate × alongside it (not layered on top
+// of it). An earlier version overlapped the × on the pill's corner, but
+// iOS Safari silently enlarges a native <select>'s tap target to meet the
+// 44pt accessibility minimum, so the select kept swallowing taps meant for
+// the × sitting right above it. Giving the × real physical distance -- its
+// own circle, its own gap -- means their tap regions never overlap.
 function FilterPill({
   active,
   onClear,
@@ -192,14 +190,14 @@ function FilterPill({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-start shrink-0">
+    <div className="flex items-center gap-1.5 shrink-0">
       {children}
       {active && (
         <button
           type="button"
           onClick={onClear}
           aria-label="Clear filter"
-          className="-ml-3 mt-[-6px] w-4 h-4 rounded-full bg-ink text-paper text-[10px] leading-4 text-center shrink-0"
+          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-paper-2 border border-hairline text-ink-soft text-sm"
         >
           ×
         </button>
@@ -393,7 +391,7 @@ export default function TransactionsPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(7rem+env(safe-area-inset-bottom))]">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Full History
           </div>
@@ -417,10 +415,9 @@ export default function TransactionsPage() {
             />
           </div>
 
-          {/* Each pill turns gold and grows a × once it holds a real value,
-              so it's clear at a glance what's filtering the list and how to
-              undo any one of them individually. */}
-          <div className="mt-4 flex items-start gap-3 overflow-x-auto pb-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Each pill turns gold once it holds a real value, with its own
+              separate × alongside (never on top of) it -- see FilterPill. */}
+          <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <FilterPill active={Boolean(selectedMemberId)} onClear={() => setSelectedMemberId("")}>
               <select
                 className={`${pillBase} max-w-[10rem] ${pillTone(Boolean(selectedMemberId))}`}
@@ -451,67 +448,15 @@ export default function TransactionsPage() {
               </select>
             </FilterPill>
 
-            {/* Single entry point for both ends of the range -- browsers
-                don't offer a native two-handed date-range picker, so this
-                opens a small panel with both fields together instead of
-                scattering "From" and "To" as two separate pills. */}
-            <div className="relative shrink-0">
-              <FilterPill active={hasDateFilter} onClear={() => { setDateFrom(""); setDateTo("") }}>
-                <button
-                  type="button"
-                  onClick={() => setDateFilterOpen((open) => !open)}
-                  className={`${pillBase} ${pillTone(hasDateFilter)}`}
-                >
-                  {dateRangeLabel}
-                </button>
-              </FilterPill>
-
-              {dateFilterOpen && (
-                <>
-                  {/* Full-screen invisible backdrop: tapping anywhere
-                      outside the panel closes it. */}
-                  <div className="fixed inset-0 z-30" onClick={() => setDateFilterOpen(false)} />
-                  <div className="absolute left-0 top-[calc(100%+0.5rem)] z-40 w-64 bg-paper-2 border border-hairline rounded-md p-4 shadow-lg">
-                    <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">
-                      From
-                    </label>
-                    <input
-                      type="date"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                      className="w-full bg-paper border border-hairline rounded-md px-3 py-2 text-sm text-ink focus:outline-none [color-scheme:dark]"
-                    />
-
-                    <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1 mt-3">
-                      To
-                    </label>
-                    <input
-                      type="date"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                      className="w-full bg-paper border border-hairline rounded-md px-3 py-2 text-sm text-ink focus:outline-none [color-scheme:dark]"
-                    />
-
-                    <div className="flex justify-between items-center pt-4">
-                      <button
-                        type="button"
-                        onClick={() => { setDateFrom(""); setDateTo("") }}
-                        className="text-xs text-ink-soft"
-                      >
-                        Clear
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDateFilterOpen(false)}
-                        className="text-xs font-semibold text-gold"
-                      >
-                        Done
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <FilterPill active={hasDateFilter} onClear={() => { setDateFrom(""); setDateTo("") }}>
+              <button
+                type="button"
+                onClick={() => setDateFilterOpen(true)}
+                className={`${pillBase} ${pillTone(hasDateFilter)}`}
+              >
+                {dateRangeLabel}
+              </button>
+            </FilterPill>
 
             {hasActiveFilters && (
               <button
@@ -648,9 +593,69 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {/* Sticky thumb-reach action bar, matching the Dashboard page. */}
-        <div className="fixed bottom-0 left-0 right-0 bg-paper border-t border-hairline pb-[env(safe-area-inset-bottom)]">
-          <div className="max-w-3xl mx-auto px-4 sm:px-5 py-3">
+        {/* Fixed viewport modal instead of a panel anchored under the pill --
+            the pill lives inside a horizontally-scrolling row, and a panel
+            positioned absolute under it was getting clipped by that row's
+            own scroll bounds (nothing visibly happened on tap even though
+            the state was toggling correctly). A fixed, viewport-level
+            bottom sheet can't be clipped by anything upstream. */}
+        {dateFilterOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
+            onClick={() => setDateFilterOpen(false)}
+          >
+            <div
+              className="w-full sm:w-80 bg-paper-2 border border-hairline rounded-t-xl sm:rounded-xl p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:pb-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-sm font-semibold text-ink mb-4">Date range</p>
+
+              <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">
+                From
+              </label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full bg-paper border border-hairline rounded-md px-3 py-2.5 text-sm text-ink focus:outline-none [color-scheme:dark]"
+              />
+
+              <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1 mt-4">
+                To
+              </label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-full bg-paper border border-hairline rounded-md px-3 py-2.5 text-sm text-ink focus:outline-none [color-scheme:dark]"
+              />
+
+              <div className="flex justify-between items-center pt-5">
+                <button
+                  type="button"
+                  onClick={() => { setDateFrom(""); setDateTo("") }}
+                  className="text-sm text-ink-soft"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDateFilterOpen(false)}
+                  className="bg-gold text-ink px-5 py-2 rounded-md text-sm font-semibold"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sticky thumb-reach action bar, matching the Dashboard page.
+            Extra buffer (0.75rem) beyond the safe-area inset keeps the
+            button clear of the home-indicator swipe-up gesture zone on
+            iPhones, instead of sitting flush against it. */}
+        <div className="fixed bottom-0 left-0 right-0 bg-paper border-t border-hairline">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
             <button
               onClick={() => router.push("/transactions/new")}
               className="w-full bg-gold text-ink px-4 py-3 rounded-md text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
