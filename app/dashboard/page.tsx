@@ -198,7 +198,7 @@ export default function DashboardPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans">
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-10">
             <SkeletonPanel />
           </div>
@@ -269,7 +269,10 @@ export default function DashboardPage() {
           {/* Segmented control */}
           <div className="flex bg-paper-2 border border-hairline rounded-md p-[3px] mb-4">
             <button
-              onClick={() => setActiveTab("you")}
+              onClick={() => {
+                setActiveTab("you")
+                window.scrollTo(0, 0)
+              }}
               className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
                 activeTab === "you" ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
               }`}
@@ -277,7 +280,10 @@ export default function DashboardPage() {
               You
             </button>
             <button
-              onClick={() => setActiveTab("fund")}
+              onClick={() => {
+                setActiveTab("fund")
+                window.scrollTo(0, 0)
+              }}
               className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
                 activeTab === "fund" ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
               }`}

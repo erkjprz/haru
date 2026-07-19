@@ -119,7 +119,7 @@ export default function AdminBorrowersPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans">
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
             <SkeletonCardList rows={3} />
           </div>
@@ -131,7 +131,7 @@ export default function AdminBorrowersPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-paper text-ink font-sans">
+      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
           <button
             onClick={() => router.push("/admin")}
@@ -158,9 +158,9 @@ export default function AdminBorrowersPage() {
               return (
                 <div key={m.member_id} className="bg-paper-2 border border-hairline rounded-md p-5">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-display text-lg">{m.name}</div>
-                      <div className="text-sm text-ink-soft">{m.email || "No email"}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display text-lg truncate">{m.name}</div>
+                      <div className="text-sm text-ink-soft truncate">{m.email || "No email"}</div>
                     </div>
                     <span
                       className={`text-[10px] uppercase font-mono border rounded-full px-2 py-0.5 shrink-0 ${

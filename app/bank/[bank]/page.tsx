@@ -155,7 +155,7 @@ export default function BankDetailPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans">
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8">
             <p className="text-sm text-ink-soft">This bank couldn't be found.</p>
             <button onClick={() => router.push("/bank")} className="mt-4 text-sm font-medium text-gold">
