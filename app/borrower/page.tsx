@@ -279,6 +279,15 @@ export default function BorrowerPage() {
                               <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
                                 ₱{fmt(r.amount)}
                               </span>
+                              {r.status === "pending" && (
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/transactions/${r.transaction_id}/edit`)}
+                                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gold font-mono"
+                                >
+                                  ✎ Edit
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}

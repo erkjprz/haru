@@ -81,24 +81,25 @@ export default function AccountPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-24">
 
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Account
           </div>
-          <h1 className="font-display text-4xl font-semibold">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
             Settings
           </h1>
+          <p className="text-[13px] text-ink-soft mb-6">Manage your sign-in email and password.</p>
 
           {/* Change Email */}
 
-          <div className="mt-8 bg-paper-2 border border-hairline rounded-md p-5">
+          <div className="bg-paper-2 border border-hairline rounded-md p-5">
 
-            <h2 className="font-display text-xl">
+            <h2 className="font-display text-lg font-medium text-ink mb-1">
               Email
             </h2>
 
-            <p className="text-sm text-ink-soft mt-1">
+            <p className="text-[13px] text-ink-soft">
               Currently signed in as {user?.email}
             </p>
 
@@ -132,7 +133,7 @@ export default function AccountPage() {
 
           <div className="mt-6 bg-paper-2 border border-hairline rounded-md p-5">
 
-            <h2 className="font-display text-xl">
+            <h2 className="font-display text-lg font-medium text-ink mb-1">
               Password
             </h2>
 

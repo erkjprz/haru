@@ -484,120 +484,160 @@ export default function LoanDetailPage() {
                 <div className="px-5 pb-5 border-t border-hairline pt-4">
                   {!isEditing ? (
                     <>
-                      <div className="flex justify-between items-start gap-3">
-                        <div className="grid grid-cols-2 gap-2 text-xs font-mono text-ink-soft flex-1">
-                          <div>Principal: ₱{fmt(adminLoan.principal)}</div>
-                          <div>Total repayable: ₱{fmt(adminLoan.totalRepayable)}</div>
-                          <div>
-                            Repaid: ₱{fmt(adminLoan.repaid)}
-                            {adminLoan.pendingRepayment > 0 && (
-                              <span className="text-gold"> (₱{fmt(adminLoan.pendingRepayment)} pending)</span>
-                            )}
+                      <div className="bg-paper rounded-lg px-4 py-3.5">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[10px] uppercase tracking-[0.1em] text-ink-soft font-mono">
+                            Loan terms
+                          </p>
+                          {adminLoan.status !== "closed" && (
+                            <button
+                              className="text-[11px] text-ink-soft border border-hairline rounded-sm px-2.5 py-1"
+                              onClick={startEditLoan}
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-[13px] text-ink-soft">Principal</span>
+                            <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink whitespace-nowrap">
+                              ₱{fmt(adminLoan.principal)}
+                            </span>
                           </div>
-                          <div className={adminLoan.remaining <= 0 ? "text-sage" : ""}>
-                            {adminLoan.remaining <= 0 ? "Fully repaid" : `Remaining: ₱${fmt(adminLoan.remaining)}`}
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-[13px] text-ink-soft">Total repayable</span>
+                            <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink whitespace-nowrap">
+                              ₱{fmt(adminLoan.totalRepayable)}
+                            </span>
                           </div>
-                          <div>
-                            {adminLoan.interest_type === "amount"
-                              ? `Interest: ₱${fmt(adminLoan.interest_amount)} flat`
-                              : `Interest: ${adminLoan.interest_rate}%`}
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-[13px] text-ink-soft">Repaid</span>
+                            <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink whitespace-nowrap">
+                              ₱{fmt(adminLoan.repaid)}
+                              {adminLoan.pendingRepayment > 0 && (
+                                <span className="text-gold"> (₱{fmt(adminLoan.pendingRepayment)} pending)</span>
+                              )}
+                            </span>
                           </div>
-                          <div>
-                            {adminLoan.term_months}mo · {adminLoan.repayment_frequency}
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-[13px] text-ink-soft">Remaining</span>
+                            <span
+                              className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold whitespace-nowrap ${
+                                adminLoan.remaining <= 0 ? "text-sage" : "text-ink"
+                              }`}
+                            >
+                              {adminLoan.remaining <= 0 ? "Fully repaid" : `₱${fmt(adminLoan.remaining)}`}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-[13px] text-ink-soft">Interest</span>
+                            <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink whitespace-nowrap">
+                              {adminLoan.interest_type === "amount"
+                                ? `₱${fmt(adminLoan.interest_amount)} flat`
+                                : `${adminLoan.interest_rate}%`}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-[13px] text-ink-soft">Term</span>
+                            <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink whitespace-nowrap">
+                              {adminLoan.term_months}mo ·{" "}
+                              {adminLoan.repayment_frequency === "monthly" ? "monthly" : "lump sum"}
+                            </span>
                           </div>
                         </div>
-                        {adminLoan.status !== "closed" && (
+                      </div>
+
+                      <div className="mt-5 pt-4 border-t border-hairline">
+                        <p className="text-[10px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">
+                          Actions
+                        </p>
+
+                        {adminLoan.status === "requested" && (
+                          <div className="space-y-2.5">
+                            <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Disburse from bank
+                            </label>
+                            <select
+                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full"
+                              value={approveBankChoice}
+                              onChange={(e) => setApproveBankChoice(e.target.value)}
+                            >
+                              <option value="">Select a bank</option>
+                              {banks.map((bank) => (
+                                <option key={bank.id} value={bank.id}>
+                                  {bank.account_name || bank.bank_name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              className="w-full bg-ink text-paper px-4 py-2.5 rounded-sm text-sm font-semibold disabled:opacity-50"
+                              onClick={approveLoan}
+                              disabled={!approveBankChoice || approving}
+                            >
+                              {approving ? "Approving..." : "Approve & Activate"}
+                            </button>
+                          </div>
+                        )}
+
+                        {adminLoan.status === "active" && adminLoan.remainingApproved <= 0 && (
                           <button
-                            className="text-xs text-ink-soft border border-hairline rounded-sm px-2 py-1 shrink-0"
-                            onClick={startEditLoan}
+                            className="w-full bg-gold text-ink px-4 py-3 rounded-sm text-sm font-semibold shadow-sm disabled:opacity-50"
+                            onClick={handleClose}
+                            disabled={closing}
                           >
-                            Edit
+                            {closing
+                              ? "Closing & distributing..."
+                              : `Close Loan & Distribute ₱${fmt(netResult)} Gain`}
+                          </button>
+                        )}
+
+                        {adminLoan.status === "active" &&
+                          adminLoan.remainingApproved > 0 &&
+                          adminLoan.remaining <= 0 && (
+                            <p className="text-xs text-gold font-mono bg-gold/10 border border-gold/30 rounded-sm px-3 py-2.5">
+                              Fully repaid, but ₱{fmt(adminLoan.pendingRepayment)} of that is still pending approval
+                              — approve it in Transactions, then come back here to close this loan.
+                            </p>
+                          )}
+
+                        {adminLoan.status === "active" && adminLoan.remainingApproved > 0 && (
+                          <button
+                            className={`w-full text-xs text-rust border border-rust rounded-sm px-3 py-2.5 disabled:opacity-50 ${
+                              adminLoan.remaining <= 0 ? "mt-2.5" : ""
+                            }`}
+                            onClick={() => {
+                              const loss = Math.abs(Math.min(0, netResult))
+                              const confirmMsg =
+                                netResult < 0
+                                  ? `Close this loan now and record a ₱${fmt(loss)} loss, split across other members? This can't be undone from the app.`
+                                  : `Close this loan now even though it's not fully repaid? This will distribute a ₱${fmt(netResult)} gain based on what's been repaid so far. This can't be undone from the app.`
+                              if (confirm(confirmMsg)) {
+                                handleClose()
+                              }
+                            }}
+                            disabled={closing}
+                          >
+                            {closing ? "Closing..." : "Close Early (Write Off)"}
+                          </button>
+                        )}
+
+                        {adminLoan.status === "closed" && (
+                          <button
+                            className="w-full text-xs text-ink-soft border border-hairline rounded-sm px-3 py-2.5 disabled:opacity-50"
+                            onClick={() => {
+                              const confirmMsg =
+                                "Reopen this loan? This will set it back to active and delete any gain/loss allocations recorded when it was closed (only if it was closed after loan reopening support was added — older closures may need manual cleanup in Supabase)."
+                              if (confirm(confirmMsg)) {
+                                reopenLoan()
+                              }
+                            }}
+                            disabled={reopening}
+                          >
+                            {reopening ? "Reopening..." : "Reopen Loan"}
                           </button>
                         )}
                       </div>
-
-                      {adminLoan.status === "requested" && (
-                        <div className="mt-4 space-y-2">
-                          <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
-                            Disburse from bank
-                          </label>
-                          <select
-                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
-                            value={approveBankChoice}
-                            onChange={(e) => setApproveBankChoice(e.target.value)}
-                          >
-                            <option value="">Select a bank</option>
-                            {banks.map((bank) => (
-                              <option key={bank.id} value={bank.id}>
-                                {bank.account_name || bank.bank_name}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50"
-                            onClick={approveLoan}
-                            disabled={!approveBankChoice || approving}
-                          >
-                            {approving ? "Approving..." : "Approve & Activate"}
-                          </button>
-                        </div>
-                      )}
-
-                      {adminLoan.status === "active" && adminLoan.remainingApproved <= 0 && (
-                        <button
-                          className="mt-4 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold disabled:opacity-50"
-                          onClick={handleClose}
-                          disabled={closing}
-                        >
-                          {closing
-                            ? "Closing & distributing..."
-                            : `Close Loan & Distribute ₱${fmt(netResult)} Gain`}
-                        </button>
-                      )}
-
-                      {adminLoan.status === "active" &&
-                        adminLoan.remainingApproved > 0 &&
-                        adminLoan.remaining <= 0 && (
-                          <p className="mt-4 text-xs text-gold font-mono">
-                            Fully repaid, but ₱{fmt(adminLoan.pendingRepayment)} of that is still pending approval —
-                            approve it in Transactions, then come back here to close this loan.
-                          </p>
-                        )}
-
-                      {adminLoan.status === "active" && adminLoan.remainingApproved > 0 && (
-                        <button
-                          className="mt-2 text-xs text-rust border border-rust rounded-sm px-3 py-2 disabled:opacity-50"
-                          onClick={() => {
-                            const loss = Math.abs(Math.min(0, netResult))
-                            const confirmMsg =
-                              netResult < 0
-                                ? `Close this loan now and record a ₱${fmt(loss)} loss, split across other members? This can't be undone from the app.`
-                                : `Close this loan now even though it's not fully repaid? This will distribute a ₱${fmt(netResult)} gain based on what's been repaid so far. This can't be undone from the app.`
-                            if (confirm(confirmMsg)) {
-                              handleClose()
-                            }
-                          }}
-                          disabled={closing}
-                        >
-                          {closing ? "Closing..." : "Close Early (Write Off)"}
-                        </button>
-                      )}
-
-                      {adminLoan.status === "closed" && (
-                        <button
-                          className="mt-4 text-xs text-ink-soft border border-hairline rounded-sm px-3 py-2 disabled:opacity-50"
-                          onClick={() => {
-                            const confirmMsg =
-                              "Reopen this loan? This will set it back to active and delete any gain/loss allocations recorded when it was closed (only if it was closed after loan reopening support was added — older closures may need manual cleanup in Supabase)."
-                            if (confirm(confirmMsg)) {
-                              reopenLoan()
-                            }
-                          }}
-                          disabled={reopening}
-                        >
-                          {reopening ? "Reopening..." : "Reopen Loan"}
-                        </button>
-                      )}
                     </>
                   ) : (
                     <div className="space-y-3">

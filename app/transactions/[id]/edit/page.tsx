@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
@@ -85,6 +86,9 @@ export default function EditTransactionPage() {
 
   const { loading: authLoading, member } = useAuth()
   const isAdmin = member?.role === "admin"
+  const isBorrower = member?.role === "borrower"
+  const backHref = isBorrower ? "/borrower" : "/transactions"
+  const backLabel = isBorrower ? "← Your loan" : "← Transactions"
   const [dataLoading, setDataLoading] = useState(true)
   const checkingAccess = authLoading || dataLoading
   const [notFound, setNotFound] = useState(false)
@@ -126,10 +130,11 @@ export default function EditTransactionPage() {
       return
     }
 
-    if (member.role === "borrower") {
-      router.push("/borrower")
-      return
-    }
+    // Borrowers are otherwise routed away from the admin/member transaction
+    // pages, but this edit page also serves their own pending Loan
+    // Repayment entries (see MEMBER_EDITABLE below), so they're let through
+    // here -- the `editable` check further down still keeps them out of
+    // anything that isn't theirs.
 
     async function load() {
       if (!member) return
@@ -191,10 +196,24 @@ export default function EditTransactionPage() {
       }
 
       if (txn.classification === "Loan Repayment") {
+        // Borrower-only loans (e.g. Joy, who isn't a fund member) link via
+        // borrowers.borrower_id rather than member_id -- mirrors the OR
+        // filter borrower/repay uses so a borrower editing their own
+        // pending repayment still sees their loan in the dropdown.
+        const { data: borrowerRow } = await supabase
+          .from("borrowers")
+          .select("borrower_id")
+          .eq("member_id", member.member_id)
+          .maybeSingle()
+
+        const loanFilter = borrowerRow?.borrower_id
+          ? `member_id.eq.${member.member_id},borrower_id.eq.${borrowerRow.borrower_id}`
+          : `member_id.eq.${member.member_id}`
+
         const { data: loans } = await supabase
           .from("loans")
           .select("loan_id, principal, interest_rate, term_months, status, start_date")
-          .eq("member_id", member.member_id)
+          .or(loanFilter)
           .in("status", ["active", "requested"])
           .order("start_date", { ascending: false })
 
@@ -368,7 +387,7 @@ export default function EditTransactionPage() {
         return
       }
 
-      router.push("/transactions")
+      router.push(backHref)
       return
     }
 
@@ -416,7 +435,7 @@ export default function EditTransactionPage() {
       return
     }
 
-    router.push("/transactions")
+    router.push(backHref)
   }
 
   async function handleCancelEntry() {
@@ -454,13 +473,13 @@ export default function EditTransactionPage() {
       return
     }
 
-    router.push("/transactions")
+    router.push(backHref)
   }
 
   if (checkingAccess) {
     return (
       <>
-        <Navbar />
+        {isBorrower ? <BorrowerHeader /> : <Navbar />}
         <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
             <SkeletonPanel />
@@ -473,7 +492,7 @@ export default function EditTransactionPage() {
   if (notFound) {
     return (
       <>
-        <Navbar />
+        {isBorrower ? <BorrowerHeader /> : <Navbar />}
         <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
             <p className="text-sm text-ink-soft">
@@ -481,10 +500,10 @@ export default function EditTransactionPage() {
             </p>
             <button
               type="button"
-              onClick={() => router.push("/transactions")}
+              onClick={() => router.push(backHref)}
               className="mt-4 text-sm text-gold font-semibold"
             >
-              ← Back to Transactions
+              {backLabel}
             </button>
           </div>
         </main>
@@ -494,21 +513,21 @@ export default function EditTransactionPage() {
 
   return (
     <>
-      <Navbar />
+      {isBorrower ? <BorrowerHeader /> : <Navbar />}
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-48">
           <button
             type="button"
-            onClick={() => router.push("/transactions")}
-            className="text-sm text-gold font-semibold mb-4"
+            onClick={() => router.push(backHref)}
+            className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
           >
-            ← Back to Transactions
+            {backLabel}
           </button>
-          <div className="text-xs tracking-[0.18em] uppercase text-gold font-mono mb-2">
+          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Editing Entry
           </div>
-          <div className="flex items-baseline gap-2.5 flex-wrap">
-            <h1 className="font-display text-4xl sm:text-5xl font-semibold text-ink">
+          <div className="flex items-baseline gap-2.5 flex-wrap mb-1">
+            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink">
               Edit Transaction
             </h1>
             <span
@@ -519,8 +538,9 @@ export default function EditTransactionPage() {
               {status}
             </span>
           </div>
+          <p className="text-[13px] text-ink-soft mb-6">Update this entry before it's reviewed.</p>
 
-          <div className="mt-8 bg-paper-2 border border-hairline rounded-md p-5">
+          <div className="bg-paper-2 border border-hairline rounded-md p-5">
             <p className="text-xs font-bold uppercase tracking-wide text-ink font-mono mb-3">
               ① Entry type
             </p>

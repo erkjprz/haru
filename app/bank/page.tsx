@@ -167,13 +167,12 @@ export default function BanksPage() {
     setSaving(true)
 
     if (editingId) {
-      // Opening balance is the reconciled cutover value -- intentionally
-      // not part of this update, so it can't drift by accident.
       const { error } = await supabase
         .from("bank_accounts")
         .update({
           bank_name: bankName,
           account_name: accountName,
+          opening_balance: Number(openingBalance) || 0,
           interest_rate: Number(interestRate) || 0
         })
         .eq("id", editingId)
@@ -284,7 +283,6 @@ export default function BanksPage() {
               onSave={saveBank}
               onCancel={clearForm}
               saveLabel="Add Bank"
-              fmt={fmt}
               className="mb-6"
             />
           )}
@@ -341,7 +339,6 @@ export default function BanksPage() {
                       onSave={saveBank}
                       onCancel={() => setEditingId(null)}
                       saveLabel="Save Changes"
-                      fmt={fmt}
                       fused
                     />
                   )}
@@ -451,7 +448,6 @@ function BankForm({
   onSave,
   onCancel,
   saveLabel,
-  fmt,
   fused = false,
   className = ""
 }: {
@@ -470,7 +466,6 @@ function BankForm({
   onSave: () => void
   onCancel: () => void
   saveLabel: string
-  fmt: (n: number) => string
   fused?: boolean
   className?: string
 }) {
@@ -508,35 +503,23 @@ function BankForm({
           />
         </div>
 
-        {isEditing ? (
-          <div>
-            <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-              Opening balance
-            </label>
-            <p className="text-sm font-mono text-ink-soft border border-hairline rounded-sm px-3 py-3 bg-paper">
-              ₱{fmt(Number(openingBalance))}
-            </p>
-            <p className="text-xs text-ink-soft mt-1">
-              Locked — this is the reconciled cutover balance (as of {CUTOVER_DATE}) and can't be edited here.
-            </p>
-          </div>
-        ) : (
-          <div>
-            <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-              Opening balance
-            </label>
-            <input
-              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
-              type="number"
-              placeholder="0.00"
-              value={openingBalance}
-              onChange={(e) => setOpeningBalance(e.target.value)}
-            />
-            <p className="text-xs text-ink-soft mt-1">
-              The true balance as of the cutover date. Can't be changed after saving.
-            </p>
-          </div>
-        )}
+        <div>
+          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+            Opening balance
+          </label>
+          <input
+            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
+            type="number"
+            placeholder="0.00"
+            value={openingBalance}
+            onChange={(e) => setOpeningBalance(e.target.value)}
+          />
+          <p className="text-xs text-ink-soft mt-1">
+            {isEditing
+              ? `The reconciled balance as of the cutover date (${CUTOVER_DATE}). Changing it affects every balance calculated from this account, so only fix it if it was wrong or never set.`
+              : "The true balance as of the cutover date."}
+          </p>
+        </div>
 
         <div>
           <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
