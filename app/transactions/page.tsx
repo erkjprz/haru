@@ -504,18 +504,22 @@ export default function TransactionsPage() {
               const showStatus = transaction.status !== "approved"
 
               // Member-submitted entries: editable by their owner while
-              // still pending. Loan Release is excluded -- it's paired
-              // with a loans row that has no equivalent "cancelled" state
-              // of its own. Admin entries (Bank Interest/Expense/Bank
-              // Transfer) are always inserted already-approved with no
-              // owning member, so they're editable by an admin instead,
-              // any time.
+              // still pending. Loan Release is excluded from self-service
+              // editing -- it's paired with a loans row a member has no
+              // rights to touch -- but an admin can edit/cancel it while
+              // it's still pending (the loan itself is still "requested";
+              // once approved, transaction.status flips to "approved" too,
+              // so this stays a reliable proxy without a separate query).
+              // Admin entries (Bank Interest/Expense/Bank Transfer) are
+              // always inserted already-approved with no owning member,
+              // so they're editable by an admin any time instead.
               const canEdit =
                 (transaction.status === "pending" &&
                   transaction.member_id === member?.member_id &&
                   transaction.classification !== "Loan Release") ||
                 (isAdmin &&
-                  ["Bank Interest", "Expense", "Internal Transfer"].includes(transaction.classification))
+                  (["Bank Interest", "Expense", "Internal Transfer"].includes(transaction.classification) ||
+                    (transaction.classification === "Loan Release" && transaction.status === "pending")))
 
               const label = monthLabel(transaction)
               const showMonthHeader = idx === 0 || label !== monthLabel(filteredTransactions[idx - 1])
