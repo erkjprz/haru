@@ -182,7 +182,7 @@ export default function AdminMembersPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans">
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
             <SkeletonCardList rows={3} />
           </div>
@@ -194,7 +194,7 @@ export default function AdminMembersPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-paper text-ink font-sans">
+      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -346,15 +346,15 @@ export default function AdminMembersPage() {
                 ) : (
                   <>
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-display text-lg">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-display text-lg truncate">
                           {member.name}
                         </div>
-                        <div className="text-sm text-ink-soft">
+                        <div className="text-sm text-ink-soft truncate">
                           {member.email || "No email"}
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-1 shrink-0">
                         <span className="text-[10px] uppercase font-mono border border-hairline rounded-full px-2 py-0.5 text-ink-soft">
                           {member.role}
                         </span>

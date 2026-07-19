@@ -261,7 +261,7 @@ export default function AdminPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans">
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
             <SkeletonCardList rows={3} />
           </div>
@@ -280,7 +280,7 @@ export default function AdminPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-paper text-ink font-sans">
+      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Administration
@@ -300,7 +300,10 @@ export default function AdminPage() {
             {tabs.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setActiveTab(t.id)}
+                onClick={() => {
+                  setActiveTab(t.id)
+                  window.scrollTo(0, 0)
+                }}
                 className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
                   activeTab === t.id ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
                 }`}
@@ -329,9 +332,9 @@ export default function AdminPage() {
                 {filteredMembers.map((m) => (
                   <details key={m.member_id} className="group bg-paper-2 border border-hairline rounded-md overflow-hidden">
                     <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                      <div className="flex-1">
-                        <p className="font-display font-medium">{m.name}</p>
-                        <p className="text-sm text-ink-soft">{m.email}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-display font-medium truncate">{m.name}</p>
+                        <p className="text-sm text-ink-soft truncate">{m.email}</p>
                         <p className="text-[11px] text-ink-soft font-mono mt-0.5">{timeAgo(m.created_at)}</p>
                       </div>
                       <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-wide text-gold border border-gold rounded-full px-2.5 py-1">
@@ -438,10 +441,10 @@ export default function AdminPage() {
                   return (
                     <details key={t.transaction_id} className="group bg-paper-2 border border-hairline rounded-md overflow-hidden">
                       <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                        <div className="flex-1">
-                          <p className="font-display font-medium">{t.members?.name || "Fund"}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display font-medium truncate">{t.members?.name || "Fund"}</p>
                           {t.submitted_by_member && (
-                            <p className="text-[11px] text-gold font-mono">Recorded by {t.submitted_by_member.name}</p>
+                            <p className="text-[11px] text-gold font-mono truncate">Recorded by {t.submitted_by_member.name}</p>
                           )}
                           <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
                           <p className="text-sm text-ink-soft">
@@ -574,8 +577,8 @@ export default function AdminPage() {
                 const linkedName = linkedLoanNameByMemberId[m.member_id]
                 return (
                   <div key={m.member_id} className="bg-paper-2 border border-hairline rounded-md p-4">
-                    <p className="font-display font-medium">{m.name}</p>
-                    <p className="text-sm text-ink-soft">{m.email || "No email"}</p>
+                    <p className="font-display font-medium break-words">{m.name}</p>
+                    <p className="text-sm text-ink-soft break-words">{m.email || "No email"}</p>
                     <p className="text-[11px] text-ink-soft font-mono mt-0.5">requests borrower access · {timeAgo(m.created_at)}</p>
 
                     {linkedName ? (

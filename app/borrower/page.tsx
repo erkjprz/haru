@@ -149,7 +149,7 @@ export default function BorrowerPage() {
     return (
       <>
         <BorrowerHeader />
-        <main className="min-h-screen bg-paper text-ink font-sans">
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
             <SkeletonCardList rows={2} />
           </div>
@@ -163,7 +163,7 @@ export default function BorrowerPage() {
   return (
     <>
       <BorrowerHeader />
-      <main className="min-h-screen bg-paper text-ink font-sans">
+      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Your loan

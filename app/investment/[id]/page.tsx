@@ -228,7 +228,7 @@ export default function InvestmentDetailPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans">
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8">
             <p className="text-sm text-ink-soft">This investment couldn't be found.</p>
             <button

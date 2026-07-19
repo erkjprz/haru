@@ -628,7 +628,7 @@ export default function NewTransactionPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans">
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
             <SkeletonPanel />
           </div>
@@ -641,7 +641,7 @@ export default function NewTransactionPage() {
     return (
       <>
         <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans">
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
             <SubmitConfirmation
               amount={confirmation.amount}
@@ -659,7 +659,7 @@ export default function NewTransactionPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-paper text-ink font-sans">
+      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-48">
           <button
             onClick={() => router.push("/transactions")}
