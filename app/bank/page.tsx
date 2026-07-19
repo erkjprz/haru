@@ -236,7 +236,7 @@ export default function BanksPage() {
                   className="bg-ink text-paper px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
                   onClick={() => {
                     setManageMode(false)
-                    setEditingId(null)
+                    clearForm()
                   }}
                 >
                   Done
@@ -244,7 +244,10 @@ export default function BanksPage() {
               ) : (
                 <button
                   className="border border-hairline text-ink-soft px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
-                  onClick={() => setManageMode(true)}
+                  onClick={() => {
+                    setManageMode(true)
+                    clearForm()
+                  }}
                 >
                   Manage
                 </button>
