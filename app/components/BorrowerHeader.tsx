@@ -20,9 +20,14 @@ export default function BorrowerHeader() {
         <span className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono">
           Haru
         </span>
-        <button onClick={logout} className="text-sm font-mono text-ink-soft hover:text-ink">
-          Sign Out
-        </button>
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.push("/help")} className="text-sm font-mono text-ink-soft hover:text-ink">
+            Help
+          </button>
+          <button onClick={logout} className="text-sm font-mono text-ink-soft hover:text-ink">
+            Sign Out
+          </button>
+        </div>
       </div>
     </nav>
   )
