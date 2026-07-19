@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { closeLoanAndDistributeGain } from "@/lib/closeLoan"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
+import { formatInterestLabel } from "@/lib/loanFormat"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 
@@ -22,7 +23,9 @@ type Loan = {
   gain: number
   outstanding: number
   total_repayable: number
+  interest_type: InterestType | null
   interest_rate: number | null
+  interest_amount: number | null
   term_months: number | null
   notes: string | null
 }
@@ -415,6 +418,12 @@ export default function LoanDetailPage() {
             <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">
               ₱{fmt(loan.status === "closed" ? loan.repayment : loan.outstanding)}
             </p>
+            {loan.status !== "closed" && (
+              <p className="text-[12px] font-mono font-bold text-gold mt-1">
+                of ₱{fmt(loan.total_repayable)} total ·{" "}
+                {formatInterestLabel(loan.interest_type, loan.interest_rate, loan.interest_amount, fmt)} interest
+              </p>
+            )}
             <div className="mt-3">
               <div className="h-2 rounded-full bg-hairline overflow-hidden">
                 <div
@@ -424,7 +433,6 @@ export default function LoanDetailPage() {
               </div>
               <p className="text-[11px] text-ink-soft mt-1.5">
                 ₱{fmt(loan.total_repayable - loan.outstanding)} repaid of ₱{fmt(loan.total_repayable)} total repayable
-                (₱{fmt(loan.principal)} principal + interest)
               </p>
             </div>
           </div>
