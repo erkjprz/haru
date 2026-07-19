@@ -207,20 +207,19 @@ export default function BankDetailPage() {
               </p>
               <div className="flex flex-col gap-3">
                 {pendingGroups.map((group) => (
-                  <div
-                    key={group.year}
-                    className="bg-paper-2 border border-hairline rounded-md p-4 flex items-center justify-between gap-3"
-                  >
-                    <div>
-                      <p className="font-display font-medium">₱{fmt(Math.abs(group.totalAmount))}</p>
-                      <p className="text-sm text-ink-soft">{group.year}</p>
-                      <p className="text-xs text-ink-soft mt-1">
-                        {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined
-                        into one lump sum
-                      </p>
-                    </div>
+                  <div key={group.year} className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-4">
+                    <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
+                      {group.year}
+                    </p>
+                    <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink">
+                      ₱{fmt(Math.abs(group.totalAmount))}
+                    </p>
+                    <p className="text-[12px] text-ink-soft mt-1.5">
+                      {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined into
+                      one lump sum
+                    </p>
                     <button
-                      className="bg-ink text-paper px-4 py-2.5 rounded-sm text-sm disabled:opacity-50 shrink-0"
+                      className="w-full mt-4 bg-ink text-paper px-4 py-3 rounded-sm text-sm font-medium disabled:opacity-50"
                       onClick={() => handleDistribute(group)}
                       disabled={distributingYear === group.year}
                     >
