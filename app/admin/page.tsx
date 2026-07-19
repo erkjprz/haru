@@ -7,6 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
+import { getPendingBankInterestGroups, distributeBankInterestGroup, type PendingBankInterestGroup } from "@/lib/bankInterest"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -19,17 +20,46 @@ const typeLabels: Record<string, string> = {
   "Internal Transfer": "Bank Transfer"
 }
 
+type Tab = "members" | "txns" | "borrowers" | "distrib"
+
+function timeAgo(dateStr: string): string {
+  const diffMs = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 export default function AdminPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
   const [dataLoading, setDataLoading] = useState(true)
   const checkingAccess = authLoading || dataLoading
 
+  const [activeTab, setActiveTab] = useState<Tab>("members")
+
   const [memberCount, setMemberCount] = useState(0)
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
+  const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>([])
+  const [memberLinkChoice, setMemberLinkChoice] = useState<Record<string, string>>({})
+  const [memberBusyId, setMemberBusyId] = useState<string | null>(null)
+
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([])
   const [banks, setBanks] = useState<any[]>([])
   const [withdrawalBankSelections, setWithdrawalBankSelections] = useState<Record<string, string>>({})
+  const [loanReleaseBankSelections, setLoanReleaseBankSelections] = useState<Record<string, string>>({})
+
+  const [borrowerMembers, setBorrowerMembers] = useState<any[]>([])
+  const [unclaimedBorrowers, setUnclaimedBorrowers] = useState<any[]>([])
+  const [linkedLoanNameByMemberId, setLinkedLoanNameByMemberId] = useState<Record<string, string>>({})
+  const [borrowerLinkChoice, setBorrowerLinkChoice] = useState<Record<string, string>>({})
+  const [borrowerBusyId, setBorrowerBusyId] = useState<string | null>(null)
+
+  const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>([])
+  const [distributingKey, setDistributingKey] = useState<string | null>(null)
 
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
@@ -42,106 +72,66 @@ export default function AdminPage() {
   const [selectedTxnIds, setSelectedTxnIds] = useState<Set<string>>(new Set())
 
   async function loadData() {
-    const { count } = await supabase
-      .from("members")
-      .select("*", { count: "exact", head: true })
-    setMemberCount(count ?? 0)
-
-    const { data: pendingM } = await supabase
-      .from("members")
-      .select("*")
-      .eq("status", "pending")
-    setPendingMembers(pendingM ?? [])
-
-    const { data: bankList } = await supabase
-      .from("bank_accounts")
-      .select("id, bank_name, account_name")
-      .order("bank_name")
-    setBanks(bankList ?? [])
-
-    const { data: pendingT, error } = await supabase
-      .from("transactions")
-      .select(
+    const [
+      memberCountRes,
+      pendingMembersRes,
+      unclaimedMembersRes,
+      banksRes,
+      pendingTxnsRes,
+      borrowerMembersRes,
+      unclaimedBorrowersRes,
+      linkedBorrowersRes,
+      pendingGroupsRes
+    ] = await Promise.all([
+      supabase.from("members").select("*", { count: "exact", head: true }),
+      supabase.from("members").select("*").eq("status", "pending").order("created_at", { ascending: false }),
+      supabase.rpc("list_unclaimed_members"),
+      supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name"),
+      supabase
+        .from("transactions")
+        .select(
+          `
+          *,
+          members!transactions_member_id_fkey ( name, email ),
+          submitted_by_member:members!transactions_submitted_by_fkey ( name ),
+          bank_accounts!transactions_bank_account_id_fkey ( bank_name, account_name )
         `
-        *,
-        members!transactions_member_id_fkey (
-          name,
-          email
-        ),
-        submitted_by_member:members!transactions_submitted_by_fkey (
-          name
-        ),
-        bank_accounts!transactions_bank_account_id_fkey (
-          bank_name,
-          account_name
         )
-      `
-      )
-      .eq("status", "pending")
-      .order("created_at", { ascending: false })
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("members")
+        .select("member_id, name, email, status, created_at")
+        .eq("role", "borrower")
+        .order("created_at", { ascending: false }),
+      supabase.from("borrowers").select("borrower_id, name").is("member_id", null).order("name"),
+      supabase.from("borrowers").select("name, member_id").not("member_id", "is", null),
+      getPendingBankInterestGroups()
+    ])
 
-    if (error) {
-      setLoadError(error.message)
+    setMemberCount(memberCountRes.count ?? 0)
+    setPendingMembers(pendingMembersRes.data ?? [])
+    setUnclaimedMembers(unclaimedMembersRes.data ?? [])
+    setBanks(banksRes.data ?? [])
+
+    if (pendingTxnsRes.error) {
+      setLoadError(pendingTxnsRes.error.message)
       setPendingTransactions([])
     } else {
       setLoadError("")
-      setPendingTransactions(pendingT ?? [])
+      setPendingTransactions(pendingTxnsRes.data ?? [])
     }
+
+    setBorrowerMembers(borrowerMembersRes.data ?? [])
+    setUnclaimedBorrowers(unclaimedBorrowersRes.data ?? [])
+    setLinkedLoanNameByMemberId(
+      Object.fromEntries((linkedBorrowersRes.data ?? []).map((b: any) => [b.member_id as string, b.name as string]))
+    )
+
+    setPendingGroups(pendingGroupsRes)
 
     setSelectedMemberIds(new Set())
     setSelectedTxnIds(new Set())
-  }
-
-  async function approveMember(memberId: string) {
-    await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
-    loadData()
-  }
-
-  async function approveTransaction(transactionId: string) {
-    const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
-    const updates: Record<string, any> = { status: "approved" }
-
-    if (txn?.classification === "Member Withdrawal") {
-      const bankAccountId = withdrawalBankSelections[transactionId]
-      if (!bankAccountId) return
-      updates.bank_account_id = bankAccountId
-    }
-
-    await supabase.from("transactions").update(updates).eq("transaction_id", transactionId)
-
-    loadData()
-  }
-
-  async function rejectTransaction(transactionId: string) {
-    await supabase.from("transactions").update({ status: "rejected" }).eq("transaction_id", transactionId)
-    loadData()
-  }
-
-  async function bulkApproveMembers() {
-    if (selectedMemberIds.size === 0) return
-    await supabase
-      .from("members")
-      .update({ status: "approved" })
-      .in("member_id", Array.from(selectedMemberIds))
-    loadData()
-  }
-
-  async function bulkApproveTransactions() {
-    if (selectedTxnIds.size === 0) return
-    const ids = Array.from(selectedTxnIds)
-
-    await supabase.from("transactions").update({ status: "approved" }).in("transaction_id", ids)
-
-    loadData()
-  }
-
-  async function bulkRejectTransactions() {
-    if (selectedTxnIds.size === 0) return
-    await supabase
-      .from("transactions")
-      .update({ status: "rejected" })
-      .in("transaction_id", Array.from(selectedTxnIds))
-    loadData()
   }
 
   useEffect(() => {
@@ -168,6 +158,118 @@ export default function AdminPage() {
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+  // ---- Members ----
+
+  async function approveMember(memberId: string) {
+    setMemberBusyId(memberId)
+    await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
+    setMemberBusyId(null)
+    loadData()
+  }
+
+  async function linkMember(pendingId: string) {
+    const targetId = memberLinkChoice[pendingId]
+    if (!targetId) return
+
+    setMemberBusyId(pendingId)
+    const { error } = await supabase.rpc("admin_link_member", {
+      p_pending_member_id: pendingId,
+      p_target_member_id: targetId
+    })
+    setMemberBusyId(null)
+
+    if (error) {
+      setLoadError(error.message)
+      return
+    }
+
+    loadData()
+  }
+
+  async function bulkApproveMembers() {
+    if (selectedMemberIds.size === 0) return
+    await supabase.from("members").update({ status: "approved" }).in("member_id", Array.from(selectedMemberIds))
+    loadData()
+  }
+
+  // ---- Transactions ----
+
+  async function approveTransaction(transactionId: string) {
+    const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
+    if (!txn) return
+
+    if (txn.classification === "Member Withdrawal") {
+      const bankAccountId = withdrawalBankSelections[transactionId]
+      if (!bankAccountId) return
+      await supabase
+        .from("transactions")
+        .update({ status: "approved", bank_account_id: bankAccountId })
+        .eq("transaction_id", transactionId)
+    } else if (txn.classification === "Loan Release") {
+      // Approving a Loan Release now does the same two updates
+      // loans/[id]'s "Approve & Activate" does -- activates the loan AND
+      // records the disbursing bank on the release transaction -- instead
+      // of only marking the transaction approved and leaving the loan
+      // stuck at "requested" (the previous behavior here).
+      const bankAccountId = loanReleaseBankSelections[transactionId]
+      if (!bankAccountId || !txn.loan_id) return
+      await supabase.from("loans").update({ status: "active" }).eq("loan_id", txn.loan_id)
+      await supabase
+        .from("transactions")
+        .update({ status: "approved", bank_account_id: bankAccountId })
+        .eq("transaction_id", transactionId)
+    } else {
+      await supabase.from("transactions").update({ status: "approved" }).eq("transaction_id", transactionId)
+    }
+
+    loadData()
+  }
+
+  async function rejectTransaction(transactionId: string) {
+    await supabase.from("transactions").update({ status: "rejected" }).eq("transaction_id", transactionId)
+    loadData()
+  }
+
+  async function bulkApproveTransactions() {
+    if (selectedTxnIds.size === 0) return
+    await supabase.from("transactions").update({ status: "approved" }).in("transaction_id", Array.from(selectedTxnIds))
+    loadData()
+  }
+
+  async function bulkRejectTransactions() {
+    if (selectedTxnIds.size === 0) return
+    await supabase
+      .from("transactions")
+      .update({ status: "rejected" })
+      .in("transaction_id", Array.from(selectedTxnIds))
+    loadData()
+  }
+
+  // ---- Borrowers ----
+
+  async function approveBorrower(memberId: string) {
+    setBorrowerBusyId(memberId)
+    await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
+
+    const chosenBorrowerId = borrowerLinkChoice[memberId]
+    if (chosenBorrowerId) {
+      await supabase.from("borrowers").update({ member_id: memberId }).eq("borrower_id", chosenBorrowerId)
+    }
+
+    setBorrowerBusyId(null)
+    loadData()
+  }
+
+  // ---- Distributions ----
+
+  async function distribute(group: PendingBankInterestGroup) {
+    const key = `${group.year}-${group.bank}`
+    setDistributingKey(key)
+    await distributeBankInterestGroup(group)
+    setDistributingKey(null)
+    loadData()
+  }
+
   const filteredMembers = pendingMembers.filter((m) => {
     const q = memberSearch.toLowerCase()
     return m.name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)
@@ -184,9 +286,13 @@ export default function AdminPage() {
   })
 
   const pendingAmountTotal = pendingTransactions.reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0)
+  const pendingBorrowers = borrowerMembers.filter((m) => m.status === "pending")
 
   const allMembersSelected = filteredMembers.length > 0 && filteredMembers.every((m) => selectedMemberIds.has(m.member_id))
-  const selectableTransactions = filteredTransactions.filter((t) => t.classification !== "Member Withdrawal")
+  // Withdrawals and loan releases each need a bank picked per-item, so they're excluded from bulk approve.
+  const selectableTransactions = filteredTransactions.filter(
+    (t) => t.classification !== "Member Withdrawal" && t.classification !== "Loan Release"
+  )
   const allTransactionsSelected =
     selectableTransactions.length > 0 && selectableTransactions.every((t) => selectedTxnIds.has(t.transaction_id))
 
@@ -203,6 +309,13 @@ export default function AdminPage() {
     )
   }
 
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: "members", label: "Members", count: pendingMembers.length },
+    { id: "txns", label: "Txns", count: pendingTransactions.length },
+    { id: "borrowers", label: "Borrowers", count: pendingBorrowers.length },
+    { id: "distrib", label: "Distrib.", count: pendingGroups.length }
+  ]
+
   return (
     <>
       <Navbar />
@@ -214,27 +327,29 @@ export default function AdminPage() {
           <h1 className="font-display text-4xl font-semibold">Admin Panel</h1>
 
           {loadError && (
-            <p className="mt-4 text-sm text-rust">
-              Couldn't load pending transactions: {loadError}
-            </p>
+            <p className="mt-4 text-sm text-rust">Couldn&apos;t load some data: {loadError}</p>
           )}
 
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="mt-6 grid grid-cols-3 sm:grid-cols-5 gap-3">
             <div className="bg-paper-2 border border-hairline rounded-md p-4">
               <div className="text-xs text-ink-soft font-mono">Members</div>
               <div className="font-display text-2xl font-semibold mt-1">{memberCount}</div>
             </div>
             <div className="bg-paper-2 border border-hairline rounded-md p-4">
-              <div className="text-xs text-ink-soft font-mono">Pending Members</div>
+              <div className="text-xs text-ink-soft font-mono">New</div>
               <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingMembers.length}</div>
             </div>
             <div className="bg-paper-2 border border-hairline rounded-md p-4">
-              <div className="text-xs text-ink-soft font-mono">Pending Txns</div>
+              <div className="text-xs text-ink-soft font-mono">Txns</div>
               <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingTransactions.length}</div>
             </div>
             <div className="bg-paper-2 border border-hairline rounded-md p-4">
-              <div className="text-xs text-ink-soft font-mono">Pending Amount</div>
-              <div className="font-display text-lg font-semibold mt-1 font-mono">₱{fmt(pendingAmountTotal)}</div>
+              <div className="text-xs text-ink-soft font-mono">Borrowers</div>
+              <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingBorrowers.length}</div>
+            </div>
+            <div className="bg-paper-2 border border-hairline rounded-md p-4">
+              <div className="text-xs text-ink-soft font-mono">Distrib.</div>
+              <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingGroups.length}</div>
             </div>
           </div>
 
@@ -242,7 +357,7 @@ export default function AdminPage() {
             {[
               { title: "Members", description: "Manage contributors and roles", path: "/admin/members" },
               { title: "Loans", description: "Approve requests, track repayment", path: "/loans" },
-              { title: "Borrowers", description: "Approve and link borrower accounts", path: "/admin/borrowers" }
+              { title: "Borrowers", description: "Full borrower account list", path: "/admin/borrowers" }
             ].map((item) => (
               <button
                 key={item.title}
@@ -255,227 +370,420 @@ export default function AdminPage() {
             ))}
           </div>
 
-          <section className="mt-10">
-            <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-2xl font-semibold">Pending Members</h2>
-              <span className="text-xs text-ink-soft font-mono">
-                {filteredMembers.length} of {pendingMembers.length}
-              </span>
-            </div>
+          {/* Segmented control */}
+          <div className="mt-8 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
+                  activeTab === t.id ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
 
-            {pendingMembers.length > 0 && (
-              <>
-                <input
-                  className="mt-4 border border-hairline bg-paper-2 text-ink text-sm rounded-sm px-3 py-2 w-full"
-                  placeholder="Search by name or email"
-                  value={memberSearch}
-                  onChange={(e) => setMemberSearch(e.target.value)}
-                />
-                <div className="mt-3 flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-sm text-ink-soft">
-                    <input
-                      type="checkbox"
-                      checked={allMembersSelected}
-                      onChange={() => {
-                        if (allMembersSelected) {
-                          setSelectedMemberIds(new Set())
-                        } else {
-                          setSelectedMemberIds(new Set(filteredMembers.map((m) => m.member_id)))
-                        }
-                      }}
-                    />
-                    Select all
-                  </label>
-                  {selectedMemberIds.size > 0 && (
-                    <button className="bg-ink text-paper px-3 py-1.5 rounded-sm text-sm" onClick={bulkApproveMembers}>
-                      Approve {selectedMemberIds.size} selected
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-
-            <div className="mt-3 space-y-3">
-              {filteredMembers.map((m) => (
-                <div key={m.member_id} className="bg-paper-2 border border-hairline rounded-md p-4 flex items-start gap-3">
+          {/* ---- Members ---- */}
+          {activeTab === "members" && (
+            <section className="mt-6">
+              {pendingMembers.length > 0 && (
+                <>
                   <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={selectedMemberIds.has(m.member_id)}
-                    onChange={() => {
-                      setSelectedMemberIds((prev) => {
-                        const next = new Set(prev)
-                        if (next.has(m.member_id)) next.delete(m.member_id)
-                        else next.add(m.member_id)
-                        return next
-                      })
-                    }}
+                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2 w-full"
+                    placeholder="Search by name or email"
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
                   />
-                  <div className="flex-1">
-                    <p className="font-display font-medium">{m.name}</p>
-                    <p className="text-sm text-ink-soft">{m.email}</p>
-                    <button
-                      className="mt-3 bg-ink text-paper px-4 py-2 rounded-sm text-sm"
-                      onClick={() => approveMember(m.member_id)}
-                    >
-                      Approve
-                    </button>
+                  <div className="mt-3 flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-sm text-ink-soft">
+                      <input
+                        type="checkbox"
+                        checked={allMembersSelected}
+                        onChange={() => {
+                          if (allMembersSelected) {
+                            setSelectedMemberIds(new Set())
+                          } else {
+                            setSelectedMemberIds(new Set(filteredMembers.map((m) => m.member_id)))
+                          }
+                        }}
+                      />
+                      Select all
+                    </label>
+                    {selectedMemberIds.size > 0 && (
+                      <button className="bg-ink text-paper px-3 py-1.5 rounded-md text-sm" onClick={bulkApproveMembers}>
+                        Approve {selectedMemberIds.size} selected
+                      </button>
+                    )}
                   </div>
-                </div>
-              ))}
-              {pendingMembers.length === 0 && <p className="text-sm text-ink-soft">No pending members</p>}
-              {pendingMembers.length > 0 && filteredMembers.length === 0 && (
-                <p className="text-sm text-ink-soft">No matches for "{memberSearch}"</p>
+                </>
               )}
-            </div>
-          </section>
 
-          <section className="mt-10">
-            <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-2xl font-semibold">Pending Transactions</h2>
-              <span className="text-xs text-ink-soft font-mono">
-                {filteredTransactions.length} of {pendingTransactions.length}
-              </span>
-            </div>
+              <div className="mt-3 space-y-3">
+                {filteredMembers.map((m) => (
+                  <details key={m.member_id} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                    <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={selectedMemberIds.has(m.member_id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => {
+                          setSelectedMemberIds((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(m.member_id)) next.delete(m.member_id)
+                            else next.add(m.member_id)
+                            return next
+                          })
+                        }}
+                      />
+                      <div className="flex-1">
+                        <p className="font-display font-medium">{m.name}</p>
+                        <p className="text-sm text-ink-soft">{m.email}</p>
+                        <p className="text-[11px] text-ink-soft font-mono mt-0.5">{timeAgo(m.created_at)}</p>
+                      </div>
+                      <span className="text-ink-soft text-xs mt-1">▾</span>
+                    </summary>
 
-            {pendingTransactions.length > 0 && (
-              <>
-                <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                  <input
-                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-sm px-3 py-2 flex-1"
-                    placeholder="Search by member, description, or amount"
-                    value={txnSearch}
-                    onChange={(e) => setTxnSearch(e.target.value)}
-                  />
-                  <select
-                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-sm px-3 py-2"
-                    value={txnTypeFilter}
-                    onChange={(e) => setTxnTypeFilter(e.target.value)}
-                  >
-                    <option value="">All types</option>
-                    {Object.keys(typeLabels).map((key) => (
-                      <option key={key} value={key}>
-                        {typeLabels[key]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
-                  <label className="flex items-center gap-2 text-sm text-ink-soft">
-                    <input
-                      type="checkbox"
-                      checked={allTransactionsSelected}
-                      onChange={() => {
-                        if (allTransactionsSelected) {
-                          setSelectedTxnIds(new Set())
-                        } else {
-                          setSelectedTxnIds(new Set(selectableTransactions.map((t) => t.transaction_id)))
-                        }
-                      }}
-                    />
-                    Select all
-                  </label>
-                  {selectedTxnIds.size > 0 && (
-                    <div className="flex gap-2">
-                      <button className="bg-ink text-paper px-3 py-1.5 rounded-sm text-sm" onClick={bulkApproveTransactions}>
-                        Approve {selectedTxnIds.size}
-                      </button>
-                      <button className="border border-hairline px-3 py-1.5 rounded-sm text-sm" onClick={bulkRejectTransactions}>
-                        Reject {selectedTxnIds.size}
-                      </button>
+                    <div className="px-4 pb-4 border-t border-hairline pt-3">
+                      {unclaimedMembers.length > 0 && (
+                        <div className="mb-3">
+                          <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                            Link to existing member
+                          </label>
+                          <p className="text-xs text-ink-soft mb-2">
+                            If this signup is actually one of the fund&apos;s existing members, link it to their
+                            record so their contributions, loans and investments carry over.
+                          </p>
+                          <select
+                            className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
+                            value={memberLinkChoice[m.member_id] || ""}
+                            onChange={(e) =>
+                              setMemberLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
+                            }
+                          >
+                            <option value="">Select a member</option>
+                            {unclaimedMembers.map((um: any) => (
+                              <option key={um.member_id} value={um.member_id}>
+                                {um.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
+                          onClick={() => approveMember(m.member_id)}
+                          disabled={memberBusyId === m.member_id}
+                        >
+                          {memberBusyId === m.member_id ? "Approving..." : "Approve as new"}
+                        </button>
+                        {memberLinkChoice[m.member_id] && (
+                          <button
+                            className="border border-hairline px-4 py-2 rounded-md text-sm disabled:opacity-50"
+                            onClick={() => linkMember(m.member_id)}
+                            disabled={memberBusyId === m.member_id}
+                          >
+                            {memberBusyId === m.member_id ? "Linking..." : "Link & approve"}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-              </>
-            )}
+                  </details>
+                ))}
+                {pendingMembers.length === 0 && <p className="text-sm text-ink-soft">No pending members</p>}
+                {pendingMembers.length > 0 && filteredMembers.length === 0 && (
+                  <p className="text-sm text-ink-soft">No matches for &quot;{memberSearch}&quot;</p>
+                )}
+              </div>
+            </section>
+          )}
 
-            <div className="mt-3 space-y-3">
-              {filteredTransactions.map((t) => (
-                <div key={t.transaction_id} className="bg-paper-2 border border-hairline rounded-md p-4 flex items-start gap-3">
-                  {t.classification !== "Member Withdrawal" && (
+          {/* ---- Transactions ---- */}
+          {activeTab === "txns" && (
+            <section className="mt-6">
+              {pendingTransactions.length > 0 && (
+                <>
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={selectedTxnIds.has(t.transaction_id)}
-                      onChange={() => {
-                        setSelectedTxnIds((prev) => {
-                          const next = new Set(prev)
-                          if (next.has(t.transaction_id)) next.delete(t.transaction_id)
-                          else next.add(t.transaction_id)
-                          return next
-                        })
-                      }}
+                      className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2 flex-1"
+                      placeholder="Search by member, description, or amount"
+                      value={txnSearch}
+                      onChange={(e) => setTxnSearch(e.target.value)}
                     />
-                  )}
-                  <div className="flex-1">
-                    <p className="font-display font-medium">{t.members?.name || "Fund"}</p>
-                    {t.submitted_by_member && (
-                      <p className="text-[11px] text-gold font-mono">
-                        Recorded by {t.submitted_by_member.name}
-                      </p>
+                    <select
+                      className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2"
+                      value={txnTypeFilter}
+                      onChange={(e) => setTxnTypeFilter(e.target.value)}
+                    >
+                      <option value="">All types</option>
+                      {Object.keys(typeLabels).map((key) => (
+                        <option key={key} value={key}>
+                          {typeLabels[key]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
+                    <label className="flex items-center gap-2 text-sm text-ink-soft">
+                      <input
+                        type="checkbox"
+                        checked={allTransactionsSelected}
+                        onChange={() => {
+                          if (allTransactionsSelected) {
+                            setSelectedTxnIds(new Set())
+                          } else {
+                            setSelectedTxnIds(new Set(selectableTransactions.map((t) => t.transaction_id)))
+                          }
+                        }}
+                      />
+                      Select all
+                    </label>
+                    {selectedTxnIds.size > 0 && (
+                      <div className="flex gap-2">
+                        <button className="bg-ink text-paper px-3 py-1.5 rounded-md text-sm" onClick={bulkApproveTransactions}>
+                          Approve {selectedTxnIds.size}
+                        </button>
+                        <button className="border border-hairline px-3 py-1.5 rounded-md text-sm" onClick={bulkRejectTransactions}>
+                          Reject {selectedTxnIds.size}
+                        </button>
+                      </div>
                     )}
-                    <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
-                    <p className="text-sm text-ink-soft">Type: {typeLabels[t.classification] || t.classification}</p>
-                    <p className="text-sm text-ink-soft">
-                      Bank: {t.bank_accounts?.account_name || t.bank_accounts?.bank_name || "None"}
-                    </p>
-                    {t.description && <p className="text-sm text-ink-soft mt-1">{t.description}</p>}
-                    {t.receipt_url && (
-                      <button
-                        type="button"
-                        onClick={() => setOpenReceiptUrl(t.receipt_url)}
-                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
-                      >
-                        🧾 View Receipt
-                      </button>
-                    )}
-                    {t.classification === "Member Withdrawal" && (
+                  </div>
+                </>
+              )}
+
+              <div className="mt-3 space-y-3">
+                {filteredTransactions.map((t) => {
+                  const needsWithdrawalBank = t.classification === "Member Withdrawal"
+                  const needsLoanBank = t.classification === "Loan Release"
+                  const canBulkSelect = !needsWithdrawalBank && !needsLoanBank
+
+                  return (
+                    <details key={t.transaction_id} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                      <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                        {canBulkSelect && (
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={selectedTxnIds.has(t.transaction_id)}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => {
+                              setSelectedTxnIds((prev) => {
+                                const next = new Set(prev)
+                                if (next.has(t.transaction_id)) next.delete(t.transaction_id)
+                                else next.add(t.transaction_id)
+                                return next
+                              })
+                            }}
+                          />
+                        )}
+                        <div className="flex-1">
+                          <p className="font-display font-medium">{t.members?.name || "Fund"}</p>
+                          {t.submitted_by_member && (
+                            <p className="text-[11px] text-gold font-mono">Recorded by {t.submitted_by_member.name}</p>
+                          )}
+                          <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
+                          <p className="text-sm text-ink-soft">
+                            {typeLabels[t.classification] || t.classification}
+                            {needsLoanBank && " · requested"}
+                            {needsWithdrawalBank && !t.bank_account_id && " · unconfirmed bank"}
+                          </p>
+                        </div>
+                        <span className="text-ink-soft text-xs mt-1">▾</span>
+                      </summary>
+
+                      <div className="px-4 pb-4 border-t border-hairline pt-3">
+                        {t.description && <p className="text-sm text-ink-soft mb-2">{t.description}</p>}
+                        {!needsLoanBank && (
+                          <p className="text-sm text-ink-soft mb-2">
+                            Bank: {t.bank_accounts?.account_name || t.bank_accounts?.bank_name || "None"}
+                          </p>
+                        )}
+                        {t.receipt_url && (
+                          <button
+                            type="button"
+                            onClick={() => setOpenReceiptUrl(t.receipt_url)}
+                            className="mb-3 inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
+                          >
+                            🧾 View Receipt
+                          </button>
+                        )}
+
+                        {needsWithdrawalBank && (
+                          <div className="mb-3">
+                            <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Withdraw from bank
+                            </label>
+                            <select
+                              className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
+                              value={withdrawalBankSelections[t.transaction_id] || ""}
+                              onChange={(e) =>
+                                setWithdrawalBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
+                              }
+                            >
+                              <option value="">Select a bank</option>
+                              {banks.map((bank) => (
+                                <option key={bank.id} value={bank.id}>
+                                  {bank.account_name || bank.bank_name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {needsLoanBank && (
+                          <div className="mb-3">
+                            <p className="text-xs text-gold bg-gold/10 border border-gold rounded-md px-3 py-2 mb-2">
+                              Approving here activates the loan and records the disbursing bank in one step,
+                              instead of separately on the loan&apos;s own page.
+                            </p>
+                            <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Disburse from bank
+                            </label>
+                            <select
+                              className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
+                              value={loanReleaseBankSelections[t.transaction_id] || ""}
+                              onChange={(e) =>
+                                setLoanReleaseBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
+                              }
+                            >
+                              <option value="">Select a bank</option>
+                              {banks.map((bank) => (
+                                <option key={bank.id} value={bank.id}>
+                                  {bank.account_name || bank.bank_name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <button
+                            className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
+                            onClick={() => approveTransaction(t.transaction_id)}
+                            disabled={
+                              (needsWithdrawalBank && !withdrawalBankSelections[t.transaction_id]) ||
+                              (needsLoanBank && !loanReleaseBankSelections[t.transaction_id])
+                            }
+                          >
+                            {needsLoanBank ? "Approve & activate" : "Approve"}
+                          </button>
+                          <button
+                            className="border border-hairline px-4 py-2 rounded-md text-sm"
+                            onClick={() => rejectTransaction(t.transaction_id)}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    </details>
+                  )
+                })}
+                {pendingTransactions.length === 0 && !loadError && (
+                  <p className="text-sm text-ink-soft">No pending transactions</p>
+                )}
+                {pendingTransactions.length > 0 && filteredTransactions.length === 0 && (
+                  <p className="text-sm text-ink-soft">No matches for current search/filter</p>
+                )}
+              </div>
+
+              {pendingTransactions.length > 0 && (
+                <p className="mt-3 text-xs text-ink-soft font-mono">
+                  {filteredTransactions.length} of {pendingTransactions.length} · ₱{fmt(pendingAmountTotal)} pending total
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* ---- Borrowers ---- */}
+          {activeTab === "borrowers" && (
+            <section className="mt-6 space-y-3">
+              {pendingBorrowers.map((m) => {
+                const linkedName = linkedLoanNameByMemberId[m.member_id]
+                return (
+                  <div key={m.member_id} className="bg-paper-2 border border-hairline rounded-md p-4">
+                    <p className="font-display font-medium">{m.name}</p>
+                    <p className="text-sm text-ink-soft">{m.email || "No email"}</p>
+                    <p className="text-[11px] text-ink-soft font-mono mt-0.5">requests borrower access · {timeAgo(m.created_at)}</p>
+
+                    {linkedName ? (
+                      <p className="mt-3 text-xs text-sage font-mono">Linked to loan record: {linkedName}</p>
+                    ) : (
                       <div className="mt-3">
                         <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                          Withdraw from bank
+                          Link to an existing loan record (optional)
                         </label>
                         <select
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
-                          value={withdrawalBankSelections[t.transaction_id] || ""}
+                          className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
+                          value={borrowerLinkChoice[m.member_id] ?? ""}
                           onChange={(e) =>
-                            setWithdrawalBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
+                            setBorrowerLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
                           }
                         >
-                          <option value="">Select a bank</option>
-                          {banks.map((bank) => (
-                            <option key={bank.id} value={bank.id}>
-                              {bank.account_name || bank.bank_name}
+                          <option value="">No existing loan record</option>
+                          {unclaimedBorrowers.map((b: any) => (
+                            <option key={b.borrower_id} value={b.borrower_id}>
+                              {b.name}
                             </option>
                           ))}
                         </select>
                       </div>
                     )}
-                    <div className="mt-4 flex gap-2">
-                      <button
-                        className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50"
-                        onClick={() => approveTransaction(t.transaction_id)}
-                        disabled={t.classification === "Member Withdrawal" && !withdrawalBankSelections[t.transaction_id]}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="border border-hairline px-4 py-2 rounded-sm text-sm"
-                        onClick={() => rejectTransaction(t.transaction_id)}
-                      >
-                        Reject
-                      </button>
-                    </div>
+
+                    <button
+                      className="mt-3 bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
+                      onClick={() => approveBorrower(m.member_id)}
+                      disabled={borrowerBusyId === m.member_id}
+                    >
+                      {borrowerBusyId === m.member_id
+                        ? "Approving..."
+                        : borrowerLinkChoice[m.member_id]
+                        ? "Approve & link"
+                        : "Approve"}
+                    </button>
                   </div>
-                </div>
-              ))}
-              {pendingTransactions.length === 0 && !loadError && (
-                <p className="text-sm text-ink-soft">No pending transactions</p>
-              )}
-              {pendingTransactions.length > 0 && filteredTransactions.length === 0 && (
-                <p className="text-sm text-ink-soft">No matches for current search/filter</p>
-              )}
-            </div>
-          </section>
+                )
+              })}
+              {pendingBorrowers.length === 0 && <p className="text-sm text-ink-soft">No pending borrower signups</p>}
+            </section>
+          )}
+
+          {/* ---- Distributions ---- */}
+          {activeTab === "distrib" && (
+            <section className="mt-6 space-y-3">
+              <p className="text-sm text-ink-soft">Approved interest that hasn&apos;t been split across members yet.</p>
+              {pendingGroups.map((group) => {
+                const key = `${group.year}-${group.bank}`
+                return (
+                  <div key={key} className="bg-paper-2 border border-hairline rounded-md p-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
+                        {group.bank} · {group.year}
+                      </p>
+                      <p className="font-mono [font-variant-numeric:tabular-nums] text-xl font-bold text-ink">
+                        ₱{fmt(Math.abs(group.totalAmount))}
+                      </p>
+                      <p className="text-xs text-ink-soft mt-0.5">
+                        {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined
+                      </p>
+                    </div>
+                    <button
+                      className="shrink-0 bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
+                      onClick={() => distribute(group)}
+                      disabled={distributingKey === key}
+                    >
+                      {distributingKey === key ? "Distributing..." : "Distribute"}
+                    </button>
+                  </div>
+                )
+              })}
+              {pendingGroups.length === 0 && <p className="text-sm text-ink-soft">Nothing waiting to be distributed</p>}
+            </section>
+          )}
         </div>
       </main>
 
