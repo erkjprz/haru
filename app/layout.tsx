@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/ThemeProvider";
+import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { ScrollToTop } from "@/app/scroll-to-top";
 import { AuthProvider } from "@/app/auth-context";
 
@@ -48,7 +49,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ScrollToTop />
         <AuthProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            <PullToRefresh>{children}</PullToRefresh>
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>
