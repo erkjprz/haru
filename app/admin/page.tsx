@@ -41,7 +41,6 @@ export default function AdminPage() {
 
   const [activeTab, setActiveTab] = useState<Tab>("members")
 
-  const [memberCount, setMemberCount] = useState(0)
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>([])
   const [memberLinkChoice, setMemberLinkChoice] = useState<Record<string, string>>({})
@@ -70,7 +69,6 @@ export default function AdminPage() {
 
   async function loadData() {
     const [
-      memberCountRes,
       pendingMembersRes,
       unclaimedMembersRes,
       banksRes,
@@ -80,7 +78,6 @@ export default function AdminPage() {
       linkedBorrowersRes,
       pendingGroupsRes
     ] = await Promise.all([
-      supabase.from("members").select("*", { count: "exact", head: true }),
       supabase.from("members").select("*").eq("status", "pending").order("created_at", { ascending: false }),
       supabase.rpc("list_unclaimed_members"),
       supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name"),
@@ -106,7 +103,6 @@ export default function AdminPage() {
       getPendingBankInterestGroups()
     ])
 
-    setMemberCount(memberCountRes.count ?? 0)
     setPendingMembers(pendingMembersRes.data ?? [])
     setUnclaimedMembers(unclaimedMembersRes.data ?? [])
     setBanks(banksRes.data ?? [])
@@ -290,55 +286,17 @@ export default function AdminPage() {
             Administration
           </div>
           <h1 className="font-display text-4xl font-semibold">Admin Panel</h1>
+          <p className="text-sm text-ink-soft mt-2 max-w-md">
+            Everything waiting on you: new signups, transactions to approve, borrower accounts to link, and
+            bank interest ready to split across members.
+          </p>
 
           {loadError && (
             <p className="mt-4 text-sm text-rust">Couldn&apos;t load some data: {loadError}</p>
           )}
 
-          <div className="mt-6 grid grid-cols-3 sm:grid-cols-5 gap-3">
-            <div className="bg-paper-2 border border-hairline rounded-md p-4">
-              <div className="text-xs text-ink-soft font-mono">Members</div>
-              <div className="font-display text-2xl font-semibold mt-1">{memberCount}</div>
-            </div>
-            <div className="bg-paper-2 border border-hairline rounded-md p-4">
-              <div className="text-xs text-ink-soft font-mono">New</div>
-              <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingMembers.length}</div>
-            </div>
-            <div className="bg-paper-2 border border-hairline rounded-md p-4">
-              <div className="text-xs text-ink-soft font-mono">Txns</div>
-              <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingTransactions.length}</div>
-            </div>
-            <div className="bg-paper-2 border border-hairline rounded-md p-4">
-              <div className="text-xs text-ink-soft font-mono">Borrowers</div>
-              <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingBorrowers.length}</div>
-            </div>
-            <div className="bg-paper-2 border border-hairline rounded-md p-4">
-              <div className="text-xs text-ink-soft font-mono">Distrib.</div>
-              <div className="font-display text-2xl font-semibold mt-1 text-gold">{pendingGroups.length}</div>
-            </div>
-          </div>
-
-          <div className="mt-6 flex border border-hairline rounded-md overflow-hidden">
-            {[
-              { title: "Members", path: "/admin/members" },
-              { title: "Loans", path: "/loans" },
-              { title: "Borrowers", path: "/admin/borrowers" }
-            ].map((item, i, arr) => (
-              <button
-                key={item.title}
-                onClick={() => router.push(item.path)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium hover:bg-paper-2 transition ${
-                  i !== arr.length - 1 ? "border-r border-hairline" : ""
-                }`}
-              >
-                {item.title}
-                <span className="text-ink-soft">→</span>
-              </button>
-            ))}
-          </div>
-
           {/* Segmented control */}
-          <div className="mt-8 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
+          <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
             {tabs.map((t) => (
               <button
                 key={t.id}
@@ -348,6 +306,9 @@ export default function AdminPage() {
                 }`}
               >
                 {t.label}
+                {t.count > 0 && (
+                  <span className={activeTab === t.id ? "text-gold" : "text-ink-soft"}> {t.count}</span>
+                )}
               </button>
             ))}
           </div>
@@ -366,14 +327,18 @@ export default function AdminPage() {
 
               <div className="mt-3 space-y-3">
                 {filteredMembers.map((m) => (
-                  <details key={m.member_id} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                  <details key={m.member_id} className="group bg-paper-2 border border-hairline rounded-md overflow-hidden">
                     <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                       <div className="flex-1">
                         <p className="font-display font-medium">{m.name}</p>
                         <p className="text-sm text-ink-soft">{m.email}</p>
                         <p className="text-[11px] text-ink-soft font-mono mt-0.5">{timeAgo(m.created_at)}</p>
                       </div>
-                      <span className="text-ink-soft text-xs mt-1">▾</span>
+                      <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-wide text-gold border border-gold rounded-full px-2.5 py-1">
+                        <span className="group-open:hidden">Review</span>
+                        <span className="hidden group-open:inline">Close</span>
+                        <span className="inline-block transition-transform group-open:rotate-180">▾</span>
+                      </span>
                     </summary>
 
                     <div className="px-4 pb-4 border-t border-hairline pt-3">
@@ -429,6 +394,13 @@ export default function AdminPage() {
                   <p className="text-sm text-ink-soft">No matches for &quot;{memberSearch}&quot;</p>
                 )}
               </div>
+
+              <button
+                onClick={() => router.push("/admin/members")}
+                className="mt-4 text-sm text-gold hover:underline"
+              >
+                Manage all members →
+              </button>
             </section>
           )}
 
@@ -464,7 +436,7 @@ export default function AdminPage() {
                   const needsLoanBank = t.classification === "Loan Release"
 
                   return (
-                    <details key={t.transaction_id} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                    <details key={t.transaction_id} className="group bg-paper-2 border border-hairline rounded-md overflow-hidden">
                       <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                         <div className="flex-1">
                           <p className="font-display font-medium">{t.members?.name || "Fund"}</p>
@@ -478,7 +450,11 @@ export default function AdminPage() {
                             {needsWithdrawalBank && !t.bank_account_id && " · unconfirmed bank"}
                           </p>
                         </div>
-                        <span className="text-ink-soft text-xs mt-1">▾</span>
+                        <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-wide text-gold border border-gold rounded-full px-2.5 py-1">
+                          <span className="group-open:hidden">Review</span>
+                          <span className="hidden group-open:inline">Close</span>
+                          <span className="inline-block transition-transform group-open:rotate-180">▾</span>
+                        </span>
                       </summary>
 
                       <div className="px-4 pb-4 border-t border-hairline pt-3">
@@ -581,6 +557,13 @@ export default function AdminPage() {
                   {filteredTransactions.length} of {pendingTransactions.length} · ₱{fmt(pendingAmountTotal)} pending total
                 </p>
               )}
+
+              <button
+                onClick={() => router.push("/loans")}
+                className="mt-4 text-sm text-gold hover:underline"
+              >
+                View all loans →
+              </button>
             </section>
           )}
 
@@ -634,6 +617,13 @@ export default function AdminPage() {
                 )
               })}
               {pendingBorrowers.length === 0 && <p className="text-sm text-ink-soft">No pending borrower signups</p>}
+
+              <button
+                onClick={() => router.push("/admin/borrowers")}
+                className="text-sm text-gold hover:underline"
+              >
+                View all borrowers →
+              </button>
             </section>
           )}
 
@@ -667,6 +657,13 @@ export default function AdminPage() {
                 )
               })}
               {pendingGroups.length === 0 && <p className="text-sm text-ink-soft">Nothing waiting to be distributed</p>}
+
+              <button
+                onClick={() => router.push("/bank")}
+                className="text-sm text-gold hover:underline"
+              >
+                View bank interest history →
+              </button>
             </section>
           )}
         </div>
