@@ -30,6 +30,8 @@ type GainShare = {
   member_id: string
   member: string
   amount: number
+  current_value: number
+  pct_share: number
 }
 
 type AdminLoan = {
@@ -97,7 +99,7 @@ export default function LoanDetailPage() {
     // members for display names and sorted highest share first.
     const sharesPromise = supabase
       .from("loan_gain_allocations")
-      .select("amount, member_id, members(name)")
+      .select("amount, member_id, current_value, pct_share, members(name)")
       .eq("loan_id", loanId)
       .order("amount", { ascending: false })
 
@@ -114,7 +116,9 @@ export default function LoanDetailPage() {
         sharesResult.data.map((r: any) => ({
           member_id: r.member_id,
           member: r.members?.name ?? "Unknown",
-          amount: Number(r.amount)
+          amount: Number(r.amount),
+          current_value: Number(r.current_value),
+          pct_share: Number(r.pct_share)
         }))
       )
     } else if (sharesResult.error) {
@@ -724,9 +728,14 @@ export default function LoanDetailPage() {
                           </span>
                         )}
                       </div>
-                      <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-sage shrink-0">
-                        +₱{fmt(s.amount)}
-                      </p>
+                      <div className="flex flex-col items-end shrink-0">
+                        <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-sage">
+                          +₱{fmt(s.amount)}
+                        </p>
+                        <p className="text-[11px] text-ink-soft font-mono whitespace-nowrap">
+                          {s.pct_share.toFixed(2)}% of ₱{fmt(s.current_value)}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>

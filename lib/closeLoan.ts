@@ -135,7 +135,9 @@ export async function closeLoanAndDistributeGain(params: CloseLoanParams) {
       member_id: s.member_id,
       amount: s.amount,
       allocation_date: closingDate,
-      notes: `${s.memberName} current value ₱${s.currentValue.toFixed(2)} / total ₱${totalValue.toFixed(2)} of ₱${Math.abs(gainOrLoss).toFixed(2)} ${gainOrLossLabel} from loan closed ${closingDate}`
+      current_value: s.currentValue,
+      pct_share: Number(((s.currentValue / totalValue) * 100).toFixed(2)),
+      notes: `Share of ₱${Math.abs(gainOrLoss).toFixed(2)} ${gainOrLossLabel} from loan closed ${closingDate}`
     }))
 
     await supabase.from("loan_gain_allocations").insert(loanGainRows)

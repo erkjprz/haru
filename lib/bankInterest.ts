@@ -138,9 +138,11 @@ export async function distributeBankInterestGroup(group: PendingBankInterestGrou
     bank: group.bank,
     allocation_date: distributionDate,
     amount: s.amount,
+    current_value: s.balance,
+    pct_share: totalBalance > 0 ? Number(((s.balance / totalBalance) * 100).toFixed(2)) : 0,
     notes:
       s.balance > 0
-        ? `${s.memberName} balance ₱${s.balance.toFixed(2)} / total ₱${totalBalance.toFixed(2)} of ₱${interestAmount.toFixed(2)} ${group.bank} interest for ${group.year} distributed ${distributionDate}`
+        ? `Share of ₱${interestAmount.toFixed(2)} ${group.bank} interest for ${group.year} distributed ${distributionDate}`
         : `No contribution balance in the fund as of ${distributionDate}`
   }))
 
