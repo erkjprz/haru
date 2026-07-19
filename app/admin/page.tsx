@@ -8,11 +8,6 @@ import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
-import {
-  getPendingBankInterestGroups,
-  distributeBankInterestGroup,
-  type PendingBankInterestGroup
-} from "@/lib/bankInterest"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -34,7 +29,6 @@ export default function AdminPage() {
   const [memberCount, setMemberCount] = useState(0)
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([])
-  const [pendingBankInterestGroups, setPendingBankInterestGroups] = useState<PendingBankInterestGroup[]>([])
   const [banks, setBanks] = useState<any[]>([])
   const [withdrawalBankSelections, setWithdrawalBankSelections] = useState<Record<string, string>>({})
 
@@ -47,8 +41,6 @@ export default function AdminPage() {
 
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
   const [selectedTxnIds, setSelectedTxnIds] = useState<Set<string>>(new Set())
-
-  const [distributingKey, setDistributingKey] = useState<string | null>(null)
 
   async function loadData() {
     const { count } = await supabase
@@ -96,13 +88,6 @@ export default function AdminPage() {
       setLoadError("")
       setPendingTransactions(pendingT ?? [])
     }
-
-    // Bank Interest transactions that have been approved but not yet had
-    // their lump-sum split run -- grouped by (year, bank), matching the
-    // historical distribution pattern exactly (one event per calendar
-    // year per bank, not per individual transaction).
-    const groups = await getPendingBankInterestGroups()
-    setPendingBankInterestGroups(groups)
 
     setSelectedMemberIds(new Set())
     setSelectedTxnIds(new Set())
@@ -170,14 +155,6 @@ export default function AdminPage() {
       .from("transactions")
       .update({ status: "rejected" })
       .in("transaction_id", Array.from(selectedTxnIds))
-    loadData()
-  }
-
-  async function handleDistribute(group: PendingBankInterestGroup) {
-    const key = `${group.year}-${group.bank}`
-    setDistributingKey(key)
-    await distributeBankInterestGroup(group)
-    setDistributingKey(null)
     loadData()
   }
 
@@ -278,8 +255,6 @@ export default function AdminPage() {
           <div className="mt-6 grid grid-cols-2 gap-3">
             {[
               { title: "Members", description: "Manage contributors and roles", path: "/admin/members" },
-              { title: "Banks", description: "Manage bank accounts and balances", path: "/admin/banks" },
-              { title: "Assets", description: "Manage investments and write-offs", path: "/admin/assets" },
               { title: "Loans", description: "Approve requests, track repayment", path: "/admin/loans" }
             ].map((item) => (
               <button
@@ -292,50 +267,6 @@ export default function AdminPage() {
               </button>
             ))}
           </div>
-
-          {/* Bank interest pending distribution -- new manual step, grouped
-              by (year, bank) to match the historical lump-sum pattern. */}
-          <section className="mt-10">
-            <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-2xl font-semibold">Bank Interest — Pending Distribution</h2>
-              <span className="text-xs text-ink-soft font-mono">{pendingBankInterestGroups.length}</span>
-            </div>
-
-            {pendingBankInterestGroups.length === 0 && (
-              <p className="mt-3 text-sm text-ink-soft">
-                No bank interest waiting to be split across members.
-              </p>
-            )}
-
-            <div className="mt-3 space-y-3">
-              {pendingBankInterestGroups.map((group) => {
-                const key = `${group.year}-${group.bank}`
-                return (
-                  <div
-                    key={key}
-                    className="bg-paper-2 border border-hairline rounded-md p-4 flex items-center justify-between gap-3"
-                  >
-                    <div>
-                      <p className="font-display font-medium">₱{fmt(Math.abs(group.totalAmount))}</p>
-                      <p className="text-sm text-ink-soft">
-                        {group.bank} · {group.year}
-                      </p>
-                      <p className="text-xs text-ink-soft mt-1">
-                        {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined into one lump sum
-                      </p>
-                    </div>
-                    <button
-                      className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-50 shrink-0"
-                      onClick={() => handleDistribute(group)}
-                      disabled={distributingKey === key}
-                    >
-                      {distributingKey === key ? "Distributing..." : "Distribute"}
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
 
           <section className="mt-10">
             <div className="flex items-baseline justify-between">
