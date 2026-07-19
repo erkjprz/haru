@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
+import type { InterestType } from "@/lib/loanMath"
 
 type Loan = {
   loan_id: string
@@ -19,6 +20,25 @@ type Loan = {
   repayment: number
   gain: number
   outstanding: number
+  term_months: number | null
+  interest_type: InterestType | null
+  interest_rate: number | null
+  interest_amount: number | null
+}
+
+function termsLabel(loan: Loan, fmt: (n: number) => string): string | null {
+  if (loan.term_months == null) return null
+
+  const interest =
+    loan.interest_type === "amount"
+      ? loan.interest_amount != null
+        ? `₱${fmt(loan.interest_amount)} flat`
+        : null
+      : loan.interest_rate != null
+      ? `${loan.interest_rate}%`
+      : null
+
+  return interest ? `${loan.term_months} mo · ${interest}` : `${loan.term_months} mo`
 }
 
 export default function LoansPage() {
@@ -194,6 +214,9 @@ function LoanCard({
           <p className="text-[12px] text-ink-soft">
             {loan.borrower} · {dateLabel}
           </p>
+          {termsLabel(loan, fmt) && (
+            <p className="text-[11px] text-ink-soft font-mono mt-0.5">{termsLabel(loan, fmt)}</p>
+          )}
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <div className="flex items-center gap-1.5">
