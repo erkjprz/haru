@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import SubmitConfirmation from "@/app/components/SubmitConfirmation"
 
 function isValidPositiveNumber(value: string): boolean {
   if (!value.trim()) return false
@@ -30,6 +31,7 @@ export default function BorrowerRepayPage() {
   const [dragActive, setDragActive] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState("")
+  const [submitted, setSubmitted] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -144,7 +146,7 @@ export default function BorrowerRepayPage() {
       return
     }
 
-    router.push("/borrower")
+    setSubmitted(true)
   }
 
   const fmt = (n: number) =>
@@ -157,6 +159,25 @@ export default function BorrowerRepayPage() {
         <main className="min-h-screen bg-paper text-ink font-sans">
           <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
             <SkeletonPanel />
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  if (submitted) {
+    return (
+      <>
+        <BorrowerHeader />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
+            <SubmitConfirmation
+              amount={Number(amount)}
+              label="Loan repayment submitted"
+              pending
+              continueLabel="View Your Loan →"
+              onContinue={() => router.push("/borrower")}
+            />
           </div>
         </main>
       </>

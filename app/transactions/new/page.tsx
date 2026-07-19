@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import SubmitConfirmation from "@/app/components/SubmitConfirmation"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 
 const ENTRY_TYPES = [
@@ -178,6 +179,7 @@ export default function NewTransactionPage() {
   const [dragActive, setDragActive] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState("")
+  const [confirmation, setConfirmation] = useState<{ amount: number; label: string; pending: boolean } | null>(null)
 
   const [interestType, setInterestType] = useState<InterestType>("rate")
   const [interestRate, setInterestRate] = useState("")
@@ -466,7 +468,7 @@ export default function NewTransactionPage() {
         return
       }
 
-      router.push("/transactions")
+      setConfirmation({ amount: Number(amount), label: "Loan request submitted", pending: true })
       return
     }
 
@@ -494,7 +496,7 @@ export default function NewTransactionPage() {
         return
       }
 
-      router.push("/transactions")
+      setConfirmation({ amount: Number(amount), label: "Bank transfer recorded", pending: false })
       return
     }
 
@@ -535,7 +537,7 @@ export default function NewTransactionPage() {
         return
       }
 
-      router.push("/transactions")
+      setConfirmation({ amount: Number(amount), label: `${classification} recorded`, pending: false })
       return
     }
 
@@ -571,7 +573,13 @@ export default function NewTransactionPage() {
       return
     }
 
-    router.push("/transactions")
+    const typeLabel =
+      selectedType === "loan_payment" ? "Loan repayment" : selectedType === "withdrawal" ? "Withdrawal" : "Contribution"
+    setConfirmation({
+      amount: Number(amount),
+      label: `${typeLabel} ${status === "pending" ? "submitted" : "recorded"}`,
+      pending: status === "pending"
+    })
   }
 
   const fmt = (n: number) =>
@@ -623,6 +631,25 @@ export default function NewTransactionPage() {
         <main className="min-h-screen bg-paper text-ink font-sans">
           <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
             <SkeletonPanel />
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  if (confirmation) {
+    return (
+      <>
+        <Navbar />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-24">
+            <SubmitConfirmation
+              amount={confirmation.amount}
+              label={confirmation.label}
+              pending={confirmation.pending}
+              continueLabel="View Transactions →"
+              onContinue={() => router.push("/transactions")}
+            />
           </div>
         </main>
       </>
