@@ -124,6 +124,11 @@ export default function BankDetailPage() {
       return
     }
 
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     if (bank) {
       load()
       loadPending()

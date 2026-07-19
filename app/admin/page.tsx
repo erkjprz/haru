@@ -241,7 +241,8 @@ export default function AdminPage() {
           <div className="mt-6 grid grid-cols-2 gap-3">
             {[
               { title: "Members", description: "Manage contributors and roles", path: "/admin/members" },
-              { title: "Loans", description: "Approve requests, track repayment", path: "/loans" }
+              { title: "Loans", description: "Approve requests, track repayment", path: "/loans" },
+              { title: "Borrowers", description: "Approve and link borrower accounts", path: "/admin/borrowers" }
             ].map((item) => (
               <button
                 key={item.title}
