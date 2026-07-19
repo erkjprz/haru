@@ -105,6 +105,60 @@ const memberSections: FaqSection[] = [
     ]
   },
   {
+    title: "How the numbers work",
+    items: [
+      {
+        q: "How is my Available Balance calculated?",
+        a: (
+          <p>
+            Everything you&apos;ve put in and earned — contributions, bank interest, investment performance,
+            and your share of loan gains — minus withdrawals. If some of that money is currently funding
+            another member&apos;s active loan, that portion isn&apos;t available until the loan is repaid; you&apos;ll
+            see it called out separately under your balance.
+          </p>
+        )
+      },
+      {
+        q: "How does bank interest get split among members?",
+        a: (
+          <p>
+            Proportionally, based on how much each member had contributed to the fund at the time it&apos;s
+            distributed — the more you had in, the bigger your share.
+          </p>
+        )
+      },
+      {
+        q: "How is a loan's interest split when it closes?",
+        a: (
+          <p>
+            The same idea: proportional to how much each member had in the fund at that point. The member
+            who borrowed the money never shares in their own loan&apos;s interest, and anyone with nothing in
+            the fund at that point doesn&apos;t get a share either.
+          </p>
+        )
+      },
+      {
+        q: "What does my \"% of fund\" on Fund Breakdown mean?",
+        a: (
+          <p>
+            Your total value in the fund (contributions plus everything you&apos;ve earned) divided by
+            everyone&apos;s total value combined.
+          </p>
+        )
+      },
+      {
+        q: "How is loan interest calculated?",
+        a: (
+          <p>
+            Either a flat percentage of the amount borrowed, or a fixed peso amount — whichever was agreed
+            when the loan was requested. Either way it&apos;s a one-time amount added to the principal, not
+            interest that compounds over time.
+          </p>
+        )
+      }
+    ]
+  },
+  {
     title: "Submitting a contribution, withdrawal, or loan payment",
     items: [
       {
@@ -250,6 +304,17 @@ const borrowerSections: FaqSection[] = [
       {
         q: "How will I know if my loan was approved?",
         a: <p>Once an admin approves it, its status changes from <strong>requested</strong> to <strong>active</strong> on your loan page, and it&apos;ll show the bank the money was sent from.</p>
+      },
+      {
+        q: "How is my total repayment amount calculated?",
+        a: (
+          <p>
+            Principal plus interest. Interest is either a percentage of what you borrowed, or a flat peso
+            amount — whichever you chose when requesting the loan. It&apos;s a one-time amount added to the
+            principal, not interest that grows over time, so your total doesn&apos;t change while you&apos;re
+            repaying it.
+          </p>
+        )
       }
     ]
   },
@@ -398,6 +463,16 @@ const adminSections: FaqSection[] = [
             Open the loan itself (Loans → tap it) — as an admin you&apos;ll see a{" "}
             <strong>Manage loan</strong> panel there with Edit, Close &amp; Distribute, and (for closed
             loans) Reopen.
+          </p>
+        )
+      },
+      {
+        q: "How does \"Close & Distribute\" split the gain (or loss)?",
+        a: (
+          <p>
+            Proportionally across members, based on how much each has in the fund at that moment — same
+            principle as a bank interest distribution. The borrower never shares in their own loan&apos;s
+            result, and anyone with nothing in the fund at that point doesn&apos;t get a share.
           </p>
         )
       },
