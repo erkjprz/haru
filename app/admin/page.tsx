@@ -68,9 +68,6 @@ export default function AdminPage() {
   const [txnSearch, setTxnSearch] = useState("")
   const [txnTypeFilter, setTxnTypeFilter] = useState("")
 
-  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set())
-  const [selectedTxnIds, setSelectedTxnIds] = useState<Set<string>>(new Set())
-
   async function loadData() {
     const [
       memberCountRes,
@@ -129,9 +126,6 @@ export default function AdminPage() {
     )
 
     setPendingGroups(pendingGroupsRes)
-
-    setSelectedMemberIds(new Set())
-    setSelectedTxnIds(new Set())
   }
 
   useEffect(() => {
@@ -186,12 +180,6 @@ export default function AdminPage() {
     loadData()
   }
 
-  async function bulkApproveMembers() {
-    if (selectedMemberIds.size === 0) return
-    await supabase.from("members").update({ status: "approved" }).in("member_id", Array.from(selectedMemberIds))
-    loadData()
-  }
-
   // ---- Transactions ----
 
   async function approveTransaction(transactionId: string) {
@@ -227,21 +215,6 @@ export default function AdminPage() {
 
   async function rejectTransaction(transactionId: string) {
     await supabase.from("transactions").update({ status: "rejected" }).eq("transaction_id", transactionId)
-    loadData()
-  }
-
-  async function bulkApproveTransactions() {
-    if (selectedTxnIds.size === 0) return
-    await supabase.from("transactions").update({ status: "approved" }).in("transaction_id", Array.from(selectedTxnIds))
-    loadData()
-  }
-
-  async function bulkRejectTransactions() {
-    if (selectedTxnIds.size === 0) return
-    await supabase
-      .from("transactions")
-      .update({ status: "rejected" })
-      .in("transaction_id", Array.from(selectedTxnIds))
     loadData()
   }
 
@@ -287,14 +260,6 @@ export default function AdminPage() {
 
   const pendingAmountTotal = pendingTransactions.reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0)
   const pendingBorrowers = borrowerMembers.filter((m) => m.status === "pending")
-
-  const allMembersSelected = filteredMembers.length > 0 && filteredMembers.every((m) => selectedMemberIds.has(m.member_id))
-  // Withdrawals and loan releases each need a bank picked per-item, so they're excluded from bulk approve.
-  const selectableTransactions = filteredTransactions.filter(
-    (t) => t.classification !== "Member Withdrawal" && t.classification !== "Loan Release"
-  )
-  const allTransactionsSelected =
-    selectableTransactions.length > 0 && selectableTransactions.every((t) => selectedTxnIds.has(t.transaction_id))
 
   if (checkingAccess) {
     return (
@@ -353,19 +318,21 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className="mt-6 flex border border-hairline rounded-md overflow-hidden">
             {[
-              { title: "Members", description: "Manage contributors and roles", path: "/admin/members" },
-              { title: "Loans", description: "Approve requests, track repayment", path: "/loans" },
-              { title: "Borrowers", description: "Full borrower account list", path: "/admin/borrowers" }
-            ].map((item) => (
+              { title: "Members", path: "/admin/members" },
+              { title: "Loans", path: "/loans" },
+              { title: "Borrowers", path: "/admin/borrowers" }
+            ].map((item, i, arr) => (
               <button
                 key={item.title}
                 onClick={() => router.push(item.path)}
-                className="text-left bg-paper-2 border border-hairline rounded-md p-4 hover:border-gold transition"
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium hover:bg-paper-2 transition ${
+                  i !== arr.length - 1 ? "border-r border-hairline" : ""
+                }`}
               >
-                <div className="font-display text-lg font-medium">{item.title}</div>
-                <div className="text-xs text-ink-soft mt-1">{item.description}</div>
+                {item.title}
+                <span className="text-ink-soft">→</span>
               </button>
             ))}
           </div>
@@ -389,55 +356,18 @@ export default function AdminPage() {
           {activeTab === "members" && (
             <section className="mt-6">
               {pendingMembers.length > 0 && (
-                <>
-                  <input
-                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2 w-full"
-                    placeholder="Search by name or email"
-                    value={memberSearch}
-                    onChange={(e) => setMemberSearch(e.target.value)}
-                  />
-                  <div className="mt-3 flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-sm text-ink-soft">
-                      <input
-                        type="checkbox"
-                        checked={allMembersSelected}
-                        onChange={() => {
-                          if (allMembersSelected) {
-                            setSelectedMemberIds(new Set())
-                          } else {
-                            setSelectedMemberIds(new Set(filteredMembers.map((m) => m.member_id)))
-                          }
-                        }}
-                      />
-                      Select all
-                    </label>
-                    {selectedMemberIds.size > 0 && (
-                      <button className="bg-ink text-paper px-3 py-1.5 rounded-md text-sm" onClick={bulkApproveMembers}>
-                        Approve {selectedMemberIds.size} selected
-                      </button>
-                    )}
-                  </div>
-                </>
+                <input
+                  className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2 w-full"
+                  placeholder="Search by name or email"
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                />
               )}
 
               <div className="mt-3 space-y-3">
                 {filteredMembers.map((m) => (
                   <details key={m.member_id} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
                     <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={selectedMemberIds.has(m.member_id)}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={() => {
-                          setSelectedMemberIds((prev) => {
-                            const next = new Set(prev)
-                            if (next.has(m.member_id)) next.delete(m.member_id)
-                            else next.add(m.member_id)
-                            return next
-                          })
-                        }}
-                      />
                       <div className="flex-1">
                         <p className="font-display font-medium">{m.name}</p>
                         <p className="text-sm text-ink-soft">{m.email}</p>
@@ -506,81 +436,36 @@ export default function AdminPage() {
           {activeTab === "txns" && (
             <section className="mt-6">
               {pendingTransactions.length > 0 && (
-                <>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2 flex-1"
-                      placeholder="Search by member, description, or amount"
-                      value={txnSearch}
-                      onChange={(e) => setTxnSearch(e.target.value)}
-                    />
-                    <select
-                      className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2"
-                      value={txnTypeFilter}
-                      onChange={(e) => setTxnTypeFilter(e.target.value)}
-                    >
-                      <option value="">All types</option>
-                      {Object.keys(typeLabels).map((key) => (
-                        <option key={key} value={key}>
-                          {typeLabels[key]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
-                    <label className="flex items-center gap-2 text-sm text-ink-soft">
-                      <input
-                        type="checkbox"
-                        checked={allTransactionsSelected}
-                        onChange={() => {
-                          if (allTransactionsSelected) {
-                            setSelectedTxnIds(new Set())
-                          } else {
-                            setSelectedTxnIds(new Set(selectableTransactions.map((t) => t.transaction_id)))
-                          }
-                        }}
-                      />
-                      Select all
-                    </label>
-                    {selectedTxnIds.size > 0 && (
-                      <div className="flex gap-2">
-                        <button className="bg-ink text-paper px-3 py-1.5 rounded-md text-sm" onClick={bulkApproveTransactions}>
-                          Approve {selectedTxnIds.size}
-                        </button>
-                        <button className="border border-hairline px-3 py-1.5 rounded-md text-sm" onClick={bulkRejectTransactions}>
-                          Reject {selectedTxnIds.size}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2 flex-1"
+                    placeholder="Search by member, description, or amount"
+                    value={txnSearch}
+                    onChange={(e) => setTxnSearch(e.target.value)}
+                  />
+                  <select
+                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2"
+                    value={txnTypeFilter}
+                    onChange={(e) => setTxnTypeFilter(e.target.value)}
+                  >
+                    <option value="">All types</option>
+                    {Object.keys(typeLabels).map((key) => (
+                      <option key={key} value={key}>
+                        {typeLabels[key]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
 
               <div className="mt-3 space-y-3">
                 {filteredTransactions.map((t) => {
                   const needsWithdrawalBank = t.classification === "Member Withdrawal"
                   const needsLoanBank = t.classification === "Loan Release"
-                  const canBulkSelect = !needsWithdrawalBank && !needsLoanBank
 
                   return (
                     <details key={t.transaction_id} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
                       <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                        {canBulkSelect && (
-                          <input
-                            type="checkbox"
-                            className="mt-1"
-                            checked={selectedTxnIds.has(t.transaction_id)}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={() => {
-                              setSelectedTxnIds((prev) => {
-                                const next = new Set(prev)
-                                if (next.has(t.transaction_id)) next.delete(t.transaction_id)
-                                else next.add(t.transaction_id)
-                                return next
-                              })
-                            }}
-                          />
-                        )}
                         <div className="flex-1">
                           <p className="font-display font-medium">{t.members?.name || "Fund"}</p>
                           {t.submitted_by_member && (
