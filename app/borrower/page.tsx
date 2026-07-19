@@ -9,6 +9,13 @@ import { SkeletonCardList } from "@/app/components/Skeleton"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { formatInterestLabel } from "@/lib/loanFormat"
 
+type Repayment = {
+  transaction_id: string
+  amount: number
+  status: "pending" | "approved" | "rejected" | "cancelled"
+  date: string
+}
+
 type Loan = {
   loan_id: string
   name: string | null
@@ -22,6 +29,7 @@ type Loan = {
   repaid: number
   totalRepayable: number
   outstanding: number
+  repayments: Repayment[]
 }
 
 export default function BorrowerPage() {
@@ -77,15 +85,18 @@ export default function BorrowerPage() {
       const { data: allTxns } = loanIds.length
         ? await supabase
             .from("transactions")
-            .select("loan_id, classification, amount, status")
+            .select("transaction_id, loan_id, classification, amount, status, txn_date, created_at")
             .in("loan_id", loanIds)
-            .eq("status", "approved")
+            .neq("status", "cancelled")
+            .order("txn_date", { ascending: false })
         : { data: [] }
 
       const withProgress: Loan[] = (myLoans ?? []).map((loan) => {
         const related = (allTxns ?? []).filter((t) => t.loan_id === loan.loan_id)
-        const repaid = related
-          .filter((t) => t.classification === "Loan Repayment")
+        const repayments = related.filter((t) => t.classification === "Loan Repayment")
+
+        const repaid = repayments
+          .filter((t) => t.status === "approved")
           .reduce((sum, t) => sum + Number(t.amount), 0)
 
         const interestType: InterestType = loan.interest_type === "amount" ? "amount" : "rate"
@@ -108,7 +119,13 @@ export default function BorrowerPage() {
           term_months: loan.term_months,
           repaid,
           totalRepayable: totalRepayableVal,
-          outstanding: loan.status === "closed" ? 0 : Math.max(0, totalRepayableVal - repaid)
+          outstanding: loan.status === "closed" ? 0 : Math.max(0, totalRepayableVal - repaid),
+          repayments: repayments.map((t) => ({
+            transaction_id: t.transaction_id,
+            amount: Number(t.amount),
+            status: t.status,
+            date: t.txn_date ?? t.created_at
+          }))
         }
       })
 
@@ -231,6 +248,43 @@ export default function BorrowerPage() {
                       style={{ width: `${repaidPct}%` }}
                     />
                   </div>
+
+                  {loan.repayments.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-hairline">
+                      <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono mb-2">
+                        Repayments
+                      </p>
+                      <div className="space-y-2">
+                        {loan.repayments.map((r) => (
+                          <div key={r.transaction_id} className="flex items-center justify-between gap-2">
+                            <span className="text-[12px] text-ink-soft">
+                              {new Date(r.date).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric"
+                              })}
+                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span
+                                className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                                  r.status === "approved"
+                                    ? "text-sage border-sage/40"
+                                    : r.status === "rejected"
+                                    ? "text-rust border-rust/40"
+                                    : "text-gold border-gold/40"
+                                }`}
+                              >
+                                {r.status}
+                              </span>
+                              <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
+                                ₱{fmt(r.amount)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
