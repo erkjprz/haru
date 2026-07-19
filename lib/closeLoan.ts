@@ -156,35 +156,3 @@ export async function closeLoanAndDistributeGain(params: CloseLoanParams) {
 
   await supabase.from("loans").update({ status: "closed" }).eq("loan_id", params.id)
 }
-
-export async function autoCloseLoanIfFullyRepaid(loanId: string) {
-  const { data: loan } = await supabase
-    .from("loans")
-    .select("*, members ( name ), borrowers ( name )")
-    .eq("loan_id", loanId)
-    .single()
-
-  if (!loan || loan.status !== "active") return
-
-  const { data: repayments } = await supabase
-    .from("transactions")
-    .select("amount")
-    .eq("loan_id", loanId)
-    .eq("classification", "Loan Repayment")
-    .eq("status", "approved")
-
-  const totalRepaid = (repayments ?? []).reduce((sum, t) => sum + Number(t.amount), 0)
-
-  const fullAmountDue =
-    Number(loan.principal) + Number(loan.principal) * (Number(loan.interest_rate ?? 0) / 100)
-
-  if (totalRepaid >= fullAmountDue) {
-    await closeLoanAndDistributeGain({
-      id: loan.loan_id,
-      member_id: loan.member_id,
-      principal: loan.principal,
-      repaidApproved: totalRepaid,
-      borrowerName: loan.members?.name || loan.borrowers?.name
-    })
-  }
-}

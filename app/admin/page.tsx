@@ -7,7 +7,6 @@ import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
-import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -110,10 +109,6 @@ export default function AdminPage() {
 
     await supabase.from("transactions").update(updates).eq("transaction_id", transactionId)
 
-    if (txn?.classification === "Loan Repayment" && txn.loan_id) {
-      await autoCloseLoanIfFullyRepaid(txn.loan_id)
-    }
-
     loadData()
   }
 
@@ -134,17 +129,8 @@ export default function AdminPage() {
   async function bulkApproveTransactions() {
     if (selectedTxnIds.size === 0) return
     const ids = Array.from(selectedTxnIds)
-    const loanIdsToCheck = new Set(
-      pendingTransactions
-        .filter((t) => ids.includes(t.transaction_id) && t.classification === "Loan Repayment" && t.loan_id)
-        .map((t) => t.loan_id)
-    )
 
     await supabase.from("transactions").update({ status: "approved" }).in("transaction_id", ids)
-
-    for (const loanId of loanIdsToCheck) {
-      await autoCloseLoanIfFullyRepaid(loanId)
-    }
 
     loadData()
   }
@@ -255,7 +241,7 @@ export default function AdminPage() {
           <div className="mt-6 grid grid-cols-2 gap-3">
             {[
               { title: "Members", description: "Manage contributors and roles", path: "/admin/members" },
-              { title: "Loans", description: "Approve requests, track repayment", path: "/admin/loans" }
+              { title: "Loans", description: "Approve requests, track repayment", path: "/loans" }
             ].map((item) => (
               <button
                 key={item.title}

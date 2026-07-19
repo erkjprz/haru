@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import { totalRepayable, type InterestType } from "@/lib/loanMath"
 
 // Member-submitted types: editable by the member who owns the row, only
 // while it's still pending.
@@ -18,8 +19,8 @@ const ADMIN_EDITABLE = ["Bank Interest", "Expense", "Internal Transfer"]
 
 // Loan Release is handled separately (see load()): it's paired with a
 // "loans" row, so it's only editable by an admin, and only while that loan
-// is still "requested" -- once approved/active, changes belong in the
-// dedicated Admin > Loans flow instead.
+// is still "requested" -- once approved/active, changes belong on the
+// loan's own page instead.
 
 const TYPE_LABEL: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -35,7 +36,7 @@ const HELPER_TEXT: Record<string, string> = {
   "Member Contribution": "You've already sent this money. Attach proof of deposit.",
   "Member Withdrawal": "You're requesting money to be sent to you. No receipt needed yet.",
   "Loan Repayment": "You've already sent this repayment. Attach proof of deposit.",
-  "Loan Release": "This member is requesting to borrow from the fund. No bank is assigned until you approve it from Admin > Loans.",
+  "Loan Release": "This member is requesting to borrow from the fund. No bank is assigned until you approve it from the loan's own page.",
   "Bank Interest": "Recording interest earned by a bank account. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
   "Expense": "Recording money spent out of the fund. Goes straight in as approved.",
   "Internal Transfer": "Moving money between two of the fund's own banks. Doesn't affect total contributions or cash — it's just internal."
@@ -97,7 +98,9 @@ export default function EditTransactionPage() {
   const [toBankId, setToBankId] = useState("")
   const [loanId, setLoanId] = useState("")
   const [amount, setAmount] = useState("")
+  const [interestType, setInterestType] = useState<InterestType>("rate")
   const [interestRate, setInterestRate] = useState("")
+  const [interestAmount, setInterestAmount] = useState("")
   const [termMonths, setTermMonths] = useState("")
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
   const [description, setDescription] = useState("")
@@ -172,7 +175,9 @@ export default function EditTransactionPage() {
       if (isLoanReleaseType && loanRecord) {
         setLoanId(loanRecord.loan_id)
         setAmount(String(Number(loanRecord.principal)))
+        setInterestType(loanRecord.interest_type === "amount" ? "amount" : "rate")
         setInterestRate(String(Number(loanRecord.interest_rate ?? 0)))
+        setInterestAmount(loanRecord.interest_amount != null ? String(Number(loanRecord.interest_amount)) : "")
         setTermMonths(loanRecord.term_months != null ? String(loanRecord.term_months) : "")
         setRepaymentFrequency(loanRecord.repayment_frequency ?? "monthly")
       } else {
@@ -209,8 +214,12 @@ export default function EditTransactionPage() {
   const needsReceipt = classification === "Member Contribution" || classification === "Loan Repayment"
 
   const previewTotalRepayable =
-    isLoanRelease && isValidPositiveNumber(amount) && isValidPositiveNumber(interestRate, true)
-      ? Number(amount) + Number(amount) * (Number(interestRate) / 100)
+    isLoanRelease &&
+    isValidPositiveNumber(amount) &&
+    (interestType === "rate"
+      ? isValidPositiveNumber(interestRate, true)
+      : isValidPositiveNumber(interestAmount, true))
+      ? totalRepayable(Number(amount), interestType, Number(interestRate || 0), Number(interestAmount || 0))
       : 0
 
   const previewPerInstallment =
@@ -243,7 +252,7 @@ export default function EditTransactionPage() {
     chips.push(
       previewTotalRepayable > 0
         ? { done: true, text: `Total ₱${fmt(previewTotalRepayable)}` }
-        : { done: false, text: "Enter rate & term" }
+        : { done: false, text: "Enter interest & term" }
     )
   } else if (isBankTransfer) {
     chips.push(
@@ -276,8 +285,13 @@ export default function EditTransactionPage() {
     }
 
     if (isLoanRelease) {
-      if (!isValidPositiveNumber(interestRate, true)) {
+      if (interestType === "rate" && !isValidPositiveNumber(interestRate, true)) {
         setMessage("Enter a valid interest rate (0 or higher).")
+        return
+      }
+
+      if (interestType === "amount" && !isValidPositiveNumber(interestAmount, true)) {
+        setMessage("Enter a valid interest amount (0 or higher).")
         return
       }
 
@@ -322,7 +336,9 @@ export default function EditTransactionPage() {
         .from("loans")
         .update({
           principal: Number(amount),
-          interest_rate: Number(interestRate),
+          interest_type: interestType,
+          interest_rate: interestType === "rate" ? Number(interestRate) : 0,
+          interest_amount: interestType === "amount" ? Number(interestAmount) : null,
           term_months: Number(termMonths),
           repayment_frequency: repaymentFrequency,
           notes: description
@@ -567,17 +583,49 @@ export default function EditTransactionPage() {
                 <>
                   <div>
                     <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
-                      Interest rate (%)
+                      Interest
                     </label>
-                    <input
-                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="e.g. 5"
-                      value={interestRate}
-                      onChange={(e) => setInterestRate(e.target.value)}
-                    />
+                    <div className="flex border border-hairline rounded-md overflow-hidden mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setInterestType("rate")}
+                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                          interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                        }`}
+                      >
+                        Rate (%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInterestType("amount")}
+                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                          interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                        }`}
+                      >
+                        Fixed amount (₱)
+                      </button>
+                    </div>
+                    {interestType === "rate" ? (
+                      <input
+                        className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="e.g. 5"
+                        value={interestRate}
+                        onChange={(e) => setInterestRate(e.target.value)}
+                      />
+                    ) : (
+                      <input
+                        className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="e.g. 5000"
+                        value={interestAmount}
+                        onChange={(e) => setInterestAmount(e.target.value)}
+                      />
+                    )}
                   </div>
 
                   <div>
