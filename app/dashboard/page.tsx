@@ -51,6 +51,7 @@ export default function DashboardPage() {
   const [myTrend, setMyTrend] = useState<TrendPoint[]>([])
   const [fundTrend, setFundTrend] = useState<TrendPoint[]>([])
   const [pendingCount, setPendingCount] = useState(0)
+  const [myPendingCount, setMyPendingCount] = useState(0)
   const [loadError, setLoadError] = useState("")
 
   const memberName = member?.name ?? ""
@@ -115,8 +116,14 @@ export default function DashboardPage() {
             .eq("status", "pending")
         : Promise.resolve({ count: 0 } as any)
 
-      const [fundResult, mineResult, myTrendResult, fundTrendResult, pendingResult] =
-        await Promise.all([fundPromise, minePromise, myTrendPromise, fundTrendPromise, pendingPromise])
+      const myPendingPromise = supabase
+        .from("transactions")
+        .select("transaction_id", { count: "exact", head: true })
+        .eq("member_id", member.member_id)
+        .eq("status", "pending")
+
+      const [fundResult, mineResult, myTrendResult, fundTrendResult, pendingResult, myPendingResult] =
+        await Promise.all([fundPromise, minePromise, myTrendPromise, fundTrendPromise, pendingPromise, myPendingPromise])
 
       if (fundResult.error) {
         setLoadError(fundResult.error.message)
@@ -163,6 +170,7 @@ export default function DashboardPage() {
       }
 
       setPendingCount(pendingResult.count ?? 0)
+      setMyPendingCount(myPendingResult.count ?? 0)
       setAsOf(new Date())
       setDataLoading(false)
     }
@@ -238,6 +246,21 @@ export default function DashboardPage() {
                   {pendingCount} {pendingCount === 1 ? "entry" : "entries"} awaiting approval
                 </p>
                 <p className="text-xs text-rust mt-0.5">Tap to review in Admin</p>
+              </div>
+              <span className="text-ink-soft">→</span>
+            </button>
+          )}
+
+          {myPendingCount > 0 && (
+            <button
+              onClick={() => router.push("/transactions")}
+              className="mb-6 w-full text-left bg-paper-2 border border-hairline rounded-md px-5 py-4 flex items-center justify-between"
+            >
+              <div>
+                <p className="text-sm text-ink font-medium">
+                  {myPendingCount} {myPendingCount === 1 ? "entry" : "entries"} pending approval
+                </p>
+                <p className="text-xs text-gold mt-0.5">Tap to view in Transactions</p>
               </div>
               <span className="text-ink-soft">→</span>
             </button>
