@@ -198,6 +198,12 @@ export default function AdminMembersPage() {
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
           <div className="flex items-start justify-between gap-4">
             <div>
+              <button
+                onClick={() => router.push("/admin")}
+                className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
+              >
+                ← Admin
+              </button>
               <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
                 Administration
               </div>
