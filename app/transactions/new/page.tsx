@@ -634,6 +634,12 @@ export default function NewTransactionPage() {
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans">
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-48">
+          <button
+            onClick={() => router.push("/transactions")}
+            className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
+          >
+            ← Transactions
+          </button>
           <div className="text-xs tracking-[0.18em] uppercase text-gold font-mono mb-2">
             New Entry
           </div>
