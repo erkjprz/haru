@@ -21,6 +21,7 @@ type Loan = {
   repayment: number
   gain: number
   outstanding: number
+  total_repayable: number
   interest_rate: number | null
   term_months: number | null
   notes: string | null
@@ -364,8 +365,8 @@ export default function LoanDetailPage() {
   }
   const meta = statusMeta[loan.status]
 
-  const repaidPct = loan.principal > 0
-    ? Math.min(100, ((loan.principal - loan.outstanding) / loan.principal) * 100)
+  const repaidPct = loan.total_repayable > 0
+    ? Math.min(100, ((loan.total_repayable - loan.outstanding) / loan.total_repayable) * 100)
     : 0
 
   const startLabel = new Date(loan.start_date).toLocaleDateString(undefined, {
@@ -422,7 +423,8 @@ export default function LoanDetailPage() {
                 />
               </div>
               <p className="text-[11px] text-ink-soft mt-1.5">
-                ₱{fmt(loan.principal - loan.outstanding)} repaid of ₱{fmt(loan.principal)} principal
+                ₱{fmt(loan.total_repayable - loan.outstanding)} repaid of ₱{fmt(loan.total_repayable)} total repayable
+                (₱{fmt(loan.principal)} principal + interest)
               </p>
             </div>
           </div>
@@ -431,6 +433,7 @@ export default function LoanDetailPage() {
           <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
             <InfoBox label="Loan">
               <InfoRow label="Principal" value={`₱${fmt(loan.principal)}`} />
+              <InfoRow label="Total repayable" value={`₱${fmt(loan.total_repayable)}`} />
               <InfoRow label="Repaid so far" value={`₱${fmt(loan.repayment)}`} />
               <InfoRow
                 label="Outstanding"

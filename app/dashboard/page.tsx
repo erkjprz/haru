@@ -18,6 +18,7 @@ type FundSummary = {
   open_loans_count: number
   open_loans_principal: number
   open_loans_outstanding: number
+  open_loans_total_repayable: number
   total_contribution: number
   total_withdrawal: number
   net_contribution: number
@@ -126,6 +127,7 @@ export default function DashboardPage() {
           open_loans_count: Number(fundResult.data.open_loans_count),
           open_loans_principal: Number(fundResult.data.open_loans_principal),
           open_loans_outstanding: Number(fundResult.data.open_loans_outstanding),
+          open_loans_total_repayable: Number(fundResult.data.open_loans_total_repayable),
           total_contribution: Number(fundResult.data.total_contribution),
           total_withdrawal: Number(fundResult.data.total_withdrawal),
           net_contribution: Number(fundResult.data.net_contribution)
@@ -195,8 +197,8 @@ export default function DashboardPage() {
   const bdoPct = fund && fund.bdo_balance + fund.maya_balance > 0
     ? (fund.bdo_balance / (fund.bdo_balance + fund.maya_balance)) * 100
     : 50
-  const loanRepaidPct = fund && fund.open_loans_principal > 0
-    ? ((fund.open_loans_principal - fund.open_loans_outstanding) / fund.open_loans_principal) * 100
+  const loanRepaidPct = fund && fund.open_loans_total_repayable > 0
+    ? ((fund.open_loans_total_repayable - fund.open_loans_outstanding) / fund.open_loans_total_repayable) * 100
     : 0
 
   return (
@@ -426,8 +428,8 @@ export default function DashboardPage() {
                     <div className="flex justify-between text-[11px] text-ink-soft mb-1.5">
                       <span className="font-semibold text-sage">{loanRepaidPct.toFixed(0)}% repaid</span>
                       <span>
-                        ₱{fmt(fund.open_loans_principal - fund.open_loans_outstanding)} of ₱
-                        {fmt(fund.open_loans_principal)}
+                        ₱{fmt(fund.open_loans_total_repayable - fund.open_loans_outstanding)} of ₱
+                        {fmt(fund.open_loans_total_repayable)}
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-hairline overflow-hidden">

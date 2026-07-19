@@ -20,6 +20,7 @@ type Loan = {
   repayment: number
   gain: number
   outstanding: number
+  total_repayable: number
   term_months: number | null
   interest_type: InterestType | null
   interest_rate: number | null
@@ -187,8 +188,8 @@ function LoanCard({
   isMine: boolean
   onClick: () => void
 }) {
-  const repaidPct = loan.principal > 0
-    ? Math.min(100, ((loan.principal - loan.outstanding) / loan.principal) * 100)
+  const repaidPct = loan.total_repayable > 0
+    ? Math.min(100, ((loan.total_repayable - loan.outstanding) / loan.total_repayable) * 100)
     : 0
 
   const dateLabel = new Date(loan.start_date).toLocaleDateString(undefined, {
