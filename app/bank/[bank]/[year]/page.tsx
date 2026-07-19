@@ -12,6 +12,8 @@ type Share = {
   member: string
   amount: number
   allocation_date: string
+  current_value: number
+  pct_share: number
 }
 
 export default function BankYearDetailPage() {
@@ -47,7 +49,7 @@ export default function BankYearDetailPage() {
       // distribution event, joined to members(name) for display.
       const { data, error } = await supabase
         .from("bank_interest_allocations")
-        .select("amount, allocation_date, member_id, members(name)")
+        .select("amount, allocation_date, member_id, current_value, pct_share, members(name)")
         .eq("bank", bank)
         .gte("allocation_date", `${year}-01-01`)
         .lte("allocation_date", `${year}-12-31`)
@@ -62,7 +64,9 @@ export default function BankYearDetailPage() {
             member_id: r.member_id,
             member: r.members?.name ?? "Unknown",
             amount: Number(r.amount),
-            allocation_date: r.allocation_date
+            allocation_date: r.allocation_date,
+            current_value: Number(r.current_value),
+            pct_share: Number(r.pct_share)
           }))
         )
       }
@@ -163,9 +167,14 @@ export default function BankYearDetailPage() {
                           </span>
                         )}
                       </div>
-                      <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-sage shrink-0">
-                        +₱{fmt(s.amount)}
-                      </p>
+                      <div className="flex flex-col items-end shrink-0">
+                        <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-sage">
+                          +₱{fmt(s.amount)}
+                        </p>
+                        <p className="text-[11px] text-ink-soft font-mono whitespace-nowrap">
+                          {s.pct_share.toFixed(2)}% of ₱{fmt(s.current_value)}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
