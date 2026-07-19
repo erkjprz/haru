@@ -253,6 +253,9 @@ export default function TransactionsPage() {
             name
           )
         ),
+        investments!transactions_investment_id_fkey (
+          name
+        ),
         from_bank_account:bank_accounts!transactions_bank_account_id_fkey (
           bank_name,
           account_name
@@ -478,6 +481,9 @@ export default function TransactionsPage() {
               const loanName = transaction.loans?.name || null
               const borrowerName = transaction.loans?.borrowers?.name || null
               const transferLabel = isTransferTxn ? transaction._transferLabel ?? null : null
+              const isInvestmentTxn =
+                transaction.classification === "Investment" || transaction.classification === "Investment Return"
+              const investmentName = isInvestmentTxn ? transaction.investments?.name || null : null
 
               // Legacy migrated rows carry the bank as plain text in `bank`.
               // Rows created through the app instead link a real bank
@@ -595,6 +601,9 @@ export default function TransactionsPage() {
                     )}
                     {isLoanTxn && loanName && (
                       <p className="col-span-2 text-xs text-ink-soft font-mono">{loanName}</p>
+                    )}
+                    {isInvestmentTxn && investmentName && (
+                      <p className="col-span-2 text-xs text-ink-soft font-mono">{investmentName}</p>
                     )}
                     {showDescription && (
                       <p className="col-span-2 text-xs text-ink-soft break-words">

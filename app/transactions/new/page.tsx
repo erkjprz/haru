@@ -15,7 +15,9 @@ const ENTRY_TYPES = [
   { key: "loan_payment", label: "Loan Payment", adminOnly: false },
   { key: "bank_interest", label: "Bank Interest", adminOnly: true },
   { key: "expense", label: "Expense", adminOnly: true },
-  { key: "bank_transfer", label: "Bank Transfer", adminOnly: true }
+  { key: "bank_transfer", label: "Bank Transfer", adminOnly: true },
+  { key: "investment", label: "Investment", adminOnly: true },
+  { key: "investment_return", label: "Investment Return", adminOnly: true }
 ]
 
 const MEMBER_LINKED_TYPES = ["contribution", "withdrawal", "loan_request", "loan_payment"]
@@ -31,7 +33,9 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
   loan_payment: { arrow: "↑", tone: "in" },
   bank_interest: { arrow: "↑", tone: "in" },
   expense: { arrow: "↓", tone: "out" },
-  bank_transfer: { arrow: "⇄", tone: "neutral" }
+  bank_transfer: { arrow: "⇄", tone: "neutral" },
+  investment: { arrow: "↓", tone: "out" },
+  investment_return: { arrow: "↑", tone: "in" }
 }
 
 function FlowBadge({ type }: { type: string }) {
@@ -160,9 +164,11 @@ export default function NewTransactionPage() {
   const [banks, setBanks] = useState<any[]>([])
   const [allMembers, setAllMembers] = useState<any[]>([])
   const [myLoans, setMyLoans] = useState<any[]>([])
+  const [investmentsList, setInvestmentsList] = useState<any[]>([])
 
   const [selectedType, setSelectedType] = useState("contribution")
   const [onBehalfOfId, setOnBehalfOfId] = useState("")
+  const [investmentId, setInvestmentId] = useState("")
   const [bankId, setBankId] = useState("")
   const [toBankId, setToBankId] = useState("")
   const [amount, setAmount] = useState("")
@@ -226,6 +232,13 @@ export default function NewTransactionPage() {
           .order("name")
 
         setAllMembers(memberList ?? [])
+
+        const { data: investmentList } = await supabase
+          .from("investments")
+          .select("investment_id, name")
+          .order("name")
+
+        setInvestmentsList(investmentList ?? [])
       }
 
       await loadLoansFor(member.member_id)
@@ -245,10 +258,12 @@ export default function NewTransactionPage() {
     isAdmin && isMemberLinkedType && onBehalfOfId ? memberId : null
 
   const isBankTransfer = selectedType === "bank_transfer"
+  const isInvestmentEntry = selectedType === "investment" || selectedType === "investment_return"
   const isAdminEntry =
     selectedType === "bank_interest" ||
     selectedType === "expense" ||
-    selectedType === "bank_transfer"
+    selectedType === "bank_transfer" ||
+    isInvestmentEntry
   const needsReceipt =
     (selectedType === "contribution" || selectedType === "loan_payment") && !isAdminEntry
   const needsBank =
@@ -256,7 +271,8 @@ export default function NewTransactionPage() {
     selectedType === "loan_payment" ||
     selectedType === "bank_interest" ||
     selectedType === "expense" ||
-    isBankTransfer
+    isBankTransfer ||
+    isInvestmentEntry
   const isLoanRequest = selectedType === "loan_request"
   const isLoanPayment = selectedType === "loan_payment"
 
@@ -267,7 +283,9 @@ export default function NewTransactionPage() {
     loan_payment: "You've already sent this repayment. Attach proof of deposit.",
     bank_interest: "Recording interest earned by a bank account. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
     expense: "Recording money spent out of the fund. Goes straight in as approved.",
-    bank_transfer: "Moving money between two of the fund's own banks. Doesn't affect total contributions or cash — it's just internal."
+    bank_transfer: "Moving money between two of the fund's own banks. Doesn't affect total contributions or cash — it's just internal.",
+    investment: "Moving fund cash into a venture. Pick which investment this funds. Goes in as approved.",
+    investment_return: "Cash coming back from a venture -- a payout, sale, or exit. Goes in as approved."
   }
 
   const previewTotalRepayable =
@@ -307,6 +325,7 @@ export default function NewTransactionPage() {
     setRepaymentFrequency("monthly")
     setSelectedLoanId("")
     setOnBehalfOfId("")
+    setInvestmentId("")
 
     if (newType === "loan_payment" && memberId) {
       await loadLoansFor(memberId)
@@ -347,6 +366,11 @@ export default function NewTransactionPage() {
 
     if (needsReceipt && !receipt) {
       setMessage("Attach a receipt.")
+      return
+    }
+
+    if (isInvestmentEntry && !investmentId) {
+      setMessage("Select which investment this is for.")
       return
     }
 
@@ -475,17 +499,30 @@ export default function NewTransactionPage() {
     }
 
     if (isAdminEntry) {
-      // Expenses are cash going out, so the ledger stores them negative.
+      // Expenses and new Investment outflows are cash going out, so the
+      // ledger stores them negative -- matches v_investment_summary, which
+      // reads "invested" as -amount on Investment rows and "returned" as
+      // plain amount on Investment Return rows.
       // Bank Interest rows default to interest_distributed = false and sit
       // there until an admin manually distributes them from /admin --
       // this is no longer automatic.
+      const classification =
+        selectedType === "bank_interest"
+          ? "Bank Interest"
+          : selectedType === "expense"
+          ? "Expense"
+          : selectedType === "investment"
+          ? "Investment"
+          : "Investment Return"
+
       const { error } = await supabase
         .from("transactions")
         .insert({
           member_id: null,
           bank_account_id: bankId || null,
-          classification: selectedType === "bank_interest" ? "Bank Interest" : "Expense",
-          amount: selectedType === "expense" ? -Number(amount) : Number(amount),
+          investment_id: isInvestmentEntry ? investmentId : null,
+          classification,
+          amount: selectedType === "expense" || selectedType === "investment" ? -Number(amount) : Number(amount),
           description,
           receipt_url: null,
           status: "approved"
@@ -570,6 +607,10 @@ export default function NewTransactionPage() {
         : { done: false, text: "Select both banks" }
     )
     chips.push({ done: true, text: "Doesn't affect cash total" })
+  } else if (isInvestmentEntry) {
+    chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
+    chips.push(investmentId ? { done: true, text: "✓ Investment selected" } : { done: false, text: "Investment required" })
+    chips.push({ done: true, text: "Posts as approved" })
   } else if (selectedType === "bank_interest" || selectedType === "expense") {
     chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
     chips.push({ done: true, text: "Posts as approved" })
@@ -637,6 +678,31 @@ export default function NewTransactionPage() {
                   {onBehalfOfId && (
                     <p className="text-sm text-gold mt-2">
                       This will be recorded as approved immediately for {allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {isInvestmentEntry && (
+                <div>
+                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                    Investment
+                  </label>
+                  <select
+                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                    value={investmentId}
+                    onChange={(e) => setInvestmentId(e.target.value)}
+                  >
+                    <option value="">Select an investment</option>
+                    {investmentsList.map((inv) => (
+                      <option key={inv.investment_id} value={inv.investment_id}>
+                        {inv.name}
+                      </option>
+                    ))}
+                  </select>
+                  {investmentsList.length === 0 && (
+                    <p className="text-sm text-ink-soft mt-2">
+                      No investments yet -- add one from the Investments page first.
                     </p>
                   )}
                 </div>
