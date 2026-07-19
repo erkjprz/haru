@@ -22,7 +22,11 @@ export default function AccountPage() {
 
   useEffect(() => {
     if (authLoading) return
-    if (!member) router.push("/login")
+    if (!member) {
+      router.push("/login")
+      return
+    }
+    if (member.role === "borrower") router.push("/borrower")
   }, [authLoading, member, router])
 
   async function changeEmail() {

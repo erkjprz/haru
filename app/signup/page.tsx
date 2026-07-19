@@ -16,6 +16,7 @@ export default function SignupPage() {
 
   const router = useRouter()
 
+  const [accountType, setAccountType] = useState<"member" | "borrower">("member")
   const [unclaimedMembers, setUnclaimedMembers] = useState<UnclaimedMember[]>([])
   const [selectedMemberId, setSelectedMemberId] = useState(NEW_MEMBER)
   const [name, setName] = useState("")
@@ -31,7 +32,8 @@ export default function SignupPage() {
     })
   }, [])
 
-  const isExistingMember = selectedMemberId !== NEW_MEMBER
+  const isBorrower = accountType === "borrower"
+  const isExistingMember = !isBorrower && selectedMemberId !== NEW_MEMBER
 
   async function signup() {
 
@@ -71,13 +73,17 @@ export default function SignupPage() {
         return
       }
 
+      // Borrower accounts are scoped to just their own loan(s) -- see
+      // members_select/loans_select/transactions_select RLS -- and never
+      // share in the fund's investment/bank-interest gains.
       const { error: memberError } = await supabase
         .from("members")
         .insert({
           name,
           email,
-          role: "member",
-          status: "pending"
+          role: isBorrower ? "borrower" : "member",
+          status: "pending",
+          ...(isBorrower ? { gain_sharing_eligible: false } : {})
         })
 
 
@@ -116,7 +122,7 @@ export default function SignupPage() {
           </h1>
 
           <p className="text-sm text-ink-soft mt-2">
-            Create your shared fund account.
+            {isBorrower ? "Create an account to manage your loan." : "Create your shared fund account."}
           </p>
 
         </div>
@@ -137,6 +143,28 @@ export default function SignupPage() {
 
           <div className="space-y-5">
 
+            {/* Account type */}
+
+            <div className="flex border border-hairline rounded-md overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setAccountType("member")}
+                className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                  accountType === "member" ? "bg-gold text-ink" : "bg-paper text-ink-soft"
+                }`}
+              >
+                Join the fund
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountType("borrower")}
+                className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                  accountType === "borrower" ? "bg-gold text-ink" : "bg-paper text-ink-soft"
+                }`}
+              >
+                Repaying a loan
+              </button>
+            </div>
 
             {/* Name */}
 
@@ -146,33 +174,35 @@ export default function SignupPage() {
                 Name
               </label>
 
-              <select
-                value={selectedMemberId}
-                onChange={(e) => setSelectedMemberId(e.target.value)}
-                className="
-                  w-full
-                  rounded-md
-                  border
-                  border-hairline
-                  bg-paper
-                  px-4
-                  py-3
-                  text-base
-                  text-ink
-                  outline-none
-                  transition-all
-                  focus:border-gold
-                  focus:ring-2
-                  focus:ring-gold/20
-                "
-              >
-                <option value={NEW_MEMBER}>I&apos;m a new member</option>
-                {unclaimedMembers.map((m) => (
-                  <option key={m.member_id} value={m.member_id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
+              {!isBorrower && (
+                <select
+                  value={selectedMemberId}
+                  onChange={(e) => setSelectedMemberId(e.target.value)}
+                  className="
+                    w-full
+                    rounded-md
+                    border
+                    border-hairline
+                    bg-paper
+                    px-4
+                    py-3
+                    text-base
+                    text-ink
+                    outline-none
+                    transition-all
+                    focus:border-gold
+                    focus:ring-2
+                    focus:ring-gold/20
+                  "
+                >
+                  <option value={NEW_MEMBER}>I&apos;m a new member</option>
+                  {unclaimedMembers.map((m) => (
+                    <option key={m.member_id} value={m.member_id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               {isExistingMember ? (
                 <p className="mt-2 text-xs text-ink-soft">
@@ -187,8 +217,7 @@ export default function SignupPage() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") signup()
                   }}
-                  className="
-                    mt-2
+                  className={`
                     w-full
                     rounded-md
                     border
@@ -204,8 +233,15 @@ export default function SignupPage() {
                     focus:border-gold
                     focus:ring-2
                     focus:ring-gold/20
-                  "
+                    ${isBorrower ? "" : "mt-2"}
+                  `}
                 />
+              )}
+
+              {isBorrower && (
+                <p className="mt-2 text-xs text-ink-soft">
+                  An admin will approve your account and link it to your loan.
+                </p>
               )}
 
             </div>
@@ -393,7 +429,9 @@ export default function SignupPage() {
 
 
         <p className="mt-6 text-center text-xs text-ink-soft">
-          Your account will be reviewed before joining the fund.
+          {isBorrower
+            ? "Your account will be reviewed before you can manage your loan."
+            : "Your account will be reviewed before joining the fund."}
         </p>
 
 

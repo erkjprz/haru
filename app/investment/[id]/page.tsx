@@ -50,6 +50,11 @@ export default function InvestmentDetailPage() {
       return
     }
 
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     async function load() {
       const investmentPromise = supabase
         .from("v_investment_summary")

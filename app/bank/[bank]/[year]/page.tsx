@@ -43,6 +43,11 @@ export default function BankYearDetailPage() {
       return
     }
 
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     async function load() {
       // Per-member split for this bank's interest in this calendar year.
       // Mirrors investment_allocations' shape: one row per member per

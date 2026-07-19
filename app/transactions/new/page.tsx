@@ -204,6 +204,11 @@ export default function NewTransactionPage() {
       return
     }
 
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     async function checkAccess() {
       if (!member) return
 

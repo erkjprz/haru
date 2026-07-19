@@ -126,6 +126,11 @@ export default function EditTransactionPage() {
       return
     }
 
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     async function load() {
       if (!member) return
 

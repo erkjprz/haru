@@ -70,6 +70,11 @@ export default function DashboardPage() {
       return
     }
 
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     async function loadDashboard() {
       if (!member) return
 

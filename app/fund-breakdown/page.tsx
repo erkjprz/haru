@@ -1,9 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { SkeletonCardList } from "@/app/components/Skeleton"
+import { useAuth } from "@/app/auth-context"
 
 type MemberRow = {
   member_id: string
@@ -29,12 +31,31 @@ type MemberRow = {
 const SHARE_COLORS = ["#B8912F", "#5F7A5A", "#8FA88A", "#D4B65C", "#A99B84", "#C97B63", "#7A8FA6", "#9C8AA5"]
 
 export default function FundBreakdownPage() {
+  const router = useRouter()
+  const { loading: authLoading, member } = useAuth()
   const [members, setMembers] = useState<MemberRow[]>([])
   const [totalCash, setTotalCash] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     async function load() {
       const memberPromise = supabase
         .from("members")
@@ -130,7 +151,7 @@ export default function FundBreakdownPage() {
     }
 
     load()
-  }, [])
+  }, [authLoading, member, router])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })

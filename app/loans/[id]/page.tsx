@@ -214,6 +214,11 @@ export default function LoanDetailPage() {
       return
     }
 
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     async function load() {
       await loadMemberFacing()
       if (member!.role === "admin") {

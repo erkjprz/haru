@@ -4,9 +4,11 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Navbar from "@/app/components/Navbar"
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/app/auth-context"
 
 export default function AdminMembersPage() {
   const router = useRouter()
+  const { loading: authLoading, member: authMember } = useAuth()
 
   const [members, setMembers] = useState<any[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
@@ -33,8 +35,20 @@ export default function AdminMembersPage() {
   }
 
   useEffect(() => {
+    if (authLoading) return
+
+    if (!authMember) {
+      router.push("/login")
+      return
+    }
+
+    if (authMember.role !== "admin") {
+      router.push("/dashboard")
+      return
+    }
+
     loadMembers()
-  }, [])
+  }, [authLoading, authMember, router])
 
   async function addMember() {
     if (!name) {
@@ -190,6 +204,7 @@ export default function AdminMembersPage() {
               >
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
+                <option value="borrower">Borrower</option>
               </select>
 
               <button

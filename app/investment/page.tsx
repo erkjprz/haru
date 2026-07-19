@@ -65,6 +65,11 @@ export default function InvestmentsPage() {
       return
     }
 
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     load()
   }, [authLoading, member, router])
 

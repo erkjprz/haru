@@ -54,6 +54,11 @@ export default function LoansPage() {
       return
     }
 
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     async function load() {
       // v_loan_summary carries the same principal/repayment/gain/outstanding
       // math as the audit's loan ledger (Section 5), plus loan_id, status,
