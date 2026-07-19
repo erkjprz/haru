@@ -209,6 +209,7 @@ export default function TransactionsPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
+  const dateToInputRef = useRef<HTMLInputElement>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
@@ -323,6 +324,28 @@ export default function TransactionsPage() {
     setSelectedType("")
     setDateFrom("")
     setDateTo("")
+  }
+
+  // After picking a "From" date, jump straight to "To" instead of making
+  // the person tap it separately. showPicker() opens the native date
+  // picker directly; where it's not supported, focusing the input still
+  // opens it on iOS/Android. Deferred a tick so it fires after the "From"
+  // picker has finished closing.
+  function focusDateTo() {
+    setTimeout(() => {
+      const el = dateToInputRef.current
+      if (!el) return
+      if (typeof el.showPicker === "function") {
+        try {
+          el.showPicker()
+          return
+        } catch {
+          // Falls through to focus() below (e.g. showPicker can throw if
+          // the document isn't focused, or on unsupported browsers).
+        }
+      }
+      el.focus()
+    }, 0)
   }
 
   // Built from what's actually in the loaded data rather than the full
@@ -670,7 +693,10 @@ export default function TransactionsPage() {
               <input
                 type="date"
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                onChange={(e) => {
+                  setDateFrom(e.target.value)
+                  if (e.target.value) focusDateTo()
+                }}
                 className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
               />
 
@@ -678,6 +704,7 @@ export default function TransactionsPage() {
                 To
               </label>
               <input
+                ref={dateToInputRef}
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
