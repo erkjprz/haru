@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Navbar from "@/app/components/Navbar"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
+import { SkeletonCardList } from "@/app/components/Skeleton"
 
 export default function AdminMembersPage() {
   const router = useRouter()
@@ -25,6 +26,10 @@ export default function AdminMembersPage() {
 
   const [search, setSearch] = useState("")
 
+  const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>([])
+  const [linkChoice, setLinkChoice] = useState<Record<string, string>>({})
+  const [linkingId, setLinkingId] = useState<string | null>(null)
+
   async function loadMembers() {
     const { data } = await supabase
       .from("members")
@@ -32,6 +37,11 @@ export default function AdminMembersPage() {
       .order("created_at", { ascending: false })
 
     setMembers(data ?? [])
+  }
+
+  async function loadUnclaimed() {
+    const { data } = await supabase.rpc("list_unclaimed_members")
+    setUnclaimedMembers(data ?? [])
   }
 
   useEffect(() => {
@@ -48,7 +58,31 @@ export default function AdminMembersPage() {
     }
 
     loadMembers()
+    loadUnclaimed()
   }, [authLoading, authMember, router])
+
+  async function linkMember(pendingId: string) {
+    const targetId = linkChoice[pendingId]
+    if (!targetId) return
+
+    setLinkingId(pendingId)
+
+    const { error } = await supabase.rpc("admin_link_member", {
+      p_pending_member_id: pendingId,
+      p_target_member_id: targetId
+    })
+
+    setLinkingId(null)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setMessage("Linked")
+    loadMembers()
+    loadUnclaimed()
+  }
 
   async function addMember() {
     if (!name) {
@@ -142,6 +176,19 @@ export default function AdminMembersPage() {
     approved: "text-sage border-sage",
     pending: "text-gold border-gold",
     inactive: "text-rust border-rust"
+  }
+
+  if (authLoading || !authMember || authMember.role !== "admin") {
+    return (
+      <>
+        <Navbar />
+        <main className="min-h-screen bg-paper text-ink font-sans">
+          <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+            <SkeletonCardList rows={3} />
+          </div>
+        </main>
+      </>
+    )
   }
 
   return (
@@ -338,6 +385,40 @@ export default function AdminMembersPage() {
                         </button>
                       )}
                     </div>
+
+                    {member.status === "pending" && member.role === "member" && unclaimedMembers.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-hairline space-y-2">
+                        <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Link to existing member
+                        </label>
+                        <p className="text-xs text-ink-soft">
+                          If this signup is actually one of the fund&apos;s existing members, link it to their record so their contributions, loans and investments carry over.
+                        </p>
+                        <div className="flex gap-2">
+                          <select
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 flex-1"
+                            value={linkChoice[member.member_id] || ""}
+                            onChange={(e) =>
+                              setLinkChoice((prev) => ({ ...prev, [member.member_id]: e.target.value }))
+                            }
+                          >
+                            <option value="">Select a member</option>
+                            {unclaimedMembers.map((m) => (
+                              <option key={m.member_id} value={m.member_id}>
+                                {m.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50 shrink-0"
+                            onClick={() => linkMember(member.member_id)}
+                            disabled={!linkChoice[member.member_id] || linkingId === member.member_id}
+                          >
+                            {linkingId === member.member_id ? "Linking..." : "Link"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

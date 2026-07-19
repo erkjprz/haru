@@ -1,24 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-
-type UnclaimedMember = {
-  member_id: string
-  name: string
-}
-
-const NEW_MEMBER = "__new__"
 
 export default function SignupPage() {
 
   const router = useRouter()
 
   const [accountType, setAccountType] = useState<"member" | "borrower">("member")
-  const [unclaimedMembers, setUnclaimedMembers] = useState<UnclaimedMember[]>([])
-  const [selectedMemberId, setSelectedMemberId] = useState(NEW_MEMBER)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -26,14 +17,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  useEffect(() => {
-    supabase.rpc("list_unclaimed_members").then(({ data }) => {
-      setUnclaimedMembers(data ?? [])
-    })
-  }, [])
-
   const isBorrower = accountType === "borrower"
-  const isExistingMember = !isBorrower && selectedMemberId !== NEW_MEMBER
 
   async function signup() {
 
@@ -57,21 +41,6 @@ export default function SignupPage() {
 
 
     if (data.user) {
-
-      if (isExistingMember) {
-
-        const { error: claimError } = await supabase
-          .rpc("claim_member", { p_member_id: selectedMemberId })
-
-        if (claimError) {
-          setLoading(false)
-          setMessage(claimError.message)
-          return
-        }
-
-        window.location.href = "/dashboard"
-        return
-      }
 
       // Borrower accounts are scoped to just their own loan(s) -- see
       // members_select/loans_select/transactions_select RLS -- and never
@@ -174,69 +143,32 @@ export default function SignupPage() {
                 Name
               </label>
 
-              {!isBorrower && (
-                <select
-                  value={selectedMemberId}
-                  onChange={(e) => setSelectedMemberId(e.target.value)}
-                  className="
-                    w-full
-                    rounded-md
-                    border
-                    border-hairline
-                    bg-paper
-                    px-4
-                    py-3
-                    text-base
-                    text-ink
-                    outline-none
-                    transition-all
-                    focus:border-gold
-                    focus:ring-2
-                    focus:ring-gold/20
-                  "
-                >
-                  <option value={NEW_MEMBER}>I&apos;m a new member</option>
-                  {unclaimedMembers.map((m) => (
-                    <option key={m.member_id} value={m.member_id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              {isExistingMember ? (
-                <p className="mt-2 text-xs text-ink-soft">
-                  This links your account to {unclaimedMembers.find((m) => m.member_id === selectedMemberId)?.name}&apos;s existing contributions, loans and investments.
-                </p>
-              ) : (
-                <input
-                  type="text"
-                  placeholder="Your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") signup()
-                  }}
-                  className={`
-                    w-full
-                    rounded-md
-                    border
-                    border-hairline
-                    bg-paper
-                    px-4
-                    py-3
-                    text-base
-                    text-ink
-                    placeholder:text-ink-soft
-                    outline-none
-                    transition-all
-                    focus:border-gold
-                    focus:ring-2
-                    focus:ring-gold/20
-                    ${isBorrower ? "" : "mt-2"}
-                  `}
-                />
-              )}
+              <input
+                type="text"
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") signup()
+                }}
+                className="
+                  w-full
+                  rounded-md
+                  border
+                  border-hairline
+                  bg-paper
+                  px-4
+                  py-3
+                  text-base
+                  text-ink
+                  placeholder:text-ink-soft
+                  outline-none
+                  transition-all
+                  focus:border-gold
+                  focus:ring-2
+                  focus:ring-gold/20
+                "
+              />
 
               {isBorrower && (
                 <p className="mt-2 text-xs text-ink-soft">
