@@ -224,43 +224,40 @@ export default function BanksPage() {
             Fund accounts
           </div>
 
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">Banks</h1>
-
-            {isAdmin && (
-              <div className="flex items-center gap-2 flex-wrap">
-                {manageMode ? (
-                  <button
-                    className="bg-ink text-paper px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
-                    onClick={() => {
-                      setManageMode(false)
-                      setEditingId(null)
-                    }}
-                  >
-                    Done
-                  </button>
-                ) : (
-                  <button
-                    className="border border-hairline text-ink-soft px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
-                    onClick={() => setManageMode(true)}
-                  >
-                    Manage
-                  </button>
-                )}
-                <button
-                  className="shrink-0 bg-gold text-ink px-4 py-2.5 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-                  onClick={startAdd}
-                >
-                  <span className="text-lg leading-none">+</span>
-                  Add Bank
-                </button>
-              </div>
-            )}
-          </div>
-
-          <p className="text-[13px] text-ink-soft mb-5">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">Banks</h1>
+          <p className="text-[13px] text-ink-soft mb-4">
             Where the fund's cash sits, and the interest each account has earned.
           </p>
+
+          {isAdmin && (
+            <div className="flex items-center gap-2 flex-wrap mb-5">
+              {manageMode ? (
+                <button
+                  className="bg-ink text-paper px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
+                  onClick={() => {
+                    setManageMode(false)
+                    setEditingId(null)
+                  }}
+                >
+                  Done
+                </button>
+              ) : (
+                <button
+                  className="border border-hairline text-ink-soft px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
+                  onClick={() => setManageMode(true)}
+                >
+                  Manage
+                </button>
+              )}
+              <button
+                className="shrink-0 bg-gold text-ink px-4 py-2.5 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+                onClick={startAdd}
+              >
+                <span className="text-lg leading-none">+</span>
+                Add Bank
+              </button>
+            </div>
+          )}
 
           {showAddForm && (
             <BankForm
