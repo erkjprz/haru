@@ -7,6 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import type { InterestType } from "@/lib/loanMath"
+import { formatInterestLabel } from "@/lib/loanFormat"
 
 type Loan = {
   loan_id: string
@@ -27,19 +28,8 @@ type Loan = {
   interest_amount: number | null
 }
 
-function termsLabel(loan: Loan, fmt: (n: number) => string): string | null {
-  if (loan.term_months == null) return null
-
-  const interest =
-    loan.interest_type === "amount"
-      ? loan.interest_amount != null
-        ? `₱${fmt(loan.interest_amount)} flat`
-        : null
-      : loan.interest_rate != null
-      ? `${loan.interest_rate}%`
-      : null
-
-  return interest ? `${loan.term_months} mo · ${interest}` : `${loan.term_months} mo`
+function termLabel(loan: Loan): string | null {
+  return loan.term_months != null ? `${loan.term_months} mo` : null
 }
 
 export default function LoansPage() {
@@ -214,10 +204,8 @@ function LoanCard({
           </div>
           <p className="text-[12px] text-ink-soft">
             {loan.borrower} · {dateLabel}
+            {termLabel(loan) && ` · ${termLabel(loan)}`}
           </p>
-          {termsLabel(loan, fmt) && (
-            <p className="text-[11px] text-ink-soft font-mono mt-0.5">{termsLabel(loan, fmt)}</p>
-          )}
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <div className="flex items-center gap-1.5">
@@ -228,11 +216,17 @@ function LoanCard({
         </div>
       </div>
 
-      <div className="flex items-baseline justify-between mt-3.5">
+      <div className="grid grid-cols-3 gap-2 items-baseline mt-3.5">
         <div>
           <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Principal</p>
           <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-ink">
             ₱{fmt(loan.principal)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-gold font-mono font-bold">Interest</p>
+          <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-gold">
+            {formatInterestLabel(loan.interest_type, loan.interest_rate, loan.interest_amount, fmt)}
           </p>
         </div>
         {loan.status === "closed" ? (
