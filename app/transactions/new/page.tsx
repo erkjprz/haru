@@ -4,9 +4,9 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
-import { autoCloseLoanIfFullyRepaid } from "@/lib/closeLoan"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import { totalRepayable, type InterestType } from "@/lib/loanMath"
 
 const ENTRY_TYPES = [
   { key: "contribution", label: "Contribution", adminOnly: false },
@@ -173,7 +173,9 @@ export default function NewTransactionPage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState("")
 
+  const [interestType, setInterestType] = useState<InterestType>("rate")
   const [interestRate, setInterestRate] = useState("")
+  const [interestAmount, setInterestAmount] = useState("")
   const [termMonths, setTermMonths] = useState("")
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
   const [selectedLoanId, setSelectedLoanId] = useState("")
@@ -264,8 +266,11 @@ export default function NewTransactionPage() {
   }
 
   const previewTotalRepayable =
-    isValidPositiveNumber(amount) && isValidPositiveNumber(interestRate, true)
-      ? Number(amount) + Number(amount) * (Number(interestRate) / 100)
+    isValidPositiveNumber(amount) &&
+    (interestType === "rate"
+      ? isValidPositiveNumber(interestRate, true)
+      : isValidPositiveNumber(interestAmount, true))
+      ? totalRepayable(Number(amount), interestType, Number(interestRate || 0), Number(interestAmount || 0))
       : 0
 
   const previewPerInstallment =
@@ -290,7 +295,9 @@ export default function NewTransactionPage() {
     setReceiptFile(null)
     setBankId("")
     setToBankId("")
+    setInterestType("rate")
     setInterestRate("")
+    setInterestAmount("")
     setTermMonths("")
     setRepaymentFrequency("monthly")
     setSelectedLoanId("")
@@ -338,8 +345,13 @@ export default function NewTransactionPage() {
       return
     }
 
-    if (isLoanRequest && !isValidPositiveNumber(interestRate, true)) {
+    if (isLoanRequest && interestType === "rate" && !isValidPositiveNumber(interestRate, true)) {
       setMessage("Enter a valid interest rate (0 or higher).")
+      return
+    }
+
+    if (isLoanRequest && interestType === "amount" && !isValidPositiveNumber(interestAmount, true)) {
+      setMessage("Enter a valid interest amount (0 or higher).")
       return
     }
 
@@ -385,7 +397,9 @@ export default function NewTransactionPage() {
         .insert({
           member_id: effectiveMemberId,
           principal: Number(amount),
-          interest_rate: Number(interestRate),
+          interest_type: interestType,
+          interest_rate: interestType === "rate" ? Number(interestRate) : 0,
+          interest_amount: interestType === "amount" ? Number(interestAmount) : null,
           term_months: Number(termMonths),
           repayment_frequency: repaymentFrequency,
           status: "requested",
@@ -515,12 +529,6 @@ export default function NewTransactionPage() {
       return
     }
 
-    // If an admin just instant-approved a repayment on someone's behalf and
-    // it fully covers the loan, close it and distribute gain automatically.
-    if (isLoanPayment && status === "approved" && selectedLoanId) {
-      await autoCloseLoanIfFullyRepaid(selectedLoanId)
-    }
-
     router.push("/transactions")
   }
 
@@ -548,7 +556,7 @@ export default function NewTransactionPage() {
     chips.push(
       previewTotalRepayable > 0
         ? { done: true, text: `Total ₱${fmt(previewTotalRepayable)}` }
-        : { done: false, text: "Enter rate & term" }
+        : { done: false, text: "Enter interest & term" }
     )
   } else if (isBankTransfer) {
     chips.push(
@@ -676,17 +684,49 @@ export default function NewTransactionPage() {
                 <>
                   <div>
                     <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
-                      Interest rate (%)
+                      Interest
                     </label>
-                    <input
-                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="e.g. 5"
-                      value={interestRate}
-                      onChange={(e) => setInterestRate(e.target.value)}
-                    />
+                    <div className="flex border border-hairline rounded-md overflow-hidden mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setInterestType("rate")}
+                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                          interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                        }`}
+                      >
+                        Rate (%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInterestType("amount")}
+                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                          interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                        }`}
+                      >
+                        Fixed amount (₱)
+                      </button>
+                    </div>
+                    {interestType === "rate" ? (
+                      <input
+                        className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="e.g. 5"
+                        value={interestRate}
+                        onChange={(e) => setInterestRate(e.target.value)}
+                      />
+                    ) : (
+                      <input
+                        className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="e.g. 5000"
+                        value={interestAmount}
+                        onChange={(e) => setInterestAmount(e.target.value)}
+                      />
+                    )}
                   </div>
 
                   <div>
