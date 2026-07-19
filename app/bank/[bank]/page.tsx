@@ -6,6 +6,11 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import {
+  getPendingBankInterestGroups,
+  distributeBankInterestGroup,
+  type PendingBankInterestGroup
+} from "@/lib/bankInterest"
 
 type YearRow = { year: string; amount: number; memberCount: number }
 
@@ -15,6 +20,7 @@ export default function BankDetailPage() {
   const bank = decodeURIComponent((params?.bank as string) ?? "")
 
   const { loading: authLoading, member } = useAuth()
+  const isAdmin = member?.role === "admin"
   const [dataLoading, setDataLoading] = useState(true)
   const checkingAccess = authLoading || dataLoading
   const [balance, setBalance] = useState(0)
@@ -23,6 +29,87 @@ export default function BankDetailPage() {
   const [years, setYears] = useState<YearRow[]>([])
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
+  const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>([])
+  const [distributingYear, setDistributingYear] = useState<number | null>(null)
+
+  async function loadPending() {
+    const groups = await getPendingBankInterestGroups()
+    setPendingGroups(groups.filter((g) => g.bank === bank))
+  }
+
+  async function handleDistribute(group: PendingBankInterestGroup) {
+    setDistributingYear(group.year)
+    await distributeBankInterestGroup(group)
+    await Promise.all([loadPending(), load()])
+    setDistributingYear(null)
+  }
+
+  async function load() {
+    const balancePromise = supabase.from("v_bank_balances").select("*").eq("bank", bank).maybeSingle()
+
+    const interestPromise = supabase
+      .from("transactions")
+      .select("classification, amount")
+      .eq("status", "approved")
+      .eq("bank", bank)
+      .in("classification", ["Bank Interest", "Tax"])
+
+    // Every allocation row for this bank, across all years -- grouped
+    // client-side by the year of allocation_date to build the year list.
+    // One allocation_date per member per distribution event, same shape
+    // as investment_allocations but keyed by bank + date instead of
+    // investment_id.
+    const allocationsPromise = supabase
+      .from("bank_interest_allocations")
+      .select("allocation_date, amount, member_id")
+      .eq("bank", bank)
+
+    const [balanceResult, interestResult, allocationsResult] = await Promise.all([
+      balancePromise,
+      interestPromise,
+      allocationsPromise
+    ])
+
+    if (balanceResult.error || !balanceResult.data) {
+      setNotFound(true)
+      setDataLoading(false)
+      return
+    }
+
+    setBalance(Number(balanceResult.data.balance))
+
+    if (!interestResult.error) {
+      let earned = 0
+      let taxTotal = 0
+      for (const row of interestResult.data ?? []) {
+        if (row.classification === "Bank Interest") earned += Number(row.amount)
+        if (row.classification === "Tax") taxTotal += Number(row.amount)
+      }
+      setInterestEarned(earned)
+      setTax(taxTotal)
+    } else {
+      setLoadError(interestResult.error.message)
+    }
+
+    if (!allocationsResult.error) {
+      const byYear: Record<string, { amount: number; members: Set<string> }> = {}
+      for (const row of allocationsResult.data ?? []) {
+        const year = (row.allocation_date || "").slice(0, 4)
+        if (!year) continue
+        if (!byYear[year]) byYear[year] = { amount: 0, members: new Set() }
+        byYear[year].amount += Number(row.amount)
+        byYear[year].members.add(row.member_id)
+      }
+      const rows = Object.entries(byYear)
+        .map(([year, v]) => ({ year, amount: v.amount, memberCount: v.members.size }))
+        .sort((a, b) => b.year.localeCompare(a.year))
+      setYears(rows)
+    } else if (!loadError) {
+      setLoadError(allocationsResult.error.message)
+    }
+
+    setDataLoading(false)
+  }
 
   useEffect(() => {
     if (authLoading) return
@@ -37,74 +124,10 @@ export default function BankDetailPage() {
       return
     }
 
-    async function load() {
-      const balancePromise = supabase.from("v_bank_balances").select("*").eq("bank", bank).maybeSingle()
-
-      const interestPromise = supabase
-        .from("transactions")
-        .select("classification, amount")
-        .eq("status", "approved")
-        .eq("bank", bank)
-        .in("classification", ["Bank Interest", "Tax"])
-
-      // Every allocation row for this bank, across all years -- grouped
-      // client-side by the year of allocation_date to build the year list.
-      // One allocation_date per member per distribution event, same shape
-      // as investment_allocations but keyed by bank + date instead of
-      // investment_id.
-      const allocationsPromise = supabase
-        .from("bank_interest_allocations")
-        .select("allocation_date, amount, member_id")
-        .eq("bank", bank)
-
-      const [balanceResult, interestResult, allocationsResult] = await Promise.all([
-        balancePromise,
-        interestPromise,
-        allocationsPromise
-      ])
-
-      if (balanceResult.error || !balanceResult.data) {
-        setNotFound(true)
-        setDataLoading(false)
-        return
-      }
-
-      setBalance(Number(balanceResult.data.balance))
-
-      if (!interestResult.error) {
-        let earned = 0
-        let taxTotal = 0
-        for (const row of interestResult.data ?? []) {
-          if (row.classification === "Bank Interest") earned += Number(row.amount)
-          if (row.classification === "Tax") taxTotal += Number(row.amount)
-        }
-        setInterestEarned(earned)
-        setTax(taxTotal)
-      } else {
-        setLoadError(interestResult.error.message)
-      }
-
-      if (!allocationsResult.error) {
-        const byYear: Record<string, { amount: number; members: Set<string> }> = {}
-        for (const row of allocationsResult.data ?? []) {
-          const year = (row.allocation_date || "").slice(0, 4)
-          if (!year) continue
-          if (!byYear[year]) byYear[year] = { amount: 0, members: new Set() }
-          byYear[year].amount += Number(row.amount)
-          byYear[year].members.add(row.member_id)
-        }
-        const rows = Object.entries(byYear)
-          .map(([year, v]) => ({ year, amount: v.amount, memberCount: v.members.size }))
-          .sort((a, b) => b.year.localeCompare(a.year))
-        setYears(rows)
-      } else if (!loadError) {
-        setLoadError(allocationsResult.error.message)
-      }
-
-      setDataLoading(false)
+    if (bank) {
+      load()
+      loadPending()
     }
-
-    if (bank) load()
   }, [bank, authLoading, member, router])
 
   const fmt = (n: number) =>
@@ -175,6 +198,39 @@ export default function BankDetailPage() {
           </div>
 
           {loadError && <p className="mt-4 text-sm text-rust">{loadError}</p>}
+
+          {isAdmin && pendingGroups.length > 0 && (
+            <section className="mt-8">
+              <h2 className="font-display text-lg font-medium text-ink mb-1">Pending Distribution</h2>
+              <p className="text-[13px] text-ink-soft mb-3">
+                Approved interest that hasn't been split across members yet.
+              </p>
+              <div className="flex flex-col gap-3">
+                {pendingGroups.map((group) => (
+                  <div
+                    key={group.year}
+                    className="bg-paper-2 border border-hairline rounded-md p-4 flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <p className="font-display font-medium">₱{fmt(Math.abs(group.totalAmount))}</p>
+                      <p className="text-sm text-ink-soft">{group.year}</p>
+                      <p className="text-xs text-ink-soft mt-1">
+                        {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined
+                        into one lump sum
+                      </p>
+                    </div>
+                    <button
+                      className="bg-ink text-paper px-4 py-2.5 rounded-sm text-sm disabled:opacity-50 shrink-0"
+                      onClick={() => handleDistribute(group)}
+                      disabled={distributingYear === group.year}
+                    >
+                      {distributingYear === group.year ? "Distributing..." : "Distribute"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="mt-8">
             <h2 className="font-display text-lg font-medium text-ink mb-1">Interest by Year</h2>
