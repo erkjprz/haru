@@ -199,6 +199,27 @@ const memberSections: FaqSection[] = [
             deposit slip is enough.
           </p>
         )
+      },
+      {
+        q: "I made a mistake — can I fix something I already submitted?",
+        a: (
+          <p>
+            Yes, as long as it&apos;s still <strong>Pending</strong>. On the Transactions page, your own
+            pending contributions, withdrawals, and loan payments show a small{" "}
+            <strong>✎ Edit</strong> button — tap it to change the amount, bank, receipt, or description.
+            Once an admin approves an entry, it can&apos;t be edited anymore.
+          </p>
+        )
+      },
+      {
+        q: "Can I take back something I submitted?",
+        a: (
+          <p>
+            Yes — open it with <strong>✎ Edit</strong> and tap <strong>Cancel this entry</strong> near the
+            bottom. It&apos;s removed from your list right away. This can&apos;t be undone from the app, so
+            make sure before you tap it.
+          </p>
+        )
       }
     ]
   },
@@ -341,6 +362,26 @@ const borrowerSections: FaqSection[] = [
             approved, your loan balance updates.
           </p>
         )
+      },
+      {
+        q: "I entered the wrong amount — can I fix a repayment I already submitted?",
+        a: (
+          <p>
+            Yes, as long as it&apos;s still <strong>pending</strong>. Your loan page shows a small{" "}
+            <strong>✎ Edit</strong> button next to any pending repayment — tap it to change the amount,
+            bank, receipt, or description, or to cancel it entirely. Once an admin approves it, it can no
+            longer be changed.
+          </p>
+        )
+      },
+      {
+        q: "Can I fix or cancel a loan request I already submitted?",
+        a: (
+          <p>
+            Not from your account — unlike a repayment, a loan request needs an admin to make any change to
+            it. Message your admin directly and they can correct or reject it before it&apos;s activated.
+          </p>
+        )
       }
     ]
   }
@@ -448,6 +489,18 @@ const adminSections: FaqSection[] = [
             <strong>Expense</strong>, <strong>Bank Interest</strong>, <strong>Bank Transfer</strong>,{" "}
             <strong>Investment</strong>, and <strong>Investment Return</strong> — fund-level entries that
             aren&apos;t tied to a single member&apos;s contribution. These post as approved right away.
+          </p>
+        )
+      },
+      {
+        q: "Can I edit something after I've recorded it?",
+        a: (
+          <p>
+            Expense, Bank Interest, and Bank Transfer entries you record yourself can be edited any time —
+            they show a <strong>✎ Edit</strong> button on Transactions, since they&apos;re never in a
+            member&apos;s pending queue to begin with. A pending Loan Release can also be edited or
+            cancelled (cancelling deletes the loan request entirely) right up until you activate it — once a
+            loan is active, changes move to that loan&apos;s own <strong>Manage loan</strong> panel instead.
           </p>
         )
       }
