@@ -667,14 +667,15 @@ export default function NewTransactionPage() {
           >
             ← Transactions
           </button>
-          <div className="text-xs tracking-[0.18em] uppercase text-gold font-mono mb-2">
+          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             New Entry
           </div>
-          <h1 className="font-display text-4xl sm:text-5xl font-semibold text-ink">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
             New Transaction
           </h1>
+          <p className="text-[13px] text-ink-soft mb-6">Add a new ledger entry for the fund.</p>
 
-          <div className="mt-8 bg-paper-2 border border-hairline rounded-md p-5">
+          <div className="bg-paper-2 border border-hairline rounded-md p-5">
               <SectionLabel first>① Entry type</SectionLabel>
               <TypeSelector
                 options={isAdmin ? ENTRY_TYPES : MEMBER_TYPES}

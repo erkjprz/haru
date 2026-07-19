@@ -694,8 +694,15 @@ export default function TransactionsPage() {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => {
-                  setDateFrom(e.target.value)
-                  if (e.target.value) focusDateTo()
+                  const newFrom = e.target.value
+                  setDateFrom(newFrom)
+                  if (newFrom) {
+                    // Default "To" to the same date so its picker opens on
+                    // the same month/year as "From" instead of today's --
+                    // the user can still change just the day from there.
+                    setDateTo((prev) => prev || newFrom)
+                    focusDateTo()
+                  }
                 }}
                 className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
               />

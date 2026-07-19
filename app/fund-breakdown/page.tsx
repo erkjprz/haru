@@ -61,6 +61,7 @@ export default function FundBreakdownPage() {
         .from("members")
         .select("member_id, name")
         .eq("status", "approved")
+        .neq("role", "borrower")
 
       // v_member_performance is the same source the dashboard uses for
       // "You" -- correct sign on investment gain/loss, plus bank interest,

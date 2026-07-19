@@ -54,3 +54,17 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   overscroll-behavior-y: contain;
 }
+
+/* iOS Safari auto-zooms the page when a focused input's computed
+   font-size is under 16px. Several inputs across the app use smaller
+   text sizes (text-xs/text-sm) for visual density, so force the
+   effective size back up to 16px on focus, on touch devices only --
+   desktop never zooms on focus, so this shouldn't change how the app
+   looks/behaves there. */
+@media (hover: none) and (pointer: coarse) {
+  input:focus,
+  select:focus,
+  textarea:focus {
+    font-size: 16px !important;
+  }
+}
