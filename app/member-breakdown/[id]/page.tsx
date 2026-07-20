@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
@@ -32,13 +32,19 @@ type YearRow = {
 
 export default function MemberBreakdownPage() {
   const router = useRouter()
+  const params = useParams()
+  const targetId = params?.id as string
+
   const { loading: authLoading, member } = useAuth()
   const [dataLoading, setDataLoading] = useState(true)
-  const [mine, setMine] = useState<MemberPerformance | null>(null)
+  const [targetName, setTargetName] = useState("")
+  const [notFound, setNotFound] = useState(false)
+  const [performance, setPerformance] = useState<MemberPerformance | null>(null)
   const [years, setYears] = useState<YearRow[]>([])
   const [loadError, setLoadError] = useState("")
 
   const checkingAccess = authLoading || dataLoading
+  const isSelf = member?.member_id === targetId
 
   useEffect(() => {
     if (authLoading) return
@@ -59,14 +65,16 @@ export default function MemberBreakdownPage() {
     }
 
     async function load() {
-      if (!member) return
+      if (!targetId) return
 
-      const minePromise = supabase
+      const namePromise = supabase.from("members").select("name").eq("member_id", targetId).single()
+
+      const performancePromise = supabase
         .from("v_member_performance")
         .select(
           "total_contribution, total_withdrawal, net_contribution, bank_interest, investment_gain_loss, loan_gain, bank_writeoff, total_value, money_on_hold, withdrawable_now"
         )
-        .eq("member_id", member.member_id)
+        .eq("member_id", targetId)
         .single()
 
       // Dated, per-year building blocks. Investment gain/loss isn't
@@ -76,43 +84,51 @@ export default function MemberBreakdownPage() {
       const txPromise = supabase
         .from("transactions")
         .select("txn_date, classification, amount")
-        .eq("member_id", member.member_id)
+        .eq("member_id", targetId)
         .eq("status", "approved")
         .in("classification", ["Member Contribution", "Member Withdrawal", "Bank Write-off"])
 
       const bankInterestPromise = supabase
         .from("bank_interest_allocations")
         .select("allocation_date, amount")
-        .eq("member_id", member.member_id)
+        .eq("member_id", targetId)
 
       const loanGainPromise = supabase
         .from("loan_gain_allocations")
         .select("allocation_date, amount")
-        .eq("member_id", member.member_id)
+        .eq("member_id", targetId)
 
-      const [mineResult, txResult, bankInterestResult, loanGainResult] = await Promise.all([
-        minePromise,
+      const [nameResult, performanceResult, txResult, bankInterestResult, loanGainResult] = await Promise.all([
+        namePromise,
+        performancePromise,
         txPromise,
         bankInterestPromise,
         loanGainPromise
       ])
 
+      if (nameResult.error || !nameResult.data) {
+        setNotFound(true)
+        setDataLoading(false)
+        return
+      }
+      setTargetName(nameResult.data.name)
+
       const firstError =
-        mineResult.error || txResult.error || bankInterestResult.error || loanGainResult.error
+        performanceResult.error || txResult.error || bankInterestResult.error || loanGainResult.error
       if (firstError) setLoadError(firstError.message)
 
-      if (!mineResult.error && mineResult.data) {
-        setMine({
-          total_contribution: Number(mineResult.data.total_contribution),
-          total_withdrawal: Number(mineResult.data.total_withdrawal),
-          net_contribution: Number(mineResult.data.net_contribution),
-          bank_interest: Number(mineResult.data.bank_interest),
-          investment_gain_loss: Number(mineResult.data.investment_gain_loss),
-          loan_gain: Number(mineResult.data.loan_gain),
-          bank_writeoff: Number(mineResult.data.bank_writeoff),
-          total_value: Number(mineResult.data.total_value),
-          money_on_hold: Number(mineResult.data.money_on_hold),
-          withdrawable_now: Number(mineResult.data.withdrawable_now)
+      if (!performanceResult.error && performanceResult.data) {
+        setPerformance({
+          total_contribution: Number(performanceResult.data.total_contribution),
+          total_withdrawal: Number(performanceResult.data.total_withdrawal),
+          net_contribution: Number(performanceResult.data.net_contribution),
+          bank_interest: Number(performanceResult.data.bank_interest),
+          investment_gain_loss: Number(performanceResult.data.investment_gain_loss),
+          loan_gain: Number(performanceResult.data.loan_gain),
+          bank_writeoff: Number(performanceResult.data.bank_writeoff),
+          total_value: Number(performanceResult.data.total_value),
+          money_on_hold: Number(performanceResult.data.money_on_hold),
+          withdrawable_now: Number(performanceResult.data.withdrawable_now)
         })
       }
 
@@ -165,7 +181,7 @@ export default function MemberBreakdownPage() {
     }
 
     load()
-  }, [authLoading, member, router])
+  }, [authLoading, member, router, targetId])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -186,78 +202,109 @@ export default function MemberBreakdownPage() {
     )
   }
 
+  if (notFound) {
+    return (
+      <>
+        <Navbar />
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8">
+            <p className="text-sm text-ink-soft">This member couldn't be found.</p>
+            <button onClick={() => router.push("/fund-breakdown")} className="mt-4 text-sm font-medium text-gold">
+              ← Fund Breakdown
+            </button>
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  const backLabel = isSelf ? "Dashboard" : "Fund Breakdown"
+  const backHref = isSelf ? "/dashboard" : "/fund-breakdown"
+
   return (
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+env(safe-area-inset-bottom))]">
           <button
-            onClick={() => router.push("/dashboard")}
+            onClick={() => router.push(backHref)}
             className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
           >
-            ← Dashboard
+            ← {backLabel}
           </button>
 
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Personal Ledger
           </div>
           <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
-            Your Breakdown
+            {isSelf ? "Your Breakdown" : `${targetName}'s Breakdown`}
           </h1>
           <p className="text-[13px] text-ink-soft mb-6">
-            Your capital and performance, all-time and by year.
+            {isSelf ? "Your" : `${targetName}'s`} capital and performance, all-time and by year.
           </p>
 
           {loadError && (
-            <p className="mb-4 text-sm text-rust">Couldn't load some of your breakdown: {loadError}</p>
+            <p className="mb-4 text-sm text-rust">Couldn't load some of this breakdown: {loadError}</p>
           )}
 
-          {mine != null && (
+          {performance != null && (
             <div className="bg-paper-2 border border-hairline rounded-md p-5">
               <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">
                 Available Balance
               </p>
               <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink mb-4">
-                ₱{fmt(mine.withdrawable_now)}
+                ₱{fmt(performance.withdrawable_now)}
               </p>
-              {mine.money_on_hold > 0 && (
+              {performance.money_on_hold > 0 && (
                 <p className="text-xs text-ink-soft -mt-3 mb-4">
-                  of ₱{fmt(mine.total_value)} total — ₱{fmt(mine.money_on_hold)} currently out on loan
+                  of ₱{fmt(performance.total_value)} total — ₱{fmt(performance.money_on_hold)} currently out on loan
                 </p>
               )}
 
               <InfoBox label="Capital (All-Time)">
-                <InfoRow label="Total Contribution" value={`₱${fmt(mine.total_contribution)}`} />
-                {mine.total_withdrawal !== 0 && (
+                <InfoRow label="Total Contribution" value={`₱${fmt(performance.total_contribution)}`} />
+                {performance.total_withdrawal !== 0 && (
                   <InfoRow
                     label="Total Withdrawal"
-                    value={`-₱${fmt(Math.abs(mine.total_withdrawal))}`}
+                    value={`-₱${fmt(Math.abs(performance.total_withdrawal))}`}
                     valueClass="text-rust"
                   />
                 )}
-                <InfoRow label="Net Contribution" value={`₱${fmt(mine.net_contribution)}`} bold />
+                <InfoRow label="Net Contribution" value={`₱${fmt(performance.net_contribution)}`} bold />
               </InfoBox>
 
               <InfoBox label="Performance (All-Time)">
                 <InfoRow
                   label="Total Gain/Loss"
-                  value={signed(mine.bank_interest + mine.investment_gain_loss + mine.loan_gain + mine.bank_writeoff)}
-                  valueClass={tone(mine.bank_interest + mine.investment_gain_loss + mine.loan_gain + mine.bank_writeoff)}
+                  value={signed(
+                    performance.bank_interest + performance.investment_gain_loss + performance.loan_gain + performance.bank_writeoff
+                  )}
+                  valueClass={tone(
+                    performance.bank_interest + performance.investment_gain_loss + performance.loan_gain + performance.bank_writeoff
+                  )}
                   bold
                 />
                 <div className="pt-1 space-y-1.5">
-                  <InfoSubRow label="Bank Interest" value={signed(mine.bank_interest)} valueClass={tone(mine.bank_interest)} />
+                  <InfoSubRow
+                    label="Bank Interest"
+                    value={signed(performance.bank_interest)}
+                    valueClass={tone(performance.bank_interest)}
+                  />
                   <InfoSubRow
                     label="Investment Gain/Loss"
-                    value={signed(mine.investment_gain_loss)}
-                    valueClass={tone(mine.investment_gain_loss)}
+                    value={signed(performance.investment_gain_loss)}
+                    valueClass={tone(performance.investment_gain_loss)}
                   />
-                  <InfoSubRow label="Loan Gain Share" value={signed(mine.loan_gain)} valueClass={tone(mine.loan_gain)} />
-                  {mine.bank_writeoff !== 0 && (
+                  <InfoSubRow
+                    label="Loan Gain Share"
+                    value={signed(performance.loan_gain)}
+                    valueClass={tone(performance.loan_gain)}
+                  />
+                  {performance.bank_writeoff !== 0 && (
                     <InfoSubRow
                       label="Bank Write-off Share"
-                      value={signed(mine.bank_writeoff)}
-                      valueClass={tone(mine.bank_writeoff)}
+                      value={signed(performance.bank_writeoff)}
+                      valueClass={tone(performance.bank_writeoff)}
                     />
                   )}
                 </div>

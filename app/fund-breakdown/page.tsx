@@ -243,7 +243,11 @@ export default function FundBreakdownPage() {
           {/* ---- per-member cards ---- */}
           <div className="space-y-4">
             {members.map((member) => (
-              <div key={member.member_id} className="bg-paper-2 border border-hairline rounded-md p-5">
+              <button
+                key={member.member_id}
+                onClick={() => router.push(`/member-breakdown/${member.member_id}`)}
+                className="w-full text-left bg-paper-2 border border-hairline rounded-md p-5 hover:bg-paper transition-colors"
+              >
                 <div className="flex justify-between items-baseline flex-wrap gap-1.5 mb-4">
                   <span className="font-display text-xl font-semibold text-ink">{member.name}</span>
                   <div className="flex items-baseline gap-2.5">
@@ -314,7 +318,9 @@ export default function FundBreakdownPage() {
                     </p>
                   )}
                 </div>
-              </div>
+
+                <p className="text-[11px] text-ink-soft text-right mt-3">View Breakdown →</p>
+              </button>
             ))}
           </div>
         </div>
