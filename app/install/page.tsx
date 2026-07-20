@@ -1,11 +1,20 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 
 type Platform = "ios" | "android"
 
 const INSTALL_HOST = "est2017.vercel.app"
-const INSTALL_PATH = "/login"
+// APP_PATH is where the walkthrough tells people to actually be (in their
+// browser, not this page) when they do the OS-level "Add to Home
+// Screen"/"Install app" step -- that's what becomes the installed icon's
+// launch URL, especially on iOS Safari, which has no way to set a
+// different one after the fact. SHARE_PATH is this page itself: what
+// Copy Link/Share hand out, so a first-time recipient sees the
+// walkthrough before landing on a bare sign-in form.
+const APP_PATH = "/login"
+const SHARE_PATH = "/install"
 
 function BrandMark({ size }: { size: "lg" | "md" | "icon" }) {
   if (size === "icon") {
@@ -168,7 +177,7 @@ function iosSteps(): Step[] {
       ),
       render: () => (
         <Phone>
-          <BrowserBar topGap label={`${INSTALL_HOST}${INSTALL_PATH}`} />
+          <BrowserBar topGap label={`${INSTALL_HOST}${APP_PATH}`} />
           <Screen>
             <AppCard w={120} h={74}>
               <BrandMark size="lg" />
@@ -191,7 +200,7 @@ function iosSteps(): Step[] {
       ),
       render: () => (
         <Phone>
-          <BrowserBar topGap label={`${INSTALL_HOST}${INSTALL_PATH}`} />
+          <BrowserBar topGap label={`${INSTALL_HOST}${APP_PATH}`} />
           <Screen>
             <AppCard w={120} h={74}>
               <BrandMark size="lg" />
@@ -277,7 +286,7 @@ function androidSteps(): Step[] {
       ),
       render: () => (
         <Phone notch={false}>
-          <BrowserBar label={`${INSTALL_HOST}${INSTALL_PATH}`} action={<IconSlot highlight><IconDotsVertical /></IconSlot>} />
+          <BrowserBar label={`${INSTALL_HOST}${APP_PATH}`} action={<IconSlot highlight><IconDotsVertical /></IconSlot>} />
           <Screen>
             <AppCard w={120} h={74}>
               <BrandMark size="lg" />
@@ -301,7 +310,7 @@ function androidSteps(): Step[] {
       render: () => (
         <Phone notch={false}>
           <BrowserBar
-            label={`${INSTALL_HOST}${INSTALL_PATH}`}
+            label={`${INSTALL_HOST}${APP_PATH}`}
             action={<IconSlot highlight><IconDotsVertical /></IconSlot>}
           />
           <Screen>
@@ -402,7 +411,7 @@ export default function InstallPage() {
   }
 
   async function copyLink() {
-    const text = `https://${INSTALL_HOST}${INSTALL_PATH}`
+    const text = `https://${INSTALL_HOST}${SHARE_PATH}`
     try {
       await navigator.clipboard.writeText(text)
     } catch {
@@ -420,7 +429,7 @@ export default function InstallPage() {
   }
 
   async function shareLink() {
-    const url = `https://${INSTALL_HOST}${INSTALL_PATH}`
+    const url = `https://${INSTALL_HOST}${SHARE_PATH}`
     try {
       await navigator.share({
         title: "Est. 2017",
@@ -446,7 +455,7 @@ export default function InstallPage() {
         <div className="mt-6 flex items-center gap-2 bg-paper-2 border border-hairline rounded-md pl-3.5 pr-1.5 py-1.5">
           <span className="flex-1 font-mono text-[13px] overflow-x-auto whitespace-nowrap">
             {INSTALL_HOST}
-            {INSTALL_PATH}
+            {SHARE_PATH}
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
             <button
@@ -552,6 +561,17 @@ export default function InstallPage() {
         >
           {playing ? "❚❚ pause" : "▶ play steps automatically"}
         </button>
+
+        {/* Now that they've seen how, send them to the page the steps
+            actually walk through -- also where "Add to Home Screen" needs
+            to happen from, since that's what becomes the installed icon's
+            launch URL. */}
+        <Link
+          href={APP_PATH}
+          className="block text-center mt-8 bg-gold text-ink rounded-md py-3.5 text-sm font-bold"
+        >
+          Continue to Sign In →
+        </Link>
       </div>
     </main>
   )
