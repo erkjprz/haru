@@ -78,8 +78,8 @@ const memberSections: FaqSection[] = [
         a: (
           <p>
             The amount of your own money in the fund you could withdraw right now. If some of your money is
-            currently out on a loan to another member, that&apos;s shown separately and isn&apos;t counted as
-            available until it&apos;s repaid.
+            currently tied up in a loan to another member or in an investment, that&apos;s shown separately
+            and isn&apos;t counted as available until it&apos;s repaid or returned.
           </p>
         )
       },
@@ -90,6 +90,18 @@ const memberSections: FaqSection[] = [
             <strong>You</strong> shows your own contributions, withdrawals, and gains (bank interest,
             investment performance, and your share of loan interest). <strong>Fund</strong> shows the whole
             group&apos;s totals — total cash, the split between banks, and open loans.
+          </p>
+        )
+      },
+      {
+        q: "What's \"Your Breakdown\"?",
+        a: (
+          <p>
+            A personal ledger of your capital and performance — an all-time total plus a year-by-year table
+            of your contributions, withdrawals, bank interest, and loan and investment gain share. Open it
+            from the <strong>Capital/Performance</strong> card on the You tab, or{" "}
+            <strong>My Breakdown</strong> in the menu (☰). Tapping a member&apos;s card on Fund Breakdown
+            opens the same page for them.
           </p>
         )
       },
@@ -114,8 +126,9 @@ const memberSections: FaqSection[] = [
           <p>
             Everything you&apos;ve put in and earned — contributions, bank interest, investment performance,
             and your share of loan gains — minus withdrawals. If some of that money is currently funding
-            another member&apos;s active loan, that portion isn&apos;t available until the loan is repaid; you&apos;ll
-            see it called out separately under your balance.
+            another member&apos;s active loan or is tied up in an open investment, that portion isn&apos;t
+            available until the loan is repaid or the investment is returned; you&apos;ll see it called out
+            separately under your balance.
           </p>
         )
       },
@@ -135,6 +148,16 @@ const memberSections: FaqSection[] = [
             The same idea: proportional to how much each member had in the fund at that point. The member
             who borrowed the money never shares in their own loan&apos;s interest, and anyone with nothing in
             the fund at that point doesn&apos;t get a share either.
+          </p>
+        )
+      },
+      {
+        q: "How is an investment's gain or loss split among members?",
+        a: (
+          <p>
+            The same principle as a loan: proportional to how much each member had in the fund at the time
+            the gain or loss is distributed. An investment can realize gains or losses more than once over
+            its life, so this can happen multiple times rather than just once at the end.
           </p>
         )
       },
@@ -257,7 +280,18 @@ const memberSections: FaqSection[] = [
         a: (
           <p>
             It shows each investment the fund holds and how it&apos;s performed, plus each member&apos;s
-            share of the gain or loss.
+            share of the gain or loss. Open one to see its recent transactions, or tap{" "}
+            <strong>View all</strong> to jump into Transactions pre-filtered to just that investment. Loans
+            have the same recent-transactions view and filter on their own detail page.
+          </p>
+        )
+      },
+      {
+        q: "What does the \"?\" next to the search box on Transactions do?",
+        a: (
+          <p>
+            Tapping it opens a short reminder of what the search box actually matches — member names, banks,
+            descriptions, loan and investment names, and transaction types.
           </p>
         )
       },
@@ -452,6 +486,16 @@ const adminSections: FaqSection[] = [
             contribution balance at that time.
           </p>
         )
+      },
+      {
+        q: "How do I back up the full transaction ledger?",
+        a: (
+          <p>
+            Tap <strong>Export transactions (CSV)</strong> near the top of the Admin panel. It downloads
+            every transaction, of every status, as a spreadsheet with member, bank, loan, investment, and
+            submitter names already resolved.
+          </p>
+        )
       }
     ]
   },
@@ -498,7 +542,10 @@ const adminSections: FaqSection[] = [
           <p>
             <strong>Expense</strong>, <strong>Bank Interest</strong>, <strong>Bank Transfer</strong>,{" "}
             <strong>Investment</strong>, and <strong>Investment Return</strong> — fund-level entries that
-            aren&apos;t tied to a single member&apos;s contribution. These post as approved right away.
+            aren&apos;t tied to a single member&apos;s contribution. These post as approved right away.{" "}
+            <strong>Investment</strong> and <strong>Investment Return</strong> only record cash moving in or
+            out; once a gain or loss is actually realized, split it to members with{" "}
+            <strong>Distribute Gain/Loss</strong> on that investment&apos;s own page.
           </p>
         )
       },
@@ -536,6 +583,19 @@ const adminSections: FaqSection[] = [
             Proportionally across members, based on how much each has in the fund at that moment — same
             principle as a bank interest distribution. The borrower never shares in their own loan&apos;s
             result, and anyone with nothing in the fund at that point doesn&apos;t get a share.
+          </p>
+        )
+      },
+      {
+        q: "How do I record an investment's gain or loss?",
+        a: (
+          <p>
+            Open the investment, tap <strong>Distribute Gain/Loss</strong>, pick a date, and enter the
+            amount (positive for a gain, negative for a loss) — or use the suggested undistributed amount as
+            of that date. It splits automatically across eligible members by their value in the fund at that
+            point, the same way a loan close does. You can do this more than once as an investment realizes
+            gains or losses over time, and adjust individual shares afterward with <strong>Manage</strong> if
+            you ever need to.
           </p>
         )
       },
