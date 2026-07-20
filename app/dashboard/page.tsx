@@ -311,7 +311,7 @@ export default function DashboardPage() {
 
               {mine != null && (
                 <button
-                  onClick={() => router.push("/fund-breakdown")}
+                  onClick={() => router.push("/member-breakdown")}
                   className="w-full text-left bg-paper-2 border border-hairline rounded-md p-5 mt-4 hover:bg-paper transition-colors"
                 >
                   <InfoBox label="Capital">
@@ -351,7 +351,7 @@ export default function DashboardPage() {
                     </div>
                   </InfoBox>
 
-                  <p className="text-[11px] text-ink-soft text-right mt-1">View Full Fund Breakdown →</p>
+                  <p className="text-[11px] text-ink-soft text-right mt-1">View Your Breakdown →</p>
                 </button>
               )}
             </section>
