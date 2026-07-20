@@ -8,6 +8,7 @@ import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
+import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 
 // Member-submitted types: editable by the member who owns the row, only
 // while it's still pending.
@@ -109,6 +110,7 @@ export default function EditTransactionPage() {
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
   const [description, setDescription] = useState("")
   const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null)
+  const [existingReceiptSignedUrl, setExistingReceiptSignedUrl] = useState<string | null>(null)
   const [receipt, setReceipt] = useState<File | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -116,6 +118,19 @@ export default function EditTransactionPage() {
   const [saving, setSaving] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [message, setMessage] = useState("")
+
+  useEffect(() => {
+    if (!existingReceiptUrl) return
+
+    let cancelled = false
+    getReceiptSignedUrl(existingReceiptUrl).then((signedUrl) => {
+      if (!cancelled) setExistingReceiptSignedUrl(signedUrl)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [existingReceiptUrl])
 
   useEffect(() => {
     if (authLoading) return
@@ -406,8 +421,7 @@ export default function EditTransactionPage() {
         return
       }
 
-      const { data: urlData } = supabase.storage.from("Receipts").getPublicUrl(fileName)
-      receiptUrl = urlData.publicUrl
+      receiptUrl = fileName
     }
 
     // Withdrawals and expenses are cash going out, so the ledger stores
@@ -764,10 +778,10 @@ export default function EditTransactionPage() {
                     Receipt
                   </label>
 
-                  {!receiptPreview && existingReceiptUrl && (
+                  {!receiptPreview && existingReceiptUrl && existingReceiptSignedUrl && (
                     <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
                       <img
-                        src={existingReceiptUrl}
+                        src={existingReceiptSignedUrl}
                         alt="Current receipt"
                         className="w-16 h-16 object-cover rounded-md border border-hairline"
                       />

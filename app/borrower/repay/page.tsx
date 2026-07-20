@@ -126,8 +126,6 @@ export default function BorrowerRepayPage() {
       return
     }
 
-    const { data: urlData } = supabase.storage.from("Receipts").getPublicUrl(fileName)
-
     const { error } = await supabase.from("transactions").insert({
       member_id: member!.member_id,
       bank_account_id: bankId,
@@ -135,7 +133,7 @@ export default function BorrowerRepayPage() {
       classification: "Loan Repayment",
       amount: Number(amount),
       description,
-      receipt_url: urlData.publicUrl,
+      receipt_url: fileName,
       status: "pending"
     })
 
