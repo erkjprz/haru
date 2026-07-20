@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [message, setMessage] = useState("")
+  const [needsConfirmation, setNeedsConfirmation] = useState(false)
+  const [resent, setResent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -31,6 +33,8 @@ export default function LoginPage() {
 
     setLoading(true)
     setMessage("")
+    setNeedsConfirmation(false)
+    setResent(false)
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -40,9 +44,30 @@ export default function LoginPage() {
     setLoading(false)
 
     if (error) {
-      setMessage(error.message)
+      if (error.code === "email_not_confirmed") {
+        setNeedsConfirmation(true)
+        setMessage("Confirm your email address before signing in — check the inbox for the link we sent when you signed up.")
+      } else {
+        setMessage(error.message)
+      }
     } else {
       router.replace("/dashboard")
+    }
+  }
+
+  async function resendConfirmation() {
+    if (loading || !email) return
+
+    setLoading(true)
+
+    const { error } = await supabase.auth.resend({ type: "signup", email })
+
+    setLoading(false)
+
+    if (error) {
+      setMessage(error.message)
+    } else {
+      setResent(true)
     }
   }
 
@@ -200,6 +225,23 @@ export default function LoginPage() {
                 <p className="text-sm text-rust">
                   {message}
                 </p>
+
+                {needsConfirmation && (
+                  resent ? (
+                    <p className="text-sm text-ink-soft mt-2">
+                      Confirmation email resent — check your inbox.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={resendConfirmation}
+                      disabled={loading}
+                      className="mt-2 text-sm font-medium text-gold hover:underline disabled:opacity-60"
+                    >
+                      Resend confirmation email
+                    </button>
+                  )
+                )}
               </div>
             )}
 
