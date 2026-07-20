@@ -370,6 +370,7 @@ export default function InstallPage() {
   const [step, setStep] = useState(0)
   const [playing, setPlaying] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [canShare, setCanShare] = useState(false)
   const touchStartX = useRef<number | null>(null)
 
   const steps = platform === "ios" ? iosSteps() : androidSteps()
@@ -377,6 +378,7 @@ export default function InstallPage() {
   useEffect(() => {
     const ua = navigator.userAgent || ""
     setPlatform(/android/i.test(ua) ? "android" : "ios")
+    setCanShare(typeof navigator.share === "function")
   }, [])
 
   useEffect(() => {
@@ -417,6 +419,20 @@ export default function InstallPage() {
     setTimeout(() => setCopied(false), 1600)
   }
 
+  async function shareLink() {
+    const url = `https://${INSTALL_HOST}${INSTALL_PATH}`
+    try {
+      await navigator.share({
+        title: "Est. 2017",
+        text: "Join Est. 2017 -- tap to sign up and add it to your home screen.",
+        url
+      })
+    } catch {
+      // User cancelled the share sheet, or the browser rejected it -- either
+      // way there's nothing to recover, "Copy link" is right there instead.
+    }
+  }
+
   return (
     <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
       <div className="max-w-xl mx-auto px-5 pt-10 pb-24">
@@ -432,14 +448,25 @@ export default function InstallPage() {
             {INSTALL_HOST}
             {INSTALL_PATH}
           </span>
-          <button
-            onClick={copyLink}
-            className={`shrink-0 border rounded-md text-[12.5px] font-semibold px-3.5 py-2 min-h-10 transition-colors ${
-              copied ? "text-gold border-gold" : "text-ink border-hairline bg-paper"
-            }`}
-          >
-            {copied ? "Copied" : "Copy link"}
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={copyLink}
+              className={`shrink-0 border rounded-md text-[12.5px] font-semibold px-3.5 py-2 min-h-10 transition-colors ${
+                copied ? "text-gold border-gold" : "text-ink border-hairline bg-paper"
+              }`}
+            >
+              {copied ? "Copied" : "Copy link"}
+            </button>
+            {canShare && (
+              <button
+                onClick={shareLink}
+                aria-label="Share link"
+                className="shrink-0 border border-hairline bg-paper text-ink rounded-md px-3 py-2 min-h-10 flex items-center justify-center"
+              >
+                <IconShare />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
@@ -525,17 +552,6 @@ export default function InstallPage() {
         >
           {playing ? "❚❚ pause" : "▶ play steps automatically"}
         </button>
-
-        <div className="mt-10 border-t border-hairline pt-[22px]">
-          <h2 className="font-display text-lg font-semibold">Sharing Est. 2017 with the group</h2>
-          <p className="text-sm text-ink-soft leading-relaxed mt-2 max-w-[52ch]">
-            Est. 2017 isn&apos;t a public app — every new sign-up sits as <strong className="text-ink">Pending</strong>{" "}
-            until an admin approves it. So the fastest path for a new member is: send them the link above directly
-            (text, email, or WhatsApp), have them sign up and add it to their home screen using the steps above, then
-            approve their account from Admin → Members. A QR code pointing at the same link works well for an
-            in-person handoff.
-          </p>
-        </div>
       </div>
     </main>
   )
