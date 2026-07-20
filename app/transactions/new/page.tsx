@@ -7,6 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
+import { SectionLabel, FlowBadge, Chip } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 import { dateOnly } from "@/lib/currentValue"
@@ -41,22 +42,6 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
   investment_return: { arrow: "↑", tone: "in" }
 }
 
-function FlowBadge({ type }: { type: string }) {
-  const flow = FLOW[type] ?? { arrow: "•", tone: "neutral" }
-  const toneClass =
-    flow.tone === "in"
-      ? "text-sage bg-sage/10"
-      : flow.tone === "out"
-      ? "text-rust bg-rust/10"
-      : "text-gold bg-gold/10"
-
-  return (
-    <span className={`w-7 h-7 rounded flex items-center justify-center text-sm font-bold shrink-0 ${toneClass}`}>
-      {flow.arrow}
-    </span>
-  )
-}
-
 // A number input is "valid" here if it's not empty, parses to a real
 // number (not NaN -- e.g. a stray non-numeric paste), and clears the given
 // floor. Number(amount) <= 0 alone lets NaN slip through silently, since
@@ -66,18 +51,6 @@ function isValidPositiveNumber(value: string, allowZero = false): boolean {
   const n = Number(value)
   if (Number.isNaN(n)) return false
   return allowZero ? n >= 0 : n > 0
-}
-
-function SectionLabel({ children, first }: { children: React.ReactNode; first?: boolean }) {
-  return (
-    <p
-      className={`text-xs font-bold uppercase tracking-wide text-ink font-mono mb-3 ${
-        first ? "" : "mt-6 pt-[18px] border-t border-hairline"
-      }`}
-    >
-      {children}
-    </p>
-  )
 }
 
 // Collapsed by default -- just the current selection -- and expands in
@@ -101,11 +74,11 @@ function TypeSelector({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-3 border border-hairline bg-paper rounded-md px-3.5 py-3"
+        className="w-full flex items-center justify-between gap-3 border border-hairline bg-paper rounded-sm px-3.5 py-3"
       >
         <span className="flex items-center gap-2.5 min-w-0">
-          <FlowBadge type={value} />
-          <span className="text-base font-semibold text-ink truncate">{selected?.label}</span>
+          <FlowBadge {...(FLOW[value] ?? { arrow: "•", tone: "neutral" })} />
+          <span className="text-sm font-semibold text-ink truncate">{selected?.label}</span>
         </span>
         <span
           className={`text-ink-soft text-xs shrink-0 motion-safe:transition-transform ${open ? "rotate-180" : ""}`}
@@ -115,7 +88,7 @@ function TypeSelector({
       </button>
 
       {open && (
-        <div className="mt-1.5 border border-hairline rounded-md overflow-hidden">
+        <div className="mt-1.5 border border-hairline rounded-sm overflow-hidden">
           {options.map((o) => (
             <button
               key={o.key}
@@ -129,7 +102,7 @@ function TypeSelector({
               }`}
             >
               <span className="flex items-center gap-2.5 min-w-0">
-                <FlowBadge type={o.key} />
+                <FlowBadge {...(FLOW[o.key] ?? { arrow: "•", tone: "neutral" })} />
                 <span className="truncate">{o.label}</span>
               </span>
               {o.adminOnly && (
@@ -142,18 +115,6 @@ function TypeSelector({
         </div>
       )}
     </div>
-  )
-}
-
-function Chip({ done, children }: { done?: boolean; children: React.ReactNode }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border whitespace-nowrap ${
-        done ? "text-sage border-sage/40" : "text-ink-soft border-hairline"
-      }`}
-    >
-      {children}
-    </span>
   )
 }
 
@@ -696,11 +657,11 @@ export default function NewTransactionPage() {
               <div className="space-y-4">
               {isAdmin && isMemberLinkedType && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     On behalf of
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                     value={onBehalfOfId}
                     onChange={(e) => handleOnBehalfChange(e.target.value)}
                   >
@@ -723,11 +684,11 @@ export default function NewTransactionPage() {
 
               {isInvestmentEntry && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     Investment
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                     value={investmentId}
                     onChange={(e) => setInvestmentId(e.target.value)}
                   >
@@ -748,7 +709,7 @@ export default function NewTransactionPage() {
 
               {isLoanPayment && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     Which loan
                   </label>
                   {myLoans.filter((l) => l.status === "active").length === 0 ? (
@@ -757,7 +718,7 @@ export default function NewTransactionPage() {
                     </p>
                   ) : (
                     <select
-                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                       value={selectedLoanId}
                       onChange={(e) => setSelectedLoanId(e.target.value)}
                     >
@@ -775,11 +736,11 @@ export default function NewTransactionPage() {
               )}
 
               <div>
-                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                   {isLoanRequest ? "Amount to borrow" : "Amount"}
                 </label>
                 <input
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                   type="number"
                   min="0.01"
                   step="0.01"
@@ -792,10 +753,10 @@ export default function NewTransactionPage() {
               {isLoanRequest && (
                 <>
                   <div>
-                    <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Interest
                     </label>
-                    <div className="flex border border-hairline rounded-md overflow-hidden mb-2">
+                    <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
                       <button
                         type="button"
                         onClick={() => setInterestType("rate")}
@@ -817,7 +778,7 @@ export default function NewTransactionPage() {
                     </div>
                     {interestType === "rate" ? (
                       <input
-                        className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                         type="number"
                         min="0"
                         step="0.01"
@@ -827,7 +788,7 @@ export default function NewTransactionPage() {
                       />
                     ) : (
                       <input
-                        className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                         type="number"
                         min="0"
                         step="0.01"
@@ -839,11 +800,11 @@ export default function NewTransactionPage() {
                   </div>
 
                   <div>
-                    <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Term (months)
                     </label>
                     <input
-                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                       type="number"
                       min="1"
                       step="1"
@@ -854,11 +815,11 @@ export default function NewTransactionPage() {
                   </div>
 
                   <div>
-                    <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Repayment mode
                     </label>
                     <select
-                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                       value={repaymentFrequency}
                       onChange={(e) => setRepaymentFrequency(e.target.value)}
                     >
@@ -893,11 +854,11 @@ export default function NewTransactionPage() {
 
               {needsBank && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     {isBankTransfer ? "From bank" : "Bank"}
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                     value={bankId}
                     onChange={(e) => setBankId(e.target.value)}
                   >
@@ -913,11 +874,11 @@ export default function NewTransactionPage() {
 
               {isBankTransfer && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     To bank
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                     value={toBankId}
                     onChange={(e) => setToBankId(e.target.value)}
                   >
@@ -932,11 +893,11 @@ export default function NewTransactionPage() {
               )}
 
               <div>
-                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                   Description
                 </label>
                 <input
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                   placeholder="Add a note"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -945,7 +906,7 @@ export default function NewTransactionPage() {
 
               {needsReceipt && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     Receipt
                   </label>
 

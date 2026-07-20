@@ -7,6 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import { SectionLabel, FlowBadge, Chip } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 
@@ -52,18 +53,6 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
   "Bank Interest": { arrow: "↑", tone: "in" },
   "Expense": { arrow: "↓", tone: "out" },
   "Internal Transfer": { arrow: "⇄", tone: "neutral" }
-}
-
-function FlowBadge({ classification }: { classification: string }) {
-  const flow = FLOW[classification] ?? { arrow: "•", tone: "in" }
-  const toneClass =
-    flow.tone === "in" ? "text-sage bg-sage/10" : flow.tone === "out" ? "text-rust bg-rust/10" : "text-gold bg-gold/10"
-
-  return (
-    <span className={`w-7 h-7 rounded flex items-center justify-center text-sm font-bold shrink-0 ${toneClass}`}>
-      {flow.arrow}
-    </span>
-  )
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -531,8 +520,8 @@ export default function EditTransactionPage() {
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         {/* pb-64 instead of the sticky footer's own ~pb-48 worth of space --
             the footer's height varies with wrapped chips or a validation
-            message, so extra slack here keeps the Cancel card from ever
-            landing underneath it and becoming unreachable by scroll. */}
+            message, so extra slack here keeps the bottom of the card from
+            ever landing underneath it and becoming unreachable by scroll. */}
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-64">
           <button
             type="button"
@@ -559,38 +548,31 @@ export default function EditTransactionPage() {
           <p className="text-[13px] text-ink-soft mb-6">Update this entry before it's reviewed.</p>
 
           <div className="bg-paper-2 border border-hairline rounded-md p-5">
-            <p className="text-xs font-bold uppercase tracking-wide text-ink font-mono mb-3">
-              ① Entry type
-            </p>
-            <div className="flex items-center justify-between gap-3 border border-hairline bg-paper/60 rounded-md px-3.5 py-3">
+            <SectionLabel first>① Entry type</SectionLabel>
+            <div className="flex items-center justify-between gap-3 border border-hairline bg-paper rounded-sm px-3.5 py-3">
               <span className="flex items-center gap-2.5 min-w-0">
-                <FlowBadge classification={classification} />
-                <span className="text-base font-semibold text-ink truncate">
+                <FlowBadge {...(FLOW[classification] ?? { arrow: "•", tone: "in" })} />
+                <span className="text-sm font-semibold text-ink truncate">
                   {TYPE_LABEL[classification]}
                 </span>
               </span>
               <span className="shrink-0 text-xs text-ink-soft whitespace-nowrap">🔒 Can't be changed</span>
             </div>
-            <p className="text-sm text-ink-soft mt-3">
-              To record a different kind of entry, cancel this one below and start a new one.
-            </p>
-            <p className="text-sm text-ink-soft mt-1">{HELPER_TEXT[classification]}</p>
+            <p className="text-sm text-ink-soft mt-3">{HELPER_TEXT[classification]}</p>
 
-            <p className="text-xs font-bold uppercase tracking-wide text-ink font-mono mb-3 mt-6 pt-[18px] border-t border-hairline">
-              ② Amount &amp; details
-            </p>
+            <SectionLabel>② Amount &amp; details</SectionLabel>
 
             <div className="space-y-4">
               {isLoanPayment && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     Which loan
                   </label>
                   {myLoans.filter((l) => l.status === "active").length === 0 ? (
                     <p className="text-sm text-rust">No active loans to pay against.</p>
                   ) : (
                     <select
-                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                       value={loanId}
                       onChange={(e) => setLoanId(e.target.value)}
                     >
@@ -608,11 +590,11 @@ export default function EditTransactionPage() {
               )}
 
               <div>
-                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                   {isLoanRelease ? "Amount to borrow" : "Amount"}
                 </label>
                 <input
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                   type="number"
                   min="0.01"
                   step="0.01"
@@ -625,10 +607,10 @@ export default function EditTransactionPage() {
               {isLoanRelease && (
                 <>
                   <div>
-                    <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Interest
                     </label>
-                    <div className="flex border border-hairline rounded-md overflow-hidden mb-2">
+                    <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
                       <button
                         type="button"
                         onClick={() => setInterestType("rate")}
@@ -650,7 +632,7 @@ export default function EditTransactionPage() {
                     </div>
                     {interestType === "rate" ? (
                       <input
-                        className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                         type="number"
                         min="0"
                         step="0.01"
@@ -660,7 +642,7 @@ export default function EditTransactionPage() {
                       />
                     ) : (
                       <input
-                        className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                         type="number"
                         min="0"
                         step="0.01"
@@ -672,11 +654,11 @@ export default function EditTransactionPage() {
                   </div>
 
                   <div>
-                    <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Term (months)
                     </label>
                     <input
-                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
                       type="number"
                       min="1"
                       step="1"
@@ -687,11 +669,11 @@ export default function EditTransactionPage() {
                   </div>
 
                   <div>
-                    <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Repayment mode
                     </label>
                     <select
-                      className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                       value={repaymentFrequency}
                       onChange={(e) => setRepaymentFrequency(e.target.value)}
                     >
@@ -722,11 +704,11 @@ export default function EditTransactionPage() {
 
               {needsBank && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     {isBankTransfer ? "From bank" : "Bank"}
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                     value={bankId}
                     onChange={(e) => setBankId(e.target.value)}
                   >
@@ -742,11 +724,11 @@ export default function EditTransactionPage() {
 
               {isBankTransfer && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     To bank
                   </label>
                   <select
-                    className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                     value={toBankId}
                     onChange={(e) => setToBankId(e.target.value)}
                   >
@@ -761,11 +743,11 @@ export default function EditTransactionPage() {
               )}
 
               <div>
-                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                   Description
                 </label>
                 <input
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
+                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
                   placeholder="Add a note"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -774,7 +756,7 @@ export default function EditTransactionPage() {
 
               {needsReceipt && (
                 <div>
-                  <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                     Receipt
                   </label>
 
@@ -853,23 +835,22 @@ export default function EditTransactionPage() {
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="mt-6 border border-rust/40 bg-rust/5 rounded-md p-4">
-            <p className="text-sm font-medium text-ink mb-1">Changed your mind?</p>
-            <p className="text-xs text-ink-soft mb-3">
-              {isLoanRelease
-                ? "This cancels the loan request and removes its pending disbursement entirely -- it can't be undone from the app."
-                : "This entry will be marked cancelled and removed from the transaction list -- it can't be undone from the app."}
-            </p>
-            <button
-              type="button"
-              onClick={handleCancelEntry}
-              disabled={cancelling}
-              className="w-full text-sm font-semibold text-rust border border-rust rounded-sm px-4 py-2.5 disabled:opacity-50"
-            >
-              {cancelling ? "Cancelling…" : "Cancel this entry"}
-            </button>
+            <div className="mt-6 pt-4 border-t border-hairline">
+              <p className="text-xs text-ink-soft mb-3">
+                {isLoanRelease
+                  ? "Changed your mind? This cancels the loan request and removes its pending disbursement entirely -- it can't be undone from the app."
+                  : "Changed your mind? This entry will be marked cancelled and removed from the transaction list -- it can't be undone from the app."}
+              </p>
+              <button
+                type="button"
+                onClick={handleCancelEntry}
+                disabled={cancelling}
+                className="w-full text-sm font-semibold text-rust border border-rust rounded-sm px-4 py-2.5 disabled:opacity-50"
+              >
+                {cancelling ? "Cancelling…" : "Cancel this entry"}
+              </button>
+            </div>
           </div>
         </div>
       </main>
@@ -886,14 +867,7 @@ export default function EditTransactionPage() {
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {chips.map((chip, i) => (
-                <span
-                  key={i}
-                  className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border whitespace-nowrap ${
-                    chip.done ? "text-sage border-sage/40" : "text-ink-soft border-hairline"
-                  }`}
-                >
-                  {chip.text}
-                </span>
+                <Chip key={i} done={chip.done}>{chip.text}</Chip>
               ))}
             </div>
           </div>
