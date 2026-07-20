@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 
 export default function ResetPasswordPage() {
@@ -9,6 +10,7 @@ export default function ResetPasswordPage() {
   const router = useRouter()
 
   const [ready, setReady] = useState(false)
+  const [linkError, setLinkError] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [message, setMessage] = useState("")
@@ -18,8 +20,18 @@ export default function ResetPasswordPage() {
 
   // The recovery link Supabase emails redirects here with a token in the
   // URL; supabase-js parses it and fires PASSWORD_RECOVERY once the
-  // one-time recovery session is established.
+  // one-time recovery session is established. An expired or already-used
+  // link redirects here too, but with error params instead of a token.
   useEffect(() => {
+    const params = new URLSearchParams(
+      window.location.hash ? window.location.hash.slice(1) : window.location.search
+    )
+    const errorDescription = params.get("error_description")
+    if (errorDescription) {
+      Promise.resolve().then(() => setLinkError(errorDescription.replace(/\+/g, " ")))
+      return
+    }
+
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setReady(true)
@@ -83,7 +95,27 @@ export default function ResetPasswordPage() {
 
         <div className="bg-paper-2 border border-hairline rounded-xl shadow-sm p-6">
 
-          {!ready ? (
+          {linkError ? (
+
+            <div className="text-center">
+              <div className="mx-auto mb-5 w-12 h-12 rounded-full bg-rust/10 flex items-center justify-center">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <h2 className="font-display text-xl font-semibold text-ink">
+                This link has expired
+              </h2>
+              <p className="text-sm text-ink-soft mt-3 leading-relaxed">
+                {linkError} Request a new reset link and try again.
+              </p>
+              <Link
+                href="/forgot-password"
+                className="mt-5 inline-block font-medium text-gold hover:underline"
+              >
+                Send a new reset link →
+              </Link>
+            </div>
+
+          ) : !ready ? (
 
             <p className="text-sm text-ink-soft text-center">
               Open this page using the reset link from your email.
