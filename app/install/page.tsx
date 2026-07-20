@@ -374,6 +374,48 @@ function androidSteps(): Step[] {
 
 const AUTOPLAY_MS = 2600
 
+// Shared by both the top (getting yourself set up) and bottom (bringing
+// someone else in) sections, so the two never drift out of sync.
+function ShareBar({
+  copied,
+  canShare,
+  onCopy,
+  onShare
+}: {
+  copied: boolean
+  canShare: boolean
+  onCopy: () => void
+  onShare: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2 bg-paper-2 border border-hairline rounded-md pl-3.5 pr-1.5 py-1.5">
+      <span className="flex-1 font-mono text-[13px] overflow-x-auto whitespace-nowrap">
+        {INSTALL_HOST}
+        {SHARE_PATH}
+      </span>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          onClick={onCopy}
+          className={`shrink-0 border rounded-md text-[12.5px] font-semibold px-3.5 py-2 min-h-10 transition-colors ${
+            copied ? "text-gold border-gold" : "text-ink border-hairline bg-paper"
+          }`}
+        >
+          {copied ? "Copied" : "Copy link"}
+        </button>
+        {canShare && (
+          <button
+            onClick={onShare}
+            aria-label="Share link"
+            className="shrink-0 border border-hairline bg-paper text-ink rounded-md px-3 py-2 min-h-10 flex items-center justify-center"
+          >
+            <IconShare />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function InstallPage() {
   const [platform, setPlatform] = useState<Platform>("ios")
   const [step, setStep] = useState(0)
@@ -452,30 +494,8 @@ export default function InstallPage() {
           added, it opens full-screen like any other app, with its own icon.
         </p>
 
-        <div className="mt-6 flex items-center gap-2 bg-paper-2 border border-hairline rounded-md pl-3.5 pr-1.5 py-1.5">
-          <span className="flex-1 font-mono text-[13px] overflow-x-auto whitespace-nowrap">
-            {INSTALL_HOST}
-            {SHARE_PATH}
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={copyLink}
-              className={`shrink-0 border rounded-md text-[12.5px] font-semibold px-3.5 py-2 min-h-10 transition-colors ${
-                copied ? "text-gold border-gold" : "text-ink border-hairline bg-paper"
-              }`}
-            >
-              {copied ? "Copied" : "Copy link"}
-            </button>
-            {canShare && (
-              <button
-                onClick={shareLink}
-                aria-label="Share link"
-                className="shrink-0 border border-hairline bg-paper text-ink rounded-md px-3 py-2 min-h-10 flex items-center justify-center"
-              >
-                <IconShare />
-              </button>
-            )}
-          </div>
+        <div className="mt-6">
+          <ShareBar copied={copied} canShare={canShare} onCopy={copyLink} onShare={shareLink} />
         </div>
 
         <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
@@ -572,6 +592,15 @@ export default function InstallPage() {
         >
           Continue to Sign In →
         </Link>
+
+        <div className="mt-10 border-t border-hairline pt-6">
+          <h2 className="font-display text-lg font-semibold">Bringing someone else in?</h2>
+          <p className="text-sm text-ink-soft leading-relaxed mt-2 mb-4 max-w-[52ch]">
+            Send them this same link so they see this walkthrough too, instead of landing cold on the sign-in
+            screen.
+          </p>
+          <ShareBar copied={copied} canShare={canShare} onCopy={copyLink} onShare={shareLink} />
+        </div>
       </div>
     </main>
   )
