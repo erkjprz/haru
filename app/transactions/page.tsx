@@ -210,6 +210,7 @@ export default function TransactionsPage() {
   const [dateTo, setDateTo] = useState("")
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [showSearchHint, setShowSearchHint] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
@@ -409,13 +410,30 @@ export default function TransactionsPage() {
           )}
 
           <div className="mt-6">
-            <input
-              type="text"
-              placeholder="Search transactions..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full border border-hairline bg-paper-2 text-ink rounded-md px-4 py-3 text-sm placeholder:text-ink-soft focus:outline-none"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search transactions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full border border-hairline bg-paper-2 text-ink rounded-md pl-4 pr-10 py-3 text-sm placeholder:text-ink-soft focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSearchHint((v) => !v)}
+                aria-label="What does search look at?"
+                aria-expanded={showSearchHint}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-hairline text-ink-soft text-[11px] font-semibold flex items-center justify-center shrink-0"
+              >
+                ?
+              </button>
+            </div>
+            {showSearchHint && (
+              <p className="mt-2 text-xs text-ink-soft">
+                Matches member names, banks, descriptions, loan/investment names, and transaction types --
+                not just exact text.
+              </p>
+            )}
           </div>
 
           {/* Each pill turns gold once it holds a real value, with its own
