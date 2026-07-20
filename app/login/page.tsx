@@ -303,6 +303,11 @@ export default function LoginPage() {
           Your contributions, investments, loans and fund performance in one place.
         </p>
 
+        <p className="mt-2 text-center text-xs">
+          <Link href="/install" className="text-gold hover:underline">
+            Add this to your phone&apos;s home screen →
+          </Link>
+        </p>
 
       </div>
     </main>

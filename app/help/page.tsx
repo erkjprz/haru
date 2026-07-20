@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import Navbar from "@/app/components/Navbar"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
@@ -276,6 +277,15 @@ const memberSections: FaqSection[] = [
       {
         q: "How do I switch between light and dark mode?",
         a: <p>Open the menu (☰, top left) → <strong>Appearance</strong>, at the bottom of the menu.</p>
+      },
+      {
+        q: "How do I add Est. 2017 to my phone's home screen?",
+        a: (
+          <p>
+            Open <Link href="/install" className="text-gold hover:underline">the install guide</Link> on your phone
+            — it walks through both iPhone (Safari) and Android (Chrome) with step-by-step screens.
+          </p>
+        )
       }
     ]
   }
