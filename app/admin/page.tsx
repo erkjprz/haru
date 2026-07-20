@@ -55,7 +55,7 @@ export default function AdminPage() {
   const [dataLoading, setDataLoading] = useState(true)
   const checkingAccess = authLoading || dataLoading
 
-  const [activeTab, setActiveTab] = useState<Tab>("members")
+  const [activeTab, setActiveTab] = useState<Tab>("txns")
 
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>([])
