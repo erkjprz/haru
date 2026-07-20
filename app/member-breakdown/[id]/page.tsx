@@ -28,6 +28,7 @@ type YearRow = {
   bankInterest: number
   loanGain: number
   bankWriteoff: number
+  investmentGainLoss: number
 }
 
 export default function MemberBreakdownPage() {
@@ -77,10 +78,7 @@ export default function MemberBreakdownPage() {
         .eq("member_id", targetId)
         .single()
 
-      // Dated, per-year building blocks. Investment gain/loss isn't
-      // included here -- investment_allocations has no date column at all
-      // (v_member_value_timeline dumps it all onto a placeholder date for
-      // the same reason), so it can't honestly be attributed to a year.
+      // Dated, per-year building blocks.
       const txPromise = supabase
         .from("transactions")
         .select("txn_date, classification, amount")
@@ -98,13 +96,26 @@ export default function MemberBreakdownPage() {
         .select("allocation_date, amount")
         .eq("member_id", targetId)
 
-      const [nameResult, performanceResult, txResult, bankInterestResult, loanGainResult] = await Promise.all([
-        namePromise,
-        performancePromise,
-        txPromise,
-        bankInterestPromise,
-        loanGainPromise
-      ])
+      // investment_allocations has no date of its own, so it's bucketed by
+      // its investment's last approved transaction date (v_investment_dates)
+      // -- the closest honest proxy for "when did this gain/loss happen."
+      const investmentAllocPromise = supabase
+        .from("investment_allocations")
+        .select("investment_id, allocation_type, amount")
+        .eq("member_id", targetId)
+
+      const investmentDatesPromise = supabase.from("v_investment_dates").select("investment_id, last_txn_date")
+
+      const [nameResult, performanceResult, txResult, bankInterestResult, loanGainResult, investmentAllocResult, investmentDatesResult] =
+        await Promise.all([
+          namePromise,
+          performancePromise,
+          txPromise,
+          bankInterestPromise,
+          loanGainPromise,
+          investmentAllocPromise,
+          investmentDatesPromise
+        ])
 
       if (nameResult.error || !nameResult.data) {
         setNotFound(true)
@@ -114,7 +125,12 @@ export default function MemberBreakdownPage() {
       setTargetName(nameResult.data.name)
 
       const firstError =
-        performanceResult.error || txResult.error || bankInterestResult.error || loanGainResult.error
+        performanceResult.error ||
+        txResult.error ||
+        bankInterestResult.error ||
+        loanGainResult.error ||
+        investmentAllocResult.error ||
+        investmentDatesResult.error
       if (firstError) setLoadError(firstError.message)
 
       if (!performanceResult.error && performanceResult.data) {
@@ -142,7 +158,8 @@ export default function MemberBreakdownPage() {
             netContribution: 0,
             bankInterest: 0,
             loanGain: 0,
-            bankWriteoff: 0
+            bankWriteoff: 0,
+            investmentGainLoss: 0
           }
         }
         return byYear[year]
@@ -174,6 +191,18 @@ export default function MemberBreakdownPage() {
         const year = (r.allocation_date || "").slice(0, 4)
         if (!year) return
         ensure(year).loanGain += Number(r.amount)
+      })
+
+      const investmentDateByInvestmentId: Record<string, string> = {}
+      ;(investmentDatesResult.data ?? []).forEach((r: any) => {
+        investmentDateByInvestmentId[r.investment_id] = r.last_txn_date
+      })
+
+      ;(investmentAllocResult.data ?? []).forEach((r: any) => {
+        const year = (investmentDateByInvestmentId[r.investment_id] || "").slice(0, 4)
+        if (!year) return
+        const amount = r.allocation_type === "Investment Loss" ? -Number(r.amount) : Number(r.amount)
+        ensure(year).investmentGainLoss += amount
       })
 
       setYears(Object.values(byYear).sort((a, b) => b.year.localeCompare(a.year)))
@@ -315,8 +344,9 @@ export default function MemberBreakdownPage() {
           <section className="mt-8">
             <h2 className="font-display text-lg font-medium text-ink mb-1">By Year</h2>
             <p className="text-[13px] text-ink-soft mb-3">
-              Contributions, withdrawals, bank interest, and loan gain share, by calendar year. Investment
-              gain/loss isn't tied to a specific year, so it only appears in the all-time total above.
+              Contributions, withdrawals, bank interest, loan gain share, and investment gain/loss, by
+              calendar year. Investment allocations aren't dated individually, so each is counted in the
+              year of that investment's most recent transaction.
             </p>
 
             {years.length === 0 && !loadError && (
@@ -327,7 +357,8 @@ export default function MemberBreakdownPage() {
 
             <div className="space-y-4">
               {years.map((y) => {
-                const yearTotal = y.netContribution + y.bankInterest + y.loanGain + y.bankWriteoff
+                const yearTotal =
+                  y.netContribution + y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
                 return (
                   <div key={y.year} className="bg-paper-2 border border-hairline rounded-md p-5">
                     <div className="flex justify-between items-baseline mb-3">
@@ -349,10 +380,17 @@ export default function MemberBreakdownPage() {
                       <InfoRow label="Net Contribution" value={`₱${fmt(y.netContribution)}`} bold />
                     </InfoBox>
 
-                    {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0) && (
+                    {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
                       <InfoBox label="Performance">
                         {y.bankInterest !== 0 && (
                           <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
+                        )}
+                        {y.investmentGainLoss !== 0 && (
+                          <InfoRow
+                            label="Investment Gain/Loss"
+                            value={signed(y.investmentGainLoss)}
+                            valueClass={tone(y.investmentGainLoss)}
+                          />
                         )}
                         {y.loanGain !== 0 && (
                           <InfoRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
