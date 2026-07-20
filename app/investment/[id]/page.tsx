@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import { distributeInvestmentGain, getUndistributedInvestmentGain } from "@/lib/distributeInvestment"
+import { dateOnly } from "@/lib/currentValue"
 
 type Investment = {
   investment_id: string
@@ -23,6 +25,7 @@ type Share = {
   amount: number
   allocation_type: string
   notes: string | null
+  allocation_date: string | null
 }
 
 const ALLOCATION_TYPES = ["Investment Gain", "Investment Loss"]
@@ -54,6 +57,14 @@ export default function InvestmentDetailPage() {
   const [formMessage, setFormMessage] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  const [showDistributeForm, setShowDistributeForm] = useState(false)
+  const [distributeDate, setDistributeDate] = useState(dateOnly(new Date()))
+  const [distributeAmount, setDistributeAmount] = useState("")
+  const [distributeNotes, setDistributeNotes] = useState("")
+  const [distributing, setDistributing] = useState(false)
+  const [distributeMessage, setDistributeMessage] = useState("")
+  const [suggestedAmount, setSuggestedAmount] = useState<number | null>(null)
+
   const loadShares = useCallback(async () => {
     // Per-member split, per Section 8: Perfume Biz is a flat equal
     // split across all 10 members; Farmon's realized loss is spread
@@ -63,7 +74,7 @@ export default function InvestmentDetailPage() {
     // the sign can be applied for display.
     const { data, error } = await supabase
       .from("investment_allocations")
-      .select("id, amount, allocation_type, member_id, notes, members(name)")
+      .select("id, amount, allocation_type, member_id, notes, allocation_date, members(name)")
       .eq("investment_id", investmentId)
 
     if (!error && data) {
@@ -74,7 +85,8 @@ export default function InvestmentDetailPage() {
           member: r.members?.name ?? "Unknown",
           amount: Number(r.amount),
           allocation_type: r.allocation_type,
-          notes: r.notes ?? null
+          notes: r.notes ?? null,
+          allocation_date: r.allocation_date ?? null
         }))
       )
       setLoadError("")
@@ -144,6 +156,61 @@ export default function InvestmentDetailPage() {
   function startAdd() {
     clearForm()
     setShowAddForm(true)
+  }
+
+  async function openDistribute() {
+    clearForm()
+    setShowAddForm(false)
+    setShowDistributeForm(true)
+    setDistributeDate(dateOnly(new Date()))
+    setDistributeAmount("")
+    setDistributeNotes("")
+    setDistributeMessage("")
+    await refreshSuggestedAmount(dateOnly(new Date()))
+  }
+
+  async function refreshSuggestedAmount(asOfDate: string) {
+    const suggestion = await getUndistributedInvestmentGain(investmentId, asOfDate)
+    setSuggestedAmount(suggestion)
+  }
+
+  function closeDistribute() {
+    setShowDistributeForm(false)
+    setDistributeMessage("")
+  }
+
+  async function runDistribute() {
+    const amountNum = Number(distributeAmount)
+    if (!distributeAmount.trim() || Number.isNaN(amountNum) || amountNum === 0) {
+      setDistributeMessage("Enter a nonzero amount (positive for a gain, negative for a loss).")
+      return
+    }
+    if (!distributeDate) {
+      setDistributeMessage("Pick a date.")
+      return
+    }
+
+    const label = amountNum < 0 ? "loss" : "gain"
+    const confirmMsg = `Distribute a ₱${Math.abs(amountNum).toFixed(2)} ${label} across eligible members, based on their current value as of ${distributeDate}? This can't be undone from the app.`
+    if (!confirm(confirmMsg)) return
+
+    setDistributing(true)
+    setDistributeMessage("")
+
+    try {
+      await distributeInvestmentGain({
+        investmentId,
+        allocationDate: distributeDate,
+        amount: amountNum,
+        notes: distributeNotes || undefined
+      })
+      closeDistribute()
+      await loadShares()
+    } catch (err) {
+      setDistributeMessage(err instanceof Error ? err.message : "Something went wrong.")
+    } finally {
+      setDistributing(false)
+    }
   }
 
   function startEdit(share: Share) {
@@ -253,6 +320,36 @@ export default function InvestmentDetailPage() {
   const totalShared = signedShares.reduce((sum, s) => sum + s.signed, 0)
   const unallocated = Number((investment.gain_loss - totalShared).toFixed(2))
 
+  // Group per-member rows by distribution event (allocation_date) -- a
+  // still-open investment can be distributed multiple times over its life
+  // (yearly, ad hoc, etc.), so the flat member list is broken into one
+  // section per event, newest first. Legacy rows predating allocation_date
+  // tracking have no event to group under.
+  const dateGroups = new Map<string, typeof signedShares>()
+  for (const s of signedShares) {
+    const key = s.allocation_date ?? "legacy"
+    const bucket = dateGroups.get(key)
+    if (bucket) bucket.push(s)
+    else dateGroups.set(key, [s])
+  }
+  const groupKeys = Array.from(dateGroups.keys()).sort((a, b) => {
+    if (a === "legacy") return 1
+    if (b === "legacy") return -1
+    return b.localeCompare(a)
+  })
+  const shareGroups = groupKeys.map((key) => {
+    const groupShares = dateGroups.get(key)!
+    return {
+      key,
+      label:
+        key === "legacy"
+          ? "Undated (legacy)"
+          : new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
+      shares: groupShares,
+      subtotal: groupShares.reduce((sum, s) => sum + s.signed, 0)
+    }
+  })
+
   return (
     <>
       <Navbar />
@@ -347,9 +444,15 @@ export default function InvestmentDetailPage() {
                   )}
                   <button
                     className="shrink-0 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-                    onClick={startAdd}
+                    onClick={openDistribute}
                   >
                     <span className="text-lg leading-none">+</span>
+                    Distribute Gain/Loss
+                  </button>
+                  <button
+                    className="shrink-0 border border-hairline text-ink-soft px-4 py-2 rounded-sm text-sm font-medium"
+                    onClick={startAdd}
+                  >
                     Add Share
                   </button>
                 </div>
@@ -360,6 +463,26 @@ export default function InvestmentDetailPage() {
               <p className="text-[12px] text-gold mb-3">
                 ₱{fmt(Math.abs(unallocated))} {unallocated > 0 ? "gain" : "loss"} still unallocated.
               </p>
+            )}
+
+            {showDistributeForm && (
+              <DistributeForm
+                date={distributeDate}
+                setDate={async (d) => {
+                  setDistributeDate(d)
+                  await refreshSuggestedAmount(d)
+                }}
+                amount={distributeAmount}
+                setAmount={setDistributeAmount}
+                notes={distributeNotes}
+                setNotes={setDistributeNotes}
+                suggestedAmount={suggestedAmount}
+                distributing={distributing}
+                message={distributeMessage}
+                onSave={runDistribute}
+                onCancel={closeDistribute}
+                className="mb-4"
+              />
             )}
 
             {showAddForm && (
@@ -385,14 +508,24 @@ export default function InvestmentDetailPage() {
 
             {loadError && <p className="text-sm text-rust mb-3">{loadError}</p>}
 
-            {signedShares.length > 0 && (
-              <div className="bg-paper-2 border border-hairline rounded-md">
+            {shareGroups.map((group) => (
+              <div key={group.key} className="bg-paper-2 border border-hairline rounded-md mb-3">
+                <div className="px-5 py-2.5 border-b border-hairline flex justify-between items-center">
+                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">{group.label}</p>
+                  <p
+                    className={`font-mono [font-variant-numeric:tabular-nums] text-[12px] font-semibold ${
+                      group.subtotal < 0 ? "text-rust" : "text-sage"
+                    }`}
+                  >
+                    {group.subtotal < 0 ? "-" : "+"}₱{fmt(Math.abs(group.subtotal))}
+                  </p>
+                </div>
                 <div className="px-5">
-                  {signedShares.map((s, i) => (
+                  {group.shares.map((s, i) => (
                     <div key={s.id}>
                       <div
                         className={`py-3 flex justify-between items-center gap-3 ${
-                          i !== signedShares.length - 1 || (isAdmin && manageMode) ? "border-b border-dashed border-hairline" : ""
+                          i !== group.shares.length - 1 || (isAdmin && manageMode) ? "border-b border-dashed border-hairline" : ""
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
@@ -455,22 +588,25 @@ export default function InvestmentDetailPage() {
                     </div>
                   ))}
                 </div>
-                <div className="px-5 py-3 border-t border-hairline flex justify-between items-center">
-                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
-                    Split among {signedShares.length} member{signedShares.length === 1 ? "" : "s"}
-                  </p>
-                  <p
-                    className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold ${
-                      totalShared < 0 ? "text-rust" : "text-sage"
-                    }`}
-                  >
-                    {totalShared < 0 ? "-" : "+"}₱{fmt(Math.abs(totalShared))}
-                  </p>
-                </div>
+              </div>
+            ))}
+
+            {signedShares.length > 0 && (
+              <div className="bg-paper-2 border border-hairline rounded-md px-5 py-3 flex justify-between items-center">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
+                  Split among {signedShares.length} member{signedShares.length === 1 ? "" : "s"} total
+                </p>
+                <p
+                  className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold ${
+                    totalShared < 0 ? "text-rust" : "text-sage"
+                  }`}
+                >
+                  {totalShared < 0 ? "-" : "+"}₱{fmt(Math.abs(totalShared))}
+                </p>
               </div>
             )}
 
-            {signedShares.length === 0 && !loadError && !showAddForm && (
+            {signedShares.length === 0 && !loadError && !showAddForm && !showDistributeForm && (
               <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
                 No allocation on record for this investment.
               </p>
@@ -479,6 +615,108 @@ export default function InvestmentDetailPage() {
         </div>
       </main>
     </>
+  )
+}
+
+function DistributeForm({
+  date,
+  setDate,
+  amount,
+  setAmount,
+  notes,
+  setNotes,
+  suggestedAmount,
+  distributing,
+  message,
+  onSave,
+  onCancel,
+  className = ""
+}: {
+  date: string
+  setDate: (v: string) => void
+  amount: string
+  setAmount: (v: string) => void
+  notes: string
+  setNotes: (v: string) => void
+  suggestedAmount: number | null
+  distributing: boolean
+  message: string
+  onSave: () => void
+  onCancel: () => void
+  className?: string
+}) {
+  const fmt = (n: number) =>
+    Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  return (
+    <div className={`bg-paper-2 border border-hairline rounded-md relative overflow-hidden ${className}`}>
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
+      <div className="pl-6 pr-5 py-6 space-y-4">
+        <p className="font-display text-lg font-medium">Distribute Gain/Loss</p>
+        <p className="text-[13px] text-ink-soft">
+          Splits a realized amount across eligible members, proportional to each member&apos;s current value as of
+          the date below. Positive for a gain, negative for a loss.
+        </p>
+
+        <div>
+          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Date</label>
+          <input
+            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Amount</label>
+          <input
+            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+            type="number"
+            step="0.01"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+          {suggestedAmount !== null && suggestedAmount !== 0 && (
+            <button
+              type="button"
+              className="mt-1.5 text-[11px] text-gold"
+              onClick={() => setAmount(String(suggestedAmount))}
+            >
+              Use undistributed amount as of this date: {suggestedAmount < 0 ? "-" : "+"}₱{fmt(Math.abs(suggestedAmount))}
+            </button>
+          )}
+        </div>
+
+        <div>
+          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+            Notes (optional)
+          </label>
+          <input
+            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+            placeholder="Add a note"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            className="bg-ink text-paper px-4 py-3 rounded-sm text-sm font-medium flex-1 disabled:opacity-50"
+            onClick={onSave}
+            disabled={distributing}
+          >
+            {distributing ? "Distributing..." : "Distribute"}
+          </button>
+          <button className="border border-hairline rounded-sm px-4 py-3 text-sm" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+
+        {message && <p className="text-sm text-rust">{message}</p>}
+      </div>
+    </div>
   )
 }
 

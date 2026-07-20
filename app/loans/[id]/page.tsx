@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { closeLoanAndDistributeGain } from "@/lib/closeLoan"
+import { snapshotLoanHold } from "@/lib/snapshotHold"
+import { dateOnly } from "@/lib/currentValue"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { formatInterestLabel } from "@/lib/loanFormat"
 import { useAuth } from "@/app/auth-context"
@@ -298,6 +300,10 @@ export default function LoanDetailPage() {
       .eq("loan_id", adminLoan.loan_id)
       .eq("classification", "Loan Release")
       .eq("status", "pending")
+
+    // Freezes each eligible member's pool share as of release -- the money
+    // moving out to fund this loan is "on hold" for them until it's repaid.
+    await snapshotLoanHold(adminLoan.loan_id, adminLoan.member_id, dateOnly(new Date()))
 
     setApproving(false)
     await reloadAll()
