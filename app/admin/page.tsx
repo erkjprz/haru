@@ -27,6 +27,7 @@ type ExportRow = {
   classification: string
   status: string
   amount: number
+  bank: string | null
   description: string | null
   members: { name: string } | null
   submitted_by_member: { name: string } | null
@@ -269,6 +270,7 @@ export default function AdminPage() {
         classification,
         status,
         amount,
+        bank,
         description,
         members!transactions_member_id_fkey ( name ),
         submitted_by_member:members!transactions_submitted_by_fkey ( name ),
@@ -301,7 +303,10 @@ export default function AdminPage() {
       t.status,
       t.members?.name ?? "",
       t.amount,
-      t.from_bank_account?.account_name || t.from_bank_account?.bank_name || "",
+      // Legacy migrated rows carry the bank as plain text in `bank`; rows
+      // created through the app link a real bank account via
+      // bank_account_id instead -- same fallback used on /transactions.
+      t.bank || t.from_bank_account?.account_name || t.from_bank_account?.bank_name || "",
       t.to_bank_account?.account_name || t.to_bank_account?.bank_name || "",
       t.loans?.name ?? "",
       t.investments?.name ?? "",
