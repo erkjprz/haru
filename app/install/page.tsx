@@ -494,10 +494,6 @@ export default function InstallPage() {
           added, it opens full-screen like any other app, with its own icon.
         </p>
 
-        <div className="mt-6">
-          <ShareBar copied={copied} canShare={canShare} onCopy={copyLink} onShare={shareLink} />
-        </div>
-
         <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
           {(["ios", "android"] as Platform[]).map((p) => (
             <button
