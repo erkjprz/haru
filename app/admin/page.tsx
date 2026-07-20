@@ -389,22 +389,6 @@ export default function AdminPage() {
             bank interest ready to split across members.
           </p>
 
-          <div className="mt-4">
-            <button
-              onClick={exportTransactionsCsv}
-              disabled={exporting}
-              className="inline-flex items-center gap-2 text-sm font-medium text-ink border border-hairline rounded-md px-4 py-2 hover:bg-paper-2 transition-colors disabled:opacity-60"
-            >
-              {exporting ? "Exporting..." : "⬇ Export transactions (CSV)"}
-            </button>
-            <p className="mt-1.5 text-xs text-ink-soft">
-              Full transaction history, every status, as a spreadsheet you can keep as a backup.
-            </p>
-            {exportError && (
-              <p className="mt-1.5 text-xs text-rust">Couldn&apos;t export: {exportError}</p>
-            )}
-          </div>
-
           {loadError && (
             <p className="mt-4 text-sm text-rust">Couldn&apos;t load some data: {loadError}</p>
           )}
@@ -783,6 +767,25 @@ export default function AdminPage() {
               </button>
             </section>
           )}
+
+          {/* Export sits at the very end, below every tab -- it's an
+              occasional backup/reporting action, not something reached for
+              as often as approving what's pending above. */}
+          <div className="mt-10 pt-6 border-t border-hairline">
+            <button
+              onClick={exportTransactionsCsv}
+              disabled={exporting}
+              className="inline-flex items-center gap-2 text-sm font-medium text-ink border border-hairline rounded-md px-4 py-2 hover:bg-paper-2 transition-colors disabled:opacity-60"
+            >
+              {exporting ? "Exporting..." : "⬇ Export transactions (CSV)"}
+            </button>
+            <p className="mt-1.5 text-xs text-ink-soft">
+              Full transaction history, every status, as a spreadsheet you can keep as a backup.
+            </p>
+            {exportError && (
+              <p className="mt-1.5 text-xs text-rust">Couldn&apos;t export: {exportError}</p>
+            )}
+          </div>
         </div>
       </main>
 
