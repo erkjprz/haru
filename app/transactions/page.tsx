@@ -383,10 +383,13 @@ function TransactionsPageInner() {
         t.members?.name,
         t.description,
         t.bank,
+        bankAccountLabel(t.from_bank_account),
+        bankAccountLabel(t.to_bank_account),
         t.classification,
         typeLabels[t.classification],
         t.loans?.name,
         t.loans?.borrowers?.name,
+        t.investments?.name,
         t._transferLabel,
         t.txn_date,
         effectiveDate(t).toLocaleDateString()
@@ -458,8 +461,20 @@ function TransactionsPageInner() {
                 placeholder="Search transactions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border border-hairline bg-paper-2 text-ink rounded-md pl-4 pr-10 py-3 text-sm placeholder:text-ink-soft focus:outline-none"
+                className={`w-full border border-hairline bg-paper-2 text-ink rounded-md pl-4 py-3 text-sm placeholder:text-ink-soft focus:outline-none ${
+                  searchQuery ? "pr-16" : "pr-10"
+                }`}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear search"
+                  className="absolute right-9 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-hairline text-ink-soft text-[11px] font-semibold flex items-center justify-center shrink-0"
+                >
+                  ×
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowSearchHint((v) => !v)}
