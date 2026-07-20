@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useEffect, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
@@ -198,7 +198,16 @@ function FilterPill({
 }
 
 export default function TransactionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <TransactionsPageInner />
+    </Suspense>
+  )
+}
+
+function TransactionsPageInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
   const [transactions, setTransactions] = useState<any[]>([])
@@ -214,9 +223,16 @@ export default function TransactionsPage() {
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
+  // Set once from the ?loan= query param (e.g. "View all" from a loan's
+  // detail page) -- cleared locally like any other filter, doesn't try to
+  // keep syncing back to the URL after that.
+  const [loanFilter, setLoanFilter] = useState(() => searchParams.get("loan") || "")
+
   // Default the member filter to whoever's logged in, once, the first time
   // their member record becomes available. After that we leave the filter
-  // alone so switching to "All members" (or anyone else) sticks.
+  // alone so switching to "All members" (or anyone else) sticks. Skipped
+  // when arriving pre-filtered to a specific loan -- that view should show
+  // every member's activity on that loan, not just the viewer's own.
   const defaultMemberAppliedRef = useRef(false)
 
   async function loadTransactions() {
@@ -312,11 +328,18 @@ export default function TransactionsPage() {
     loadMembers()
   }, [])
 
+  // Ref-guarded run-once-on-load initializer, same as the effect above it --
+  // loanFilter is read once here, only at the moment `member` first becomes
+  // available, so it's deliberately left out of the dependency array.
   useEffect(() => {
     if (member && !defaultMemberAppliedRef.current) {
-      setSelectedMemberId(member.member_id)
+      if (!loanFilter) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSelectedMemberId(member.member_id)
+      }
       defaultMemberAppliedRef.current = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member])
 
   function clearFilters() {
@@ -324,6 +347,7 @@ export default function TransactionsPage() {
     setSelectedType("")
     setDateFrom("")
     setDateTo("")
+    setLoanFilter("")
     // Defensive: "Clear all" sits at the end of the horizontally-scrolled
     // pill row, and removing it shrinks that row's scrollable width --
     // on some touch browsers the resulting scrollLeft clamp can land a
@@ -343,6 +367,7 @@ export default function TransactionsPage() {
   const filteredTransactions = transactions.filter((t) => {
     const memberMatch = selectedMemberId ? t.member_id === selectedMemberId : true
     const typeMatch = selectedType ? t.classification === selectedType : true
+    const loanMatch = loanFilter ? t.loan_id === loanFilter : true
 
     const ts = effectiveDate(t).getTime()
     const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
@@ -367,8 +392,16 @@ export default function TransactionsPage() {
         .toLowerCase()
         .includes(searchQuery.toLowerCase())
 
-    return memberMatch && typeMatch && fromMatch && toMatch && searchMatch
+    return memberMatch && typeMatch && loanMatch && fromMatch && toMatch && searchMatch
   })
+
+  // For the loan filter pill's label -- the loan's borrower/name isn't
+  // known until at least one matching transaction has loaded.
+  const loanFilterLabel = loanFilter
+    ? transactions.find((t) => t.loan_id === loanFilter)?.loans?.borrowers?.name ||
+      transactions.find((t) => t.loan_id === loanFilter)?.loans?.name ||
+      "Loan"
+    : ""
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, {
@@ -377,7 +410,7 @@ export default function TransactionsPage() {
     })
 
   const hasDateFilter = Boolean(dateFrom || dateTo)
-  const hasActiveFilters = Boolean(selectedMemberId || selectedType || hasDateFilter)
+  const hasActiveFilters = Boolean(selectedMemberId || selectedType || hasDateFilter || loanFilter)
   const pillBase = "shrink-0 border text-sm rounded-full px-3.5 py-2 focus:outline-none"
   const pillTone = (active: boolean) =>
     active ? "border-gold bg-gold/10 text-ink" : "border-hairline bg-paper-2 text-ink-soft"
@@ -446,6 +479,14 @@ export default function TransactionsPage() {
               gesture entirely; short default labels keep it on one line
               in the common case where nothing's filtered yet. */}
           <div className="mt-4 flex flex-wrap items-center gap-2">
+            {loanFilter && (
+              <FilterPill active onClear={() => setLoanFilter("")}>
+                <span className={`${pillBase} max-w-[10rem] truncate ${pillTone(true)}`}>
+                  Loan: {loanFilterLabel}
+                </span>
+              </FilterPill>
+            )}
+
             <FilterPill active={Boolean(selectedMemberId)} onClear={() => setSelectedMemberId("")}>
               <select
                 className={`${pillBase} max-w-[8rem] truncate ${pillTone(Boolean(selectedMemberId))}`}
