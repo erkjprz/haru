@@ -76,8 +76,8 @@ export default function FundBreakdownPage() {
       // v_fund_summary.total_cash is the SAME number the dashboard's "Fund"
       // tab shows as "Fund Total Cash". Use it here too instead of summing
       // member.total_value -- that sum is member equity (includes money
-      // currently out on loan), which is a real and different number from
-      // cash on hand.
+      // currently tied up in loans or investments), which is a real and
+      // different number from cash on hand.
       const fundPromise = supabase.from("v_fund_summary").select("total_cash").single()
 
       const [memberResult, performanceResult, fundResult] = await Promise.all([
@@ -314,7 +314,7 @@ export default function FundBreakdownPage() {
                   </p>
                   {member.money_on_hold > 0 && (
                     <p className="text-xs text-ink-soft mt-1">
-                      of ₱{fmt(member.total_value)} total — ₱{fmt(member.money_on_hold)} currently out on loan
+                      of ₱{fmt(member.total_value)} total — ₱{fmt(member.money_on_hold)} currently tied up in loans/investments
                     </p>
                   )}
                 </div>

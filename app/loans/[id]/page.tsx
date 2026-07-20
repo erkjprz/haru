@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { closeLoanAndDistributeGain } from "@/lib/closeLoan"
+import { snapshotLoanHold } from "@/lib/snapshotHold"
+import { dateOnly } from "@/lib/currentValue"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { formatInterestLabel } from "@/lib/loanFormat"
 import { useAuth } from "@/app/auth-context"
@@ -38,6 +40,20 @@ type GainShare = {
   pct_share: number
 }
 
+type RecentTransaction = {
+  transaction_id: string
+  date: string
+  classification: string
+  amount: number
+  status: string
+}
+
+const TXN_TYPE_LABELS: Record<string, string> = {
+  "Loan Release": "Loan Disbursement",
+  "Loan Repayment": "Loan Repayment",
+  "Gain Allocation": "Investment Allocation"
+}
+
 type AdminLoan = {
   loan_id: string
   member_id: string | null
@@ -69,6 +85,7 @@ export default function LoanDetailPage() {
   const checkingAccess = authLoading || dataLoading
   const [loan, setLoan] = useState<Loan | null>(null)
   const [shares, setShares] = useState<GainShare[]>([])
+  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
   const myMemberId = member?.member_id ?? null
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
@@ -107,7 +124,23 @@ export default function LoanDetailPage() {
       .eq("loan_id", loanId)
       .order("amount", { ascending: false })
 
-    const [loanResult, sharesResult] = await Promise.all([loanPromise, sharesPromise])
+    // Most recent 5 transactions tied to this loan, newest first -- a quick
+    // "what's happened lately" glance, with a link to the full ledger
+    // (pre-filtered to this loan) for anything older.
+    const recentTxnsPromise = supabase
+      .from("transactions")
+      .select("transaction_id, txn_date, created_at, classification, amount, status")
+      .eq("loan_id", loanId)
+      .neq("status", "cancelled")
+      .order("txn_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(5)
+
+    const [loanResult, sharesResult, recentTxnsResult] = await Promise.all([
+      loanPromise,
+      sharesPromise,
+      recentTxnsPromise
+    ])
 
     if (loanResult.error || !loanResult.data) {
       setNotFound(true)
@@ -127,6 +160,18 @@ export default function LoanDetailPage() {
       )
     } else if (sharesResult.error) {
       setLoadError(sharesResult.error.message)
+    }
+
+    if (!recentTxnsResult.error && recentTxnsResult.data) {
+      setRecentTransactions(
+        recentTxnsResult.data.map((r) => ({
+          transaction_id: r.transaction_id,
+          date: r.txn_date ?? r.created_at,
+          classification: r.classification,
+          amount: Number(r.amount),
+          status: r.status
+        }))
+      )
     }
   }
 
@@ -298,6 +343,10 @@ export default function LoanDetailPage() {
       .eq("loan_id", adminLoan.loan_id)
       .eq("classification", "Loan Release")
       .eq("status", "pending")
+
+    // Freezes each eligible member's pool share as of release -- the money
+    // moving out to fund this loan is "on hold" for them until it's repaid.
+    await snapshotLoanHold(adminLoan.loan_id, adminLoan.member_id, dateOnly(new Date()))
 
     setApproving(false)
     await reloadAll()
@@ -754,6 +803,63 @@ export default function LoanDetailPage() {
               )}
             </div>
           )}
+
+          {/* Recent transactions */}
+          <section className="mt-8">
+            <div className="flex items-baseline justify-between gap-3 mb-3">
+              <h2 className="font-display text-lg font-medium text-ink">Recent Transactions</h2>
+              <button
+                onClick={() => router.push(`/transactions?loan=${loanId}`)}
+                className="shrink-0 text-[13px] font-medium text-gold"
+              >
+                View all →
+              </button>
+            </div>
+
+            {recentTransactions.length > 0 ? (
+              <div className="bg-paper-2 border border-hairline rounded-md px-5">
+                {recentTransactions.map((t, i) => (
+                  <div
+                    key={t.transaction_id}
+                    className={`py-3 flex justify-between items-center gap-3 ${
+                      i !== recentTransactions.length - 1 ? "border-b border-dashed border-hairline" : ""
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm text-ink truncate">
+                        {TXN_TYPE_LABELS[t.classification] ?? t.classification}
+                      </p>
+                      <p className="text-[11px] text-ink-soft font-mono">
+                        {/* t.date is a plain "YYYY-MM-DD" when txn_date is
+                            set (the common case) -- append a local midnight
+                            time so parsing doesn't roll it back a day in
+                            timezones behind UTC. Falls back to the full
+                            created_at timestamp as-is when txn_date is
+                            null, which needs no such adjustment. */}
+                        {new Date(t.date.length === 10 ? `${t.date}T00:00:00` : t.date).toLocaleDateString(undefined, {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric"
+                        })}
+                        {t.status === "pending" ? " · pending" : ""}
+                      </p>
+                    </div>
+                    <p
+                      className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                        t.amount < 0 ? "text-rust" : "text-sage"
+                      }`}
+                    >
+                      {t.amount < 0 ? "-" : "+"}₱{fmt(Math.abs(t.amount))}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+                No transactions recorded for this loan yet.
+              </p>
+            )}
+          </section>
 
           {/* Gain share per member */}
           <section className="mt-8">

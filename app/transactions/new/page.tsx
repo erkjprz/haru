@@ -8,6 +8,8 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
+import { snapshotInvestmentHold } from "@/lib/snapshotHold"
+import { dateOnly } from "@/lib/currentValue"
 
 const ENTRY_TYPES = [
   { key: "contribution", label: "Contribution", adminOnly: false },
@@ -526,13 +528,19 @@ export default function NewTransactionPage() {
           status: "approved"
         })
 
-      setSubmitting(false)
-
       if (error) {
+        setSubmitting(false)
         setMessage(error.message)
         return
       }
 
+      // New capital into an investment changes who's staking it, so
+      // re-snapshot the pool's shares for this investment's hold tracking.
+      if (selectedType === "investment") {
+        await snapshotInvestmentHold(investmentId, dateOnly(new Date()))
+      }
+
+      setSubmitting(false)
       setConfirmation({ amount: Number(amount), label: `${classification} recorded`, pending: false })
       return
     }

@@ -96,12 +96,13 @@ export default function MemberBreakdownPage() {
         .select("allocation_date, amount")
         .eq("member_id", targetId)
 
-      // investment_allocations has no date of its own, so it's bucketed by
-      // its investment's last approved transaction date (v_investment_dates)
-      // -- the closest honest proxy for "when did this gain/loss happen."
+      // Distributions made via distributeInvestmentGain() always set their
+      // own allocation_date. Only legacy rows predating that (Farm On,
+      // Perfume Est 2020) fall back to their investment's last approved
+      // transaction date (v_investment_dates) as the closest honest proxy.
       const investmentAllocPromise = supabase
         .from("investment_allocations")
-        .select("investment_id, allocation_type, amount")
+        .select("investment_id, allocation_type, amount, allocation_date")
         .eq("member_id", targetId)
 
       const investmentDatesPromise = supabase.from("v_investment_dates").select("investment_id, last_txn_date")
@@ -199,7 +200,7 @@ export default function MemberBreakdownPage() {
       })
 
       ;(investmentAllocResult.data ?? []).forEach((r: any) => {
-        const year = (investmentDateByInvestmentId[r.investment_id] || "").slice(0, 4)
+        const year = (r.allocation_date || investmentDateByInvestmentId[r.investment_id] || "").slice(0, 4)
         if (!year) return
         const amount = r.allocation_type === "Investment Loss" ? -Number(r.amount) : Number(r.amount)
         ensure(year).investmentGainLoss += amount
@@ -286,7 +287,7 @@ export default function MemberBreakdownPage() {
               </p>
               {performance.money_on_hold > 0 && (
                 <p className="text-xs text-ink-soft -mt-3 mb-4">
-                  of ₱{fmt(performance.total_value)} total — ₱{fmt(performance.money_on_hold)} currently out on loan
+                  of ₱{fmt(performance.total_value)} total — ₱{fmt(performance.money_on_hold)} currently tied up in loans/investments
                 </p>
               )}
 

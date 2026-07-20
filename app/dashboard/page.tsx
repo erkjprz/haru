@@ -303,7 +303,7 @@ export default function DashboardPage() {
                 </p>
                 {mine != null && mine.money_on_hold > 0 && (
                   <p className="text-xs text-ink-soft mt-1">
-                    of ₱{fmt(mine.total_value)} total — ₱{fmt(mine.money_on_hold)} currently out on loan
+                    of ₱{fmt(mine.total_value)} total — ₱{fmt(mine.money_on_hold)} currently tied up in loans/investments
                   </p>
                 )}
                 <Sparkline points={myTrend} color="#5F7A5A" />
