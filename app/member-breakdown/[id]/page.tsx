@@ -287,7 +287,7 @@ export default function MemberBreakdownPage() {
               </p>
               {performance.money_on_hold > 0 && (
                 <p className="text-xs text-ink-soft -mt-3 mb-4">
-                  of ₱{fmt(performance.total_value)} total — ₱{fmt(performance.money_on_hold)} currently out on loan
+                  of ₱{fmt(performance.total_value)} total — ₱{fmt(performance.money_on_hold)} currently tied up in loans/investments
                 </p>
               )}
 

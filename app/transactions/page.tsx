@@ -223,16 +223,17 @@ function TransactionsPageInner() {
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
-  // Set once from the ?loan= query param (e.g. "View all" from a loan's
-  // detail page) -- cleared locally like any other filter, doesn't try to
-  // keep syncing back to the URL after that.
+  // Set once from the ?loan= / ?investment= query param (e.g. "View all"
+  // from a loan's or investment's detail page) -- cleared locally like any
+  // other filter, doesn't try to keep syncing back to the URL after that.
   const [loanFilter, setLoanFilter] = useState(() => searchParams.get("loan") || "")
+  const [investmentFilter, setInvestmentFilter] = useState(() => searchParams.get("investment") || "")
 
   // Default the member filter to whoever's logged in, once, the first time
   // their member record becomes available. After that we leave the filter
   // alone so switching to "All members" (or anyone else) sticks. Skipped
-  // when arriving pre-filtered to a specific loan -- that view should show
-  // every member's activity on that loan, not just the viewer's own.
+  // when arriving pre-filtered to a specific loan/investment -- that view
+  // should show every member's activity on it, not just the viewer's own.
   const defaultMemberAppliedRef = useRef(false)
 
   async function loadTransactions() {
@@ -329,11 +330,12 @@ function TransactionsPageInner() {
   }, [])
 
   // Ref-guarded run-once-on-load initializer, same as the effect above it --
-  // loanFilter is read once here, only at the moment `member` first becomes
-  // available, so it's deliberately left out of the dependency array.
+  // loanFilter/investmentFilter are read once here, only at the moment
+  // `member` first becomes available, so they're deliberately left out of
+  // the dependency array.
   useEffect(() => {
     if (member && !defaultMemberAppliedRef.current) {
-      if (!loanFilter) {
+      if (!loanFilter && !investmentFilter) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedMemberId(member.member_id)
       }
@@ -348,6 +350,7 @@ function TransactionsPageInner() {
     setDateFrom("")
     setDateTo("")
     setLoanFilter("")
+    setInvestmentFilter("")
     // Defensive: "Clear all" sits at the end of the horizontally-scrolled
     // pill row, and removing it shrinks that row's scrollable width --
     // on some touch browsers the resulting scrollLeft clamp can land a
@@ -368,6 +371,7 @@ function TransactionsPageInner() {
     const memberMatch = selectedMemberId ? t.member_id === selectedMemberId : true
     const typeMatch = selectedType ? t.classification === selectedType : true
     const loanMatch = loanFilter ? t.loan_id === loanFilter : true
+    const investmentMatch = investmentFilter ? t.investment_id === investmentFilter : true
 
     const ts = effectiveDate(t).getTime()
     const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
@@ -392,15 +396,18 @@ function TransactionsPageInner() {
         .toLowerCase()
         .includes(searchQuery.toLowerCase())
 
-    return memberMatch && typeMatch && loanMatch && fromMatch && toMatch && searchMatch
+    return memberMatch && typeMatch && loanMatch && investmentMatch && fromMatch && toMatch && searchMatch
   })
 
-  // For the loan filter pill's label -- the loan's borrower/name isn't
-  // known until at least one matching transaction has loaded.
+  // For the loan/investment filter pills' labels -- neither name is known
+  // until at least one matching transaction has loaded.
   const loanFilterLabel = loanFilter
     ? transactions.find((t) => t.loan_id === loanFilter)?.loans?.borrowers?.name ||
       transactions.find((t) => t.loan_id === loanFilter)?.loans?.name ||
       "Loan"
+    : ""
+  const investmentFilterLabel = investmentFilter
+    ? transactions.find((t) => t.investment_id === investmentFilter)?.investments?.name || "Investment"
     : ""
 
   const fmt = (n: number) =>
@@ -410,7 +417,9 @@ function TransactionsPageInner() {
     })
 
   const hasDateFilter = Boolean(dateFrom || dateTo)
-  const hasActiveFilters = Boolean(selectedMemberId || selectedType || hasDateFilter || loanFilter)
+  const hasActiveFilters = Boolean(
+    selectedMemberId || selectedType || hasDateFilter || loanFilter || investmentFilter
+  )
   const pillBase = "shrink-0 border text-sm rounded-full px-3.5 py-2 focus:outline-none"
   const pillTone = (active: boolean) =>
     active ? "border-gold bg-gold/10 text-ink" : "border-hairline bg-paper-2 text-ink-soft"
@@ -483,6 +492,14 @@ function TransactionsPageInner() {
               <FilterPill active onClear={() => setLoanFilter("")}>
                 <span className={`${pillBase} max-w-[10rem] truncate ${pillTone(true)}`}>
                   Loan: {loanFilterLabel}
+                </span>
+              </FilterPill>
+            )}
+
+            {investmentFilter && (
+              <FilterPill active onClear={() => setInvestmentFilter("")}>
+                <span className={`${pillBase} max-w-[10rem] truncate ${pillTone(true)}`}>
+                  Investment: {investmentFilterLabel}
                 </span>
               </FilterPill>
             )}
