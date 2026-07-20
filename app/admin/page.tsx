@@ -22,6 +22,21 @@ const typeLabels: Record<string, string> = {
 
 type Tab = "members" | "txns" | "borrowers" | "distrib"
 
+type ExportRow = {
+  txn_date: string | null
+  classification: string
+  status: string
+  amount: number
+  description: string | null
+  members: { name: string } | null
+  submitted_by_member: { name: string } | null
+  loans: { name: string } | null
+  investments: { name: string } | null
+  from_bank_account: { bank_name: string; account_name: string | null } | null
+  to_bank_account: { bank_name: string; account_name: string | null } | null
+  created_at: string
+}
+
 function timeAgo(dateStr: string): string {
   const diffMs = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diffMs / 60000)
@@ -66,6 +81,9 @@ export default function AdminPage() {
   const [memberSearch, setMemberSearch] = useState("")
   const [txnSearch, setTxnSearch] = useState("")
   const [txnTypeFilter, setTxnTypeFilter] = useState("")
+
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState("")
 
   async function loadData() {
     const [
@@ -229,6 +247,81 @@ export default function AdminPage() {
     loadData()
   }
 
+  // ---- Export ----
+
+  function csvCell(value: unknown): string {
+    const str = value === null || value === undefined ? "" : String(value)
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str
+  }
+
+  // Full history including approved/rejected/cancelled rows, unlike the
+  // pending-only queue above -- this is meant as a complete backup/audit
+  // export replacing the manually maintained Excel sheet, not a working view.
+  async function exportTransactionsCsv() {
+    setExporting(true)
+    setExportError("")
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .select(
+        `
+        txn_date,
+        classification,
+        status,
+        amount,
+        description,
+        members!transactions_member_id_fkey ( name ),
+        submitted_by_member:members!transactions_submitted_by_fkey ( name ),
+        loans!transactions_loan_id_fkey ( name ),
+        investments!transactions_investment_id_fkey ( name ),
+        from_bank_account:bank_accounts!transactions_bank_account_id_fkey ( bank_name, account_name ),
+        to_bank_account:bank_accounts!transactions_to_bank_account_id_fkey ( bank_name, account_name ),
+        created_at
+      `
+      )
+      .order("txn_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true })
+      .range(0, 9999)
+
+    setExporting(false)
+
+    if (error) {
+      setExportError(error.message)
+      return
+    }
+
+    const headers = [
+      "Date", "Type", "Status", "Member", "Amount", "Bank",
+      "Transfer To", "Loan", "Investment", "Submitted By", "Description", "Recorded At"
+    ]
+
+    const rows = ((data ?? []) as unknown as ExportRow[]).map((t) => [
+      t.txn_date ?? "",
+      typeLabels[t.classification] || t.classification,
+      t.status,
+      t.members?.name ?? "",
+      t.amount,
+      t.from_bank_account?.account_name || t.from_bank_account?.bank_name || "",
+      t.to_bank_account?.account_name || t.to_bank_account?.bank_name || "",
+      t.loans?.name ?? "",
+      t.investments?.name ?? "",
+      t.submitted_by_member?.name ?? "",
+      t.description ?? "",
+      t.created_at ?? ""
+    ])
+
+    const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `est-2017-transactions-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   // ---- Distributions ----
 
   async function distribute(group: PendingBankInterestGroup) {
@@ -290,6 +383,22 @@ export default function AdminPage() {
             Everything waiting on you: new signups, transactions to approve, borrower accounts to link, and
             bank interest ready to split across members.
           </p>
+
+          <div className="mt-4">
+            <button
+              onClick={exportTransactionsCsv}
+              disabled={exporting}
+              className="inline-flex items-center gap-2 text-sm font-medium text-ink border border-hairline rounded-md px-4 py-2 hover:bg-paper-2 transition-colors disabled:opacity-60"
+            >
+              {exporting ? "Exporting..." : "⬇ Export transactions (CSV)"}
+            </button>
+            <p className="mt-1.5 text-xs text-ink-soft">
+              Full transaction history, every status, as a spreadsheet you can keep as a backup.
+            </p>
+            {exportError && (
+              <p className="mt-1.5 text-xs text-rust">Couldn&apos;t export: {exportError}</p>
+            )}
+          </div>
 
           {loadError && (
             <p className="mt-4 text-sm text-rust">Couldn&apos;t load some data: {loadError}</p>
