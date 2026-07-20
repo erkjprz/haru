@@ -44,7 +44,7 @@ export default function AccountPage() {
       return
     }
 
-    setEmailMessage("Check your new email inbox to confirm the change.")
+    setEmailMessage("Check your new email inbox to confirm the change. Some accounts also need to confirm from the old email address — check there too if the change doesn't take effect.")
     setNewEmail("")
   }
 
