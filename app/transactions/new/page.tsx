@@ -415,11 +415,7 @@ export default function NewTransactionPage() {
         return
       }
 
-      const { data: urlData } = supabase.storage
-        .from("Receipts")
-        .getPublicUrl(fileName)
-
-      receiptUrl = urlData.publicUrl
+      receiptUrl = fileName
     }
 
     if (isLoanRequest) {

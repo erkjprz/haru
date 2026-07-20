@@ -1,16 +1,35 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 
 export default function ReceiptModal({
-  url,
+  path,
   onClose
 }: {
-  url: string
+  path: string
   onClose: () => void
 }) {
+  const [url, setUrl] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    getReceiptSignedUrl(path).then((signedUrl) => {
+      if (cancelled) return
+      if (!signedUrl) {
+        setFailed(true)
+        return
+      }
+      setUrl(signedUrl)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [path])
 
   return (
     <div
@@ -30,7 +49,7 @@ export default function ReceiptModal({
           ×
         </button>
 
-        {!failed && (
+        {url && !failed && (
           <img
             src={url}
             alt="Receipt"
