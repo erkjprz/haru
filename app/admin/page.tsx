@@ -369,10 +369,10 @@ export default function AdminPage() {
   }
 
   const tabs: { id: Tab; label: string; count: number }[] = [
-    { id: "members", label: "Members", count: pendingMembers.length },
     { id: "txns", label: "Txns", count: pendingTransactions.length },
-    { id: "borrowers", label: "Borrowers", count: pendingBorrowers.length },
-    { id: "distrib", label: "Distrib.", count: pendingGroups.length }
+    { id: "distrib", label: "Distrib.", count: pendingGroups.length },
+    { id: "members", label: "Members", count: pendingMembers.length },
+    { id: "borrowers", label: "Borrowers", count: pendingBorrowers.length }
   ]
 
   return (
