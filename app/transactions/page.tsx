@@ -324,6 +324,12 @@ export default function TransactionsPage() {
     setSelectedType("")
     setDateFrom("")
     setDateTo("")
+    // Defensive: "Clear all" sits at the end of the horizontally-scrolled
+    // pill row, and removing it shrinks that row's scrollable width --
+    // on some touch browsers the resulting scrollLeft clamp can land a
+    // stray tap on whatever pill (e.g. Date range) ends up under the
+    // finger. Force the date modal closed here so that can never surface.
+    setDateFilterOpen(false)
   }
 
   // After picking a "From" date, jump straight to "To" instead of making
@@ -332,6 +338,11 @@ export default function TransactionsPage() {
   // opens it on iOS/Android. Deferred a tick so it fires after the "From"
   // picker has finished closing.
   function focusDateTo() {
+    // A plain 0ms timeout can still fire before the browser has finished
+    // committing the new "To" value into the input's own picker UI on some
+    // mobile browsers, which is what made the wheel occasionally open on
+    // today's date instead of "From"'s. A short real delay gives the DOM
+    // update time to land first.
     setTimeout(() => {
       const el = dateToInputRef.current
       if (!el) return
@@ -345,7 +356,7 @@ export default function TransactionsPage() {
         }
       }
       el.focus()
-    }, 0)
+    }, 80)
   }
 
   // Built from what's actually in the loaded data rather than the full
@@ -437,7 +448,14 @@ export default function TransactionsPage() {
 
           {/* Each pill turns gold once it holds a real value, with its own
               separate × alongside (never on top of) it -- see FilterPill. */}
-          <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* touch-action: pan-x tells the browser up front that this row
+              only scrolls horizontally, instead of letting it arbitrate
+              between horizontal drag and the page's own vertical scroll on
+              every touch -- without it, a tap-to-scroll gesture here would
+              intermittently get treated as a vertical scroll attempt (the
+              "sometimes drags down a bit" symptom) and other times as a
+              horizontal one. */}
+          <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1 pr-4 [touch-action:pan-x] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <FilterPill active={Boolean(selectedMemberId)} onClear={() => setSelectedMemberId("")}>
               <select
                 className={`${pillBase} max-w-[10rem] ${pillTone(Boolean(selectedMemberId))}`}
@@ -478,14 +496,22 @@ export default function TransactionsPage() {
               </button>
             </FilterPill>
 
-            {hasActiveFilters && (
-              <button
-                className="shrink-0 border border-hairline rounded-full px-4 py-2 text-sm text-ink-soft"
-                onClick={clearFilters}
-              >
-                Clear all
-              </button>
-            )}
+            {/* Kept mounted at a stable width (just hidden) rather than
+                unmounted when inactive -- removing it outright shrinks the
+                scroll row's content width, which on some touch browsers
+                clamps scrollLeft and shifts every pill left under the
+                finger right as the tap lands, misfiring a click on
+                whichever pill (e.g. Date range) ends up there instead. */}
+            <button
+              className={`shrink-0 border border-hairline rounded-full px-4 py-2 text-sm text-ink-soft ${
+                hasActiveFilters ? "" : "invisible pointer-events-none"
+              }`}
+              onClick={clearFilters}
+              tabIndex={hasActiveFilters ? 0 : -1}
+              aria-hidden={!hasActiveFilters}
+            >
+              Clear all
+            </button>
           </div>
 
           <div className="mt-4 text-xs text-ink-soft font-mono [font-variant-numeric:tabular-nums]">
@@ -697,10 +723,11 @@ export default function TransactionsPage() {
                   const newFrom = e.target.value
                   setDateFrom(newFrom)
                   if (newFrom) {
-                    // Default "To" to the same date so its picker opens on
-                    // the same month/year as "From" instead of today's --
-                    // the user can still change just the day from there.
-                    setDateTo((prev) => prev || newFrom)
+                    // Snap "To" to the same date every time "From" changes
+                    // (not just when empty) so its picker always opens on
+                    // that month/year instead of drifting back to today's
+                    // -- the user can still change just the day from there.
+                    setDateTo(newFrom)
                     focusDateTo()
                   }
                 }}

@@ -588,11 +588,17 @@ export default function HelpPage() {
     )
   }
 
-  const tabs: { id: Tab; label: string; sections: FaqSection[] }[] = [
-    { id: "members", label: "Members", sections: memberSections },
-    { id: "borrowers", label: "Borrowers", sections: borrowerSections },
-    { id: "admin", label: "Admin", sections: adminSections }
-  ]
+  // Borrower accounts can't do anything the Members/Admin sections
+  // describe -- they can't see the fund dashboard, other members, or the
+  // Admin panel at all -- so only the Borrowers tab is relevant, and there's
+  // nothing else worth switching to.
+  const tabs: { id: Tab; label: string; sections: FaqSection[] }[] = isBorrower
+    ? [{ id: "borrowers", label: "Borrowers", sections: borrowerSections }]
+    : [
+        { id: "members", label: "Members", sections: memberSections },
+        { id: "borrowers", label: "Borrowers", sections: borrowerSections },
+        { id: "admin", label: "Admin", sections: adminSections }
+      ]
 
   const active = tabs.find((t) => t.id === activeTab) ?? tabs[0]
 
@@ -610,22 +616,24 @@ export default function HelpPage() {
             quick refresher, organized by what you're trying to do.
           </p>
 
-          <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => {
-                  setActiveTab(t.id)
-                  window.scrollTo(0, 0)
-                }}
-                className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
-                  activeTab === t.id ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          {tabs.length > 1 && (
+            <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setActiveTab(t.id)
+                    window.scrollTo(0, 0)
+                  }}
+                  className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
+                    activeTab === t.id ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {active.sections.map((section) => (
             <FaqSectionCard key={section.title} title={section.title} items={section.items} />

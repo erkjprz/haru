@@ -515,7 +515,11 @@ export default function EditTransactionPage() {
     <>
       {isBorrower ? <BorrowerHeader /> : <Navbar />}
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-48">
+        {/* pb-64 instead of the sticky footer's own ~pb-48 worth of space --
+            the footer's height varies with wrapped chips or a validation
+            message, so extra slack here keeps the Cancel card from ever
+            landing underneath it and becoming unreachable by scroll. */}
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-64">
           <button
             type="button"
             onClick={() => router.push(backHref)}
@@ -837,14 +841,22 @@ export default function EditTransactionPage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleCancelEntry}
-            disabled={cancelling}
-            className="mt-4 text-sm text-rust disabled:opacity-50"
-          >
-            {cancelling ? "Cancelling…" : "Cancel this entry"}
-          </button>
+          <div className="mt-6 border border-rust/40 bg-rust/5 rounded-md p-4">
+            <p className="text-sm font-medium text-ink mb-1">Changed your mind?</p>
+            <p className="text-xs text-ink-soft mb-3">
+              {isLoanRelease
+                ? "This cancels the loan request and removes its pending disbursement entirely -- it can't be undone from the app."
+                : "This entry will be marked cancelled and removed from the transaction list -- it can't be undone from the app."}
+            </p>
+            <button
+              type="button"
+              onClick={handleCancelEntry}
+              disabled={cancelling}
+              className="w-full text-sm font-semibold text-rust border border-rust rounded-sm px-4 py-2.5 disabled:opacity-50"
+            >
+              {cancelling ? "Cancelling…" : "Cancel this entry"}
+            </button>
+          </div>
         </div>
       </main>
 
