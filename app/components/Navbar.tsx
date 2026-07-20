@@ -27,10 +27,10 @@ export default function Navbar() {
     { label: "Dashboard", path: "/dashboard" },
     { label: "Fund Breakdown", path: "/fund-breakdown" },
     ...(member ? [{ label: "My Breakdown", path: `/member-breakdown/${member.member_id}` }] : []),
-    { label: "Loans", path: "/loans" },
+    { label: "Transactions", path: "/transactions" },
     { label: "Investments", path: "/investment" },
     { label: "Banks", path: "/bank" },
-    { label: "Transactions", path: "/transactions" },
+    { label: "Loans", path: "/loans" },
     { label: "Account", path: "/account" },
     { label: "Help", path: "/help" },
     ...(isAdmin ? [{ label: "Admin", path: "/admin" }] : [])
@@ -110,7 +110,7 @@ export default function Navbar() {
             <div className="flex-1 overflow-y-auto py-3">
               {links.map((link) => (
                 <button
-                  key={link.path}
+                  key={link.label}
                   onClick={() => {
                     router.push(link.path)
                     setIsOpen(false)
