@@ -311,7 +311,7 @@ export default function DashboardPage() {
 
               {mine != null && (
                 <button
-                  onClick={() => router.push("/member-breakdown")}
+                  onClick={() => router.push(`/member-breakdown/${member?.member_id}`)}
                   className="w-full text-left bg-paper-2 border border-hairline rounded-md p-5 mt-4 hover:bg-paper transition-colors"
                 >
                   <InfoBox label="Capital">

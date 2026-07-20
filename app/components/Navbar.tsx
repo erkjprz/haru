@@ -26,6 +26,7 @@ export default function Navbar() {
   const links = [
     { label: "Dashboard", path: "/dashboard" },
     { label: "Fund Breakdown", path: "/fund-breakdown" },
+    ...(member ? [{ label: "My Breakdown", path: `/member-breakdown/${member.member_id}` }] : []),
     { label: "Loans", path: "/loans" },
     { label: "Investments", path: "/investment" },
     { label: "Banks", path: "/bank" },
