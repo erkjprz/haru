@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -110,6 +110,21 @@ function NewTransactionForm() {
   // top regardless of where the last page (or the last visit here) left off.
   useEffect(() => {
     window.scrollTo(0, 0)
+  }, [])
+
+  // The sticky bottom bar's height isn't fixed -- it grows when chips wrap
+  // to a second line or a validation message appears. Measuring it and
+  // feeding that back into the content's bottom padding means the last row
+  // never sits hidden behind the bar, without having to pad every page for
+  // the tallest bar that could ever occur.
+  const bottomBarRef = useRef<HTMLDivElement>(null)
+  const [bottomBarHeight, setBottomBarHeight] = useState(0)
+  useEffect(() => {
+    const el = bottomBarRef.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => setBottomBarHeight(entry.contentRect.height))
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
@@ -587,7 +602,7 @@ function NewTransactionForm() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-36">
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8" style={{ paddingBottom: bottomBarHeight + 24 }}>
           <button
             onClick={() => router.push("/transactions")}
             className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
@@ -826,6 +841,7 @@ function NewTransactionForm() {
       </main>
 
       <div
+        ref={bottomBarRef}
         className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline"
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >

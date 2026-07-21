@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -122,6 +122,21 @@ export default function EditTransactionPage() {
   // top regardless of where the last page left off.
   useEffect(() => {
     window.scrollTo(0, 0)
+  }, [])
+
+  // The sticky bottom bar's height isn't fixed -- it grows when chips wrap
+  // to a second line or a validation message appears. Measuring it and
+  // feeding that back into the content's bottom padding means the last row
+  // never sits hidden behind the bar, without having to pad every page for
+  // the tallest bar that could ever occur.
+  const bottomBarRef = useRef<HTMLDivElement>(null)
+  const [bottomBarHeight, setBottomBarHeight] = useState(0)
+  useEffect(() => {
+    const el = bottomBarRef.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => setBottomBarHeight(entry.contentRect.height))
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
@@ -543,7 +558,7 @@ export default function EditTransactionPage() {
             below short content -- the old bottom bar crammed amount + chips
             + button into one row and needed much more headroom than the
             single-button bar this page has now. */}
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-36">
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8" style={{ paddingBottom: bottomBarHeight + 24 }}>
           <button
             type="button"
             onClick={() => router.push(backHref)}
@@ -797,6 +812,7 @@ export default function EditTransactionPage() {
       </main>
 
       <div
+        ref={bottomBarRef}
         className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline"
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
