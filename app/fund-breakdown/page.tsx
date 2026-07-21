@@ -86,18 +86,21 @@ function FundBreakdownHub() {
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+var(--dock-h)+env(safe-area-inset-bottom))]">
-          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
+          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-1">
             Fund Ledger
           </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-4">Breakdown</h1>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-3">Breakdown</h1>
 
-          <div className="flex border border-hairline rounded-sm overflow-hidden mb-5">
+          {/* Top-level section nav -- plain underline tabs (not a boxed
+              control) so it reads as page-level navigation, distinct from
+              the pill toggle below it. */}
+          <div className="flex border-b border-hairline mb-5">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 onClick={() => selectTab(t.id)}
-                className={`flex-1 text-[13px] font-semibold py-2.5 transition-colors ${
-                  activeTab === t.id ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                className={`flex-1 text-[14px] font-semibold pt-1 pb-2.5 border-b-2 -mb-px transition-colors ${
+                  activeTab === t.id ? "text-ink border-gold" : "text-ink-soft border-transparent"
                 }`}
               >
                 {t.label}
@@ -107,16 +110,20 @@ function FundBreakdownHub() {
 
           {activeTab === "fund" && (
             <>
-              <div className="flex border border-hairline rounded-sm overflow-hidden mb-5 w-full max-w-[220px]">
+              {/* Secondary view toggle -- raised-pill segmented control,
+                  matching the Dashboard's You/Fund switcher, so it clearly
+                  reads as a sub-choice under the Fund tab rather than a
+                  second row of top-level tabs. */}
+              <div className="flex bg-paper-2 border border-hairline rounded-full p-[3px] mb-5">
                 {(["group", "you"] as FundView[]).map((v) => (
                   <button
                     key={v}
                     onClick={() => selectView(v)}
-                    className={`flex-1 text-[12px] font-semibold py-2 transition-colors ${
-                      activeView === v ? "bg-gold text-ink" : "bg-paper text-ink-soft"
+                    className={`flex-1 py-2 rounded-full text-[13px] font-semibold transition-colors ${
+                      activeView === v ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
                     }`}
                   >
-                    {v === "group" ? "Group" : "You"}
+                    {v === "group" ? "Haru" : "You"}
                   </button>
                 ))}
               </div>
