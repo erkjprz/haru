@@ -8,7 +8,6 @@ import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import {
-  Chip,
   RowGroup,
   SelectRow,
   TextRow,
@@ -338,6 +337,18 @@ export default function EditTransactionPage() {
   if (isLoanPayment) {
     chips.push(loanId ? { done: true, text: "✓ Loan matched" } : { done: false, text: "Select a loan" })
   }
+
+  // The submit button's label doubles as the readiness indicator instead of
+  // a separate chip row -- "No receipt needed" is informational rather than
+  // a requirement, so it's the one chip excluded from gating the button.
+  const amountReady = isValidPositiveNumber(amount)
+  const blockingChip = chips.find((c) => !c.done && c.text !== "No receipt needed")
+  const readyToSave = amountReady && !blockingChip
+  const saveLabel = !amountReady
+    ? "Enter an amount to continue"
+    : blockingChip
+      ? blockingChip.text
+      : "Save Changes"
 
   async function handleSave() {
     setMessage("")
@@ -817,21 +828,16 @@ export default function EditTransactionPage() {
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4">
-          {chips.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {chips.map((chip, i) => (
-                <Chip key={i} done={chip.done}>
-                  {chip.text}
-                </Chip>
-              ))}
-            </div>
-          )}
           <button
-            className="w-full bg-ink text-paper py-3.5 rounded-md text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.99] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+            className={
+              readyToSave
+                ? "w-full bg-ink text-paper py-3.5 rounded-md text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.99] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                : "w-full bg-transparent text-ink-soft py-3.5 rounded-md text-base font-bold border border-hairline motion-safe:transition-transform motion-safe:active:scale-[0.99] disabled:opacity-50"
+            }
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? "Saving…" : "Save Changes"}
+            {saving ? "Saving…" : saveLabel}
           </button>
         </div>
         {message && (

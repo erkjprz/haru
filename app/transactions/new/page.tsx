@@ -8,7 +8,6 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
 import {
-  Chip,
   RowGroup,
   SelectRow,
   TextRow,
@@ -566,6 +565,19 @@ function NewTransactionForm() {
     chips.push({ done: true, text: "Posts as approved" })
   }
 
+  // The submit button's label doubles as the readiness indicator instead of
+  // a separate chip row -- "No receipt needed" is informational rather than
+  // a requirement (withdrawal has nothing else to fill in), so it's the one
+  // chip excluded from gating the button.
+  const amountReady = isValidPositiveNumber(amount)
+  const blockingChip = chips.find((c) => !c.done && c.text !== "No receipt needed")
+  const readyToSubmit = amountReady && !blockingChip
+  const submitLabel = !amountReady
+    ? "Enter an amount to continue"
+    : blockingChip
+      ? blockingChip.text
+      : `Submit ₱${fmt(Number(amount))}`
+
   if (checkingAccess) {
     return (
       <>
@@ -846,21 +858,16 @@ function NewTransactionForm() {
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4">
-          {chips.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {chips.map((chip, i) => (
-                <Chip key={i} done={chip.done}>
-                  {chip.text}
-                </Chip>
-              ))}
-            </div>
-          )}
           <button
-            className="w-full bg-ink text-paper py-3.5 rounded-md text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.99] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+            className={
+              readyToSubmit
+                ? "w-full bg-ink text-paper py-3.5 rounded-md text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.99] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                : "w-full bg-transparent text-ink-soft py-3.5 rounded-md text-base font-bold border border-hairline motion-safe:transition-transform motion-safe:active:scale-[0.99] disabled:opacity-50"
+            }
             onClick={handleSubmit}
             disabled={submitting}
           >
-            {submitting ? "Submitting…" : "Submit"}
+            {submitting ? "Submitting…" : submitLabel}
           </button>
         </div>
         {message && (

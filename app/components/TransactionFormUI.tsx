@@ -27,18 +27,6 @@ export function FlowBadge({ arrow, tone }: { arrow: string; tone: "in" | "out" |
   )
 }
 
-export function Chip({ done, children }: { done?: boolean; children: React.ReactNode }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border whitespace-nowrap ${
-        done ? "text-sage border-sage/40" : "text-ink-soft border-hairline"
-      }`}
-    >
-      {children}
-    </span>
-  )
-}
-
 // ============================================================
 // "Grouped rows" primitives (Wise/Revolut-style settings list),
 // used by both /transactions/new and /transactions/[id]/edit.
