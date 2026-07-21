@@ -259,6 +259,11 @@ function NewTransactionForm() {
 
   async function handleTypeChange(newType: string) {
     setSelectedType(newType)
+    // A validation error from the previous type (e.g. "Select a source
+    // bank.") has nothing to do with the newly selected type's own fields --
+    // leaving it on screen reads as a leftover complaint about a form that
+    // no longer exists.
+    setMessage("")
     // Switching type can swap in a much shorter (or longer) set of fields --
     // same idiom as Dashboard's You/Fund tabs, so the new fields are never
     // left scrolled halfway down a page whose content just changed height.
