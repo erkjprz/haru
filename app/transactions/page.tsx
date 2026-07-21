@@ -377,27 +377,33 @@ function TransactionsPageInner() {
     const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
     const toMatch = dateTo ? ts <= new Date(`${dateTo}T23:59:59`).getTime() : true
 
-    const searchMatch =
-      searchQuery.trim() === "" ||
-      [
-        t.members?.name,
-        t.description,
-        t.bank,
-        bankAccountLabel(t.from_bank_account),
-        bankAccountLabel(t.to_bank_account),
-        t.classification,
-        typeLabels[t.classification],
-        t.loans?.name,
-        t.loans?.borrowers?.name,
-        t.investments?.name,
-        t._transferLabel,
-        t.txn_date,
-        effectiveDate(t).toLocaleDateString()
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase())
+    // Every word in the query has to appear somewhere in the haystack, but
+    // not necessarily adjacent to (or in the same field as) each other --
+    // e.g. "Vhan BDO" should match a row where the member name and bank
+    // badge are two separate fields, not a literal "vhan bdo" substring.
+    const searchHaystack = [
+      t.members?.name,
+      t.description,
+      t.bank,
+      bankAccountLabel(t.from_bank_account),
+      bankAccountLabel(t.to_bank_account),
+      t.classification,
+      typeLabels[t.classification],
+      t.loans?.name,
+      t.loans?.borrowers?.name,
+      t.investments?.name,
+      t._transferLabel,
+      t.txn_date,
+      effectiveDate(t).toLocaleDateString(),
+      cardDate(t),
+      monthLabel(t)
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+
+    const searchWords = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    const searchMatch = searchWords.length === 0 || searchWords.every((word) => searchHaystack.includes(word))
 
     return memberMatch && typeMatch && loanMatch && investmentMatch && fromMatch && toMatch && searchMatch
   })
@@ -487,8 +493,9 @@ function TransactionsPageInner() {
             </div>
             {showSearchHint && (
               <p className="mt-2 text-xs text-ink-soft">
-                Matches member names, banks, descriptions, loan/investment names, and transaction types --
-                not just exact text.
+                Matches member names, banks, descriptions, loan/investment names, transaction types, and dates.
+                Multiple words narrow the results -- e.g. "Vhan BDO" finds Vhan's transactions on BDO, even
+                though the two words aren't next to each other on the card.
               </p>
             )}
           </div>
