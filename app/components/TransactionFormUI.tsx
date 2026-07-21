@@ -207,7 +207,7 @@ export function AmountHero({
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur()
           }}
-          className="font-mono [font-variant-numeric:tabular-nums] text-6xl font-bold text-ink bg-transparent text-center focus:outline-none w-full max-w-[280px] placeholder:text-hairline"
+          className="text-preserve font-mono [font-variant-numeric:tabular-nums] text-6xl font-bold text-ink bg-transparent text-center focus:outline-none w-full max-w-[280px] placeholder:text-hairline"
         />
       </div>
       {helper && <p className="text-[13px] text-ink-soft mt-3 px-2">{helper}</p>}

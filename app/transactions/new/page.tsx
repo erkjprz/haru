@@ -554,9 +554,9 @@ function NewTransactionForm() {
     )
   } else if (isBankTransfer) {
     chips.push(
-      bankId && toBankId
+      bankId && toBankId && bankId !== toBankId
         ? { done: true, text: `✓ ${bankLabel(bankId)} → ${bankLabel(toBankId)}` }
-        : { done: false, text: "Select both banks" }
+        : { done: false, text: bankId && bankId === toBankId ? "Banks must differ" : "Select both banks" }
     )
     chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
     chips.push({ done: true, text: "Doesn't affect cash total" })
@@ -620,7 +620,7 @@ function NewTransactionForm() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8" style={{ paddingBottom: bottomBarHeight + 24 }}>
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8" style={{ paddingBottom: bottomBarHeight + 32 }}>
           <button
             onClick={() => router.push("/transactions")}
             className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"

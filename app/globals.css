@@ -67,9 +67,14 @@ body {
    text sizes (text-xs/text-sm) for visual density, so force the
    effective size back up to 16px on focus, on touch devices only --
    desktop never zooms on focus, so this shouldn't change how the app
-   looks/behaves there. */
+   looks/behaves there. `:not(.text-preserve)` opts out inputs that are
+   already well above 16px by design (e.g. the transaction amount
+   hero) -- without it, this rule's !important clobbered their real
+   size down to 16px the instant they were focused, then let it jump
+   back up on blur, which read as the amount switching fonts between
+   typing and viewing. */
 @media (hover: none) and (pointer: coarse) {
-  input:focus,
+  input:focus:not(.text-preserve),
   select:focus,
   textarea:focus {
     font-size: 16px !important;

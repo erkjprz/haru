@@ -324,9 +324,9 @@ export default function EditTransactionPage() {
     )
   } else if (isBankTransfer) {
     chips.push(
-      bankId && toBankId
+      bankId && toBankId && bankId !== toBankId
         ? { done: true, text: `✓ ${bankLabel(bankId)} → ${bankLabel(toBankId)}` }
-        : { done: false, text: "Select both banks" }
+        : { done: false, text: bankId && bankId === toBankId ? "Banks must differ" : "Select both banks" }
     )
   } else if (needsBank) {
     chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
@@ -575,7 +575,7 @@ export default function EditTransactionPage() {
             below short content -- the old bottom bar crammed amount + chips
             + button into one row and needed much more headroom than the
             single-button bar this page has now. */}
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8" style={{ paddingBottom: bottomBarHeight + 24 }}>
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8" style={{ paddingBottom: bottomBarHeight + 32 }}>
           <button
             type="button"
             onClick={() => router.push(backHref)}
