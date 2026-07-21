@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -37,6 +37,9 @@ export default function FundBreakdownPage() {
   const [totalCash, setTotalCash] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
+  const [activeIndex, setActiveIndex] = useState(0)
+  const touchStartX = useRef<number | null>(null)
+  const suppressClickRef = useRef(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -160,6 +163,37 @@ export default function FundBreakdownPage() {
   const signed = (n: number) => `${n < 0 ? "-" : "+"}₱${fmt(Math.abs(n))}`
   const tone = (n: number) => (n > 0 ? "text-sage" : n < 0 ? "text-rust" : "text-ink-soft")
 
+  // Swipe detection lives entirely in touchend (no touchmove listener), so
+  // the page's own vertical scroll -- needed since a single member's card
+  // can be taller than the viewport -- is never fought over mid-gesture.
+  // Anything past a small deadzone also marks the gesture as a drag rather
+  // than a tap, so it doesn't also fire the card's "go to breakdown" click.
+  function handleCarouselTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  function handleCarouselTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    touchStartX.current = null
+
+    if (Math.abs(dx) < 10) return
+
+    suppressClickRef.current = true
+    if (Math.abs(dx) >= 32) {
+      setActiveIndex((i) => Math.max(0, Math.min(members.length - 1, dx < 0 ? i + 1 : i - 1)))
+    }
+  }
+
+  function handleCardClick(memberId: string, e: React.MouseEvent) {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      e.preventDefault()
+      return
+    }
+    router.push(`/member-breakdown/${memberId}`)
+  }
+
   if (loading) {
     return (
       <>
@@ -172,6 +206,10 @@ export default function FundBreakdownPage() {
       </>
     )
   }
+
+  // Clamped defensively in case `members` ever shrinks after activeIndex
+  // was set against a longer list.
+  const clampedIndex = Math.min(activeIndex, Math.max(0, members.length - 1))
 
   return (
     <>
@@ -240,89 +278,117 @@ export default function FundBreakdownPage() {
             </div>
           )}
 
-          {/* ---- per-member cards ---- */}
-          <div className="space-y-4">
-            {members.map((member) => (
-              <button
-                key={member.member_id}
-                onClick={() => router.push(`/member-breakdown/${member.member_id}`)}
-                className="w-full text-left bg-paper-2 border border-hairline rounded-md p-5 hover:bg-paper transition-colors"
-              >
-                <div className="flex justify-between items-baseline flex-wrap gap-1.5 mb-4">
-                  <span className="font-display text-xl font-semibold text-ink">{member.name}</span>
-                  <div className="flex items-baseline gap-2.5">
-                    {member.roi !== null && (
-                      <span
-                        className={`text-[11.5px] font-mono font-semibold px-[7px] py-[2px] rounded-full ${tone(
-                          member.roi
-                        )} ${member.roi > 0 ? "bg-sage/10" : member.roi < 0 ? "bg-rust/10" : "bg-ink-soft/10"}`}
-                      >
-                        {member.roi >= 0 ? "+" : ""}
-                        {member.roi.toFixed(1)}% return
+          {/* ---- per-member cards: swipe left/right, one member per screen ---- */}
+          <div
+            className="overflow-hidden"
+            onTouchStart={handleCarouselTouchStart}
+            onTouchEnd={handleCarouselTouchEnd}
+          >
+            <div
+              className="flex transition-transform duration-300 ease-out will-change-transform motion-reduce:transition-none"
+              style={{ transform: `translateX(-${clampedIndex * 100}%)` }}
+            >
+              {members.map((member) => (
+                <button
+                  key={member.member_id}
+                  onClick={(e) => handleCardClick(member.member_id, e)}
+                  className="w-full shrink-0 text-left bg-paper-2 border border-hairline rounded-md p-5 hover:bg-paper transition-colors"
+                >
+                  <div className="flex justify-between items-baseline flex-wrap gap-1.5 mb-4">
+                    <span className="font-display text-xl font-semibold text-ink">{member.name}</span>
+                    <div className="flex items-baseline gap-2.5">
+                      {member.roi !== null && (
+                        <span
+                          className={`text-[11.5px] font-mono font-semibold px-[7px] py-[2px] rounded-full ${tone(
+                            member.roi
+                          )} ${member.roi > 0 ? "bg-sage/10" : member.roi < 0 ? "bg-rust/10" : "bg-ink-soft/10"}`}
+                        >
+                          {member.roi >= 0 ? "+" : ""}
+                          {member.roi.toFixed(1)}% return
+                        </span>
+                      )}
+                      <span className="text-[11px] text-ink-soft font-mono">
+                        {member.shareOfFund.toFixed(2)}% of fund
                       </span>
-                    )}
-                    <span className="text-[11px] text-ink-soft font-mono">
-                      {member.shareOfFund.toFixed(2)}% of fund
-                    </span>
+                    </div>
                   </div>
-                </div>
 
-                <InfoBox label="Capital">
-                  <InfoRow label="Total Contribution" value={`₱${fmt(member.total_contribution)}`} />
-                  {member.total_withdrawal !== 0 && (
-                    <InfoRow
-                      label="Total Withdrawal"
-                      value={`-₱${fmt(Math.abs(member.total_withdrawal))}`}
-                      valueClass="text-rust"
-                    />
-                  )}
-                  <InfoRow label="Net Contribution" value={`₱${fmt(member.net_contribution)}`} bold />
-                </InfoBox>
-
-                <InfoBox label="Performance">
-                  <InfoRow
-                    label="Total Gain/Loss"
-                    value={signed(member.totalGainLoss)}
-                    valueClass={tone(member.totalGainLoss)}
-                    bold
-                  />
-                  <div className="pt-1 space-y-1.5">
-                    <InfoSubRow label="Bank Interest" value={signed(member.bank_interest)} valueClass={tone(member.bank_interest)} />
-                    <InfoSubRow
-                      label="Investment Gain/Loss"
-                      value={signed(member.investment_gain_loss)}
-                      valueClass={tone(member.investment_gain_loss)}
-                    />
-                    <InfoSubRow label="Loan Gain Share" value={signed(member.loan_gain)} valueClass={tone(member.loan_gain)} />
-                    {member.bank_writeoff !== 0 && (
-                      <InfoSubRow
-                        label="Bank Write-off Share"
-                        value={signed(member.bank_writeoff)}
-                        valueClass={tone(member.bank_writeoff)}
+                  <InfoBox label="Capital">
+                    <InfoRow label="Total Contribution" value={`₱${fmt(member.total_contribution)}`} />
+                    {member.total_withdrawal !== 0 && (
+                      <InfoRow
+                        label="Total Withdrawal"
+                        value={`-₱${fmt(Math.abs(member.total_withdrawal))}`}
+                        valueClass="text-rust"
                       />
                     )}
-                  </div>
-                </InfoBox>
+                    <InfoRow label="Net Contribution" value={`₱${fmt(member.net_contribution)}`} bold />
+                  </InfoBox>
 
-                {/* Available Balance -- same pattern as the dashboard's "You" tab */}
-                <div className="mt-4">
-                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">
-                    Available Balance
-                  </p>
-                  <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink">
-                    ₱{fmt(member.withdrawable_now)}
-                  </p>
-                  {member.money_on_hold > 0 && (
-                    <p className="text-xs text-ink-soft mt-1">
-                      of ₱{fmt(member.total_value)} total — ₱{fmt(member.money_on_hold)} currently tied up in loans/investments
+                  <InfoBox label="Performance">
+                    <InfoRow
+                      label="Total Gain/Loss"
+                      value={signed(member.totalGainLoss)}
+                      valueClass={tone(member.totalGainLoss)}
+                      bold
+                    />
+                    <div className="pt-1 space-y-1.5">
+                      <InfoSubRow label="Bank Interest" value={signed(member.bank_interest)} valueClass={tone(member.bank_interest)} />
+                      <InfoSubRow
+                        label="Investment Gain/Loss"
+                        value={signed(member.investment_gain_loss)}
+                        valueClass={tone(member.investment_gain_loss)}
+                      />
+                      <InfoSubRow label="Loan Gain Share" value={signed(member.loan_gain)} valueClass={tone(member.loan_gain)} />
+                      {member.bank_writeoff !== 0 && (
+                        <InfoSubRow
+                          label="Bank Write-off Share"
+                          value={signed(member.bank_writeoff)}
+                          valueClass={tone(member.bank_writeoff)}
+                        />
+                      )}
+                    </div>
+                  </InfoBox>
+
+                  {/* Available Balance -- same pattern as the dashboard's "You" tab */}
+                  <div className="mt-4">
+                    <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">
+                      Available Balance
                     </p>
-                  )}
-                </div>
+                    <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink">
+                      ₱{fmt(member.withdrawable_now)}
+                    </p>
+                    {member.money_on_hold > 0 && (
+                      <p className="text-xs text-ink-soft mt-1">
+                        of ₱{fmt(member.total_value)} total — ₱{fmt(member.money_on_hold)} currently tied up in loans/investments
+                      </p>
+                    )}
+                  </div>
 
-                <p className="text-[11px] text-ink-soft text-right mt-3">View Breakdown →</p>
-              </button>
-            ))}
+                  <p className="text-[11px] text-ink-soft text-right mt-3">View Breakdown →</p>
+                </button>
+              ))}
+            </div>
           </div>
+
+          {members.length > 1 && (
+            <div className="flex items-center justify-center gap-1.5 mt-4">
+              {members.map((m, i) => (
+                <button
+                  key={m.member_id}
+                  onClick={() => setActiveIndex(i)}
+                  aria-label={`Go to ${m.name}`}
+                  className="w-6 h-6 flex items-center justify-center"
+                >
+                  <span
+                    className={`block rounded-full transition-all ${
+                      i === clampedIndex ? "w-4 h-1.5 rounded-[3px] bg-gold" : "w-1.5 h-1.5 bg-hairline"
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </main>
     </>
