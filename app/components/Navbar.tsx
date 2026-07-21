@@ -73,12 +73,22 @@ export default function Navbar() {
   // -- on the Menu page -- so Menu reads as "active" while browsing any of
   // it, the same way Transactions stays active on a transaction's own
   // pages even though there's no separate "Transactions" sub-route tab.
-  const MENU_OWNED_PREFIXES = ["/menu", "/account", "/help", "/investment", "/bank", "/loans", "/member-breakdown"]
+  const MENU_OWNED_PREFIXES = ["/menu", "/account", "/help"]
+
+  // Loans/Banks/Investments live as tabs on the Breakdown hub now, and
+  // member-breakdown is the Group tab's drill-down -- all of it should
+  // still read as "Breakdown" active, not fall through to Menu.
+  const BREAKDOWN_OWNED_PREFIXES = ["/fund-breakdown", "/loans", "/bank", "/investment", "/member-breakdown"]
 
   const dockItems: DockItem[] = [
     { label: "Dashboard", path: "/dashboard", icon: IconHome },
     { label: "Transactions", path: "/transactions", icon: IconTransactions },
-    { label: "Breakdown", path: "/fund-breakdown", icon: IconBreakdown },
+    {
+      label: "Breakdown",
+      path: "/fund-breakdown",
+      icon: IconBreakdown,
+      activeWhen: (p) => BREAKDOWN_OWNED_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix + "/"))
+    },
     ...(isAdmin ? [{ label: "Admin", path: "/admin", icon: IconAdmin } as DockItem] : []),
     {
       label: "Menu",

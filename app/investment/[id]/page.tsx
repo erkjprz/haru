@@ -344,7 +344,7 @@ export default function InvestmentDetailPage() {
           <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8">
             <p className="text-sm text-ink-soft">This investment couldn't be found.</p>
             <button
-              onClick={() => router.push("/investment")}
+              onClick={() => router.push("/fund-breakdown?tab=investments")}
               className="mt-4 text-sm font-medium text-gold"
             >
               ← Back to Investment
@@ -401,7 +401,7 @@ export default function InvestmentDetailPage() {
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+var(--dock-h)+env(safe-area-inset-bottom))]">
           <button
-            onClick={() => router.push("/investment")}
+            onClick={() => router.push("/fund-breakdown?tab=investments")}
             className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
           >
             ← Investment

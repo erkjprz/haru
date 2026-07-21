@@ -660,7 +660,7 @@ export default function AdminPage() {
               )}
 
               <button
-                onClick={() => router.push("/loans")}
+                onClick={() => router.push("/fund-breakdown?tab=loans")}
                 className="mt-4 text-sm text-gold hover:underline"
               >
                 View all loans →
@@ -760,7 +760,7 @@ export default function AdminPage() {
               {pendingGroups.length === 0 && <p className="text-sm text-ink-soft">Nothing waiting to be distributed</p>}
 
               <button
-                onClick={() => router.push("/bank")}
+                onClick={() => router.push("/fund-breakdown?tab=banks")}
                 className="text-sm text-gold hover:underline"
               >
                 View bank interest history →
