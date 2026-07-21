@@ -40,9 +40,9 @@ const HELPER_TEXT: Record<string, string> = {
   "Member Withdrawal": "You're requesting money to be sent to you. No receipt needed yet.",
   "Loan Repayment": "You've already sent this repayment. Attach proof of deposit.",
   "Loan Release": "This member is requesting to borrow from the fund. No bank is assigned until you approve it from the loan's own page.",
-  "Bank Interest": "Recording interest earned by a bank account. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
-  "Expense": "Recording money spent out of the fund. Goes straight in as approved.",
-  "Internal Transfer": "Moving money between two of the fund's own banks. Doesn't affect total contributions or cash — it's just internal."
+  "Bank Interest": "Recording interest earned by a bank account. Attach the bank statement or screenshot showing it credited. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
+  "Expense": "Recording money spent out of the fund. Attach a receipt or proof of payment. Goes straight in as approved.",
+  "Internal Transfer": "Moving money between two of the fund's own banks. Attach a screenshot of the transfer confirmation. Doesn't affect total contributions or cash — it's just internal."
 }
 
 const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = {
@@ -239,7 +239,11 @@ export default function EditTransactionPage() {
     classification === "Bank Interest" ||
     classification === "Expense" ||
     isBankTransfer
-  const needsReceipt = classification === "Member Contribution" || classification === "Loan Repayment"
+  // Every editable type requires a receipt except Member Withdrawal and
+  // Loan Release, where nothing has actually moved yet -- mirrors the same
+  // rule on /transactions/new (see the comment there for why admin-entered
+  // types like Bank Interest/Expense/Internal Transfer are included).
+  const needsReceipt = classification !== "Member Withdrawal" && !isLoanRelease
 
   const previewTotalRepayable =
     isLoanRelease &&
