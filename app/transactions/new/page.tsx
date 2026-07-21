@@ -105,6 +105,13 @@ function NewTransactionForm() {
     setMyLoans(data ?? [])
   }
 
+  // Defensive against iOS Safari restoring a previous scroll position on
+  // back-forward-cache navigation -- this form should always start at the
+  // top regardless of where the last page (or the last visit here) left off.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
+
   useEffect(() => {
     if (authLoading) return
 
@@ -228,6 +235,10 @@ function NewTransactionForm() {
 
   async function handleTypeChange(newType: string) {
     setSelectedType(newType)
+    // Switching type can swap in a much shorter (or longer) set of fields --
+    // same idiom as Dashboard's You/Fund tabs, so the new fields are never
+    // left scrolled halfway down a page whose content just changed height.
+    window.scrollTo(0, 0)
     setReceiptFile(null)
     setBankId("")
     setToBankId("")
@@ -576,7 +587,7 @@ function NewTransactionForm() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-48">
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-36">
           <button
             onClick={() => router.push("/transactions")}
             className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
@@ -653,7 +664,7 @@ function NewTransactionForm() {
                   )}
                 </div>
 
-                <NumberRow label="Term" value={termMonths} onChange={setTermMonths} placeholder="6" suffix="months" />
+                <NumberRow label="Term" value={termMonths} onChange={setTermMonths} placeholder="e.g. 6" suffix="months" />
 
                 <SelectRow
                   label="Repayment"

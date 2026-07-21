@@ -117,6 +117,13 @@ export default function EditTransactionPage() {
   const [cancelling, setCancelling] = useState(false)
   const [message, setMessage] = useState("")
 
+  // Defensive against iOS Safari restoring a previous scroll position on
+  // back-forward-cache navigation -- this form should always start at the
+  // top regardless of where the last page left off.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
+
   useEffect(() => {
     if (!existingReceiptUrl) return
 
@@ -531,11 +538,12 @@ export default function EditTransactionPage() {
     <>
       {isBorrower ? <BorrowerHeader /> : <Navbar />}
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        {/* pb-64 instead of the sticky footer's own ~pb-48 worth of space --
-            the footer's height varies with wrapped chips or a validation
-            message, so extra slack here keeps the bottom of the card from
-            ever landing underneath it and becoming unreachable by scroll. */}
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-64">
+        {/* Enough slack to clear the sticky footer even when it grows (wrapped
+            chips, a validation message) without leaving a large empty gap
+            below short content -- the old bottom bar crammed amount + chips
+            + button into one row and needed much more headroom than the
+            single-button bar this page has now. */}
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-36">
           <button
             type="button"
             onClick={() => router.push(backHref)}
@@ -622,7 +630,7 @@ export default function EditTransactionPage() {
                   )}
                 </div>
 
-                <NumberRow label="Term" value={termMonths} onChange={setTermMonths} placeholder="6" suffix="months" />
+                <NumberRow label="Term" value={termMonths} onChange={setTermMonths} placeholder="e.g. 6" suffix="months" />
 
                 <SelectRow
                   label="Repayment"

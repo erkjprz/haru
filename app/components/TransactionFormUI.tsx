@@ -201,10 +201,10 @@ export function AmountHero({
   helper?: string
 }) {
   return (
-    <div className="text-center py-5 border-b border-hairline mb-5">
-      <p className="text-xs font-bold uppercase tracking-wide text-ink-soft font-mono mb-2.5">{label}</p>
-      <div className="flex items-baseline justify-center gap-1.5">
-        <span className="font-mono text-2xl font-bold text-ink-soft">&#8369;</span>
+    <div className="text-center py-6 border-b border-hairline mb-5">
+      <p className="text-xs font-bold uppercase tracking-wide text-ink-soft font-mono mb-3">{label}</p>
+      <div className="flex items-baseline justify-center gap-2">
+        <span className="font-mono text-3xl font-bold text-ink-soft">&#8369;</span>
         <input
           type="number"
           min="0.01"
@@ -212,10 +212,10 @@ export function AmountHero({
           placeholder="0.00"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="font-mono [font-variant-numeric:tabular-nums] text-4xl font-bold text-ink bg-transparent text-center focus:outline-none w-[210px] placeholder:text-hairline"
+          className="font-mono [font-variant-numeric:tabular-nums] text-6xl font-bold text-ink bg-transparent text-center focus:outline-none w-full max-w-[280px] placeholder:text-hairline"
         />
       </div>
-      {helper && <p className="text-[13px] text-ink-soft mt-2.5 px-2">{helper}</p>}
+      {helper && <p className="text-[13px] text-ink-soft mt-3 px-2">{helper}</p>}
     </div>
   )
 }
