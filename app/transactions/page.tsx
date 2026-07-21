@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -219,6 +219,11 @@ function TransactionsPageInner() {
   const [dateTo, setDateTo] = useState("")
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  // Filtering re-renders every visible transaction card, which is heavy
+  // enough on a long list that doing it on every keystroke made typing feel
+  // laggy. The input itself stays bound to searchQuery for instant visual
+  // feedback; only the actual filtering waits for typing to pause.
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [showSearchHint, setShowSearchHint] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
@@ -344,6 +349,11 @@ function TransactionsPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member])
 
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300)
+    return () => clearTimeout(timeout)
+  }, [searchQuery])
+
   function clearFilters() {
     setSelectedMemberId("")
     setSelectedType("")
@@ -367,46 +377,61 @@ function TransactionsPageInner() {
     (a, b) => (typeLabels[a] || a).localeCompare(typeLabels[b] || b)
   )
 
-  const filteredTransactions = transactions.filter((t) => {
-    const memberMatch = selectedMemberId ? t.member_id === selectedMemberId : true
-    const typeMatch = selectedType ? t.classification === selectedType : true
-    const loanMatch = loanFilter ? t.loan_id === loanFilter : true
-    const investmentMatch = investmentFilter ? t.investment_id === investmentFilter : true
+  // Recomputing this list means re-scanning every transaction and (when
+  // there's a search query) rebuilding several toLocaleDateString-formatted
+  // strings per row -- expensive enough on a long list that running it on
+  // every keystroke made typing feel laggy. Memoized so it only reruns when
+  // one of these actually changes, in particular gated on the *debounced*
+  // search query rather than the raw one.
+  const filteredTransactions = useMemo(() => {
+    const searchWords = debouncedSearchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
 
-    const ts = effectiveDate(t).getTime()
-    const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
-    const toMatch = dateTo ? ts <= new Date(`${dateTo}T23:59:59`).getTime() : true
+    return transactions.filter((t) => {
+      const memberMatch = selectedMemberId ? t.member_id === selectedMemberId : true
+      const typeMatch = selectedType ? t.classification === selectedType : true
+      const loanMatch = loanFilter ? t.loan_id === loanFilter : true
+      const investmentMatch = investmentFilter ? t.investment_id === investmentFilter : true
 
-    // Every word in the query has to appear somewhere in the haystack, but
-    // not necessarily adjacent to (or in the same field as) each other --
-    // e.g. "Vhan BDO" should match a row where the member name and bank
-    // badge are two separate fields, not a literal "vhan bdo" substring.
-    const searchHaystack = [
-      t.members?.name,
-      t.description,
-      t.bank,
-      bankAccountLabel(t.from_bank_account),
-      bankAccountLabel(t.to_bank_account),
-      t.classification,
-      typeLabels[t.classification],
-      t.loans?.name,
-      t.loans?.borrowers?.name,
-      t.investments?.name,
-      t._transferLabel,
-      t.txn_date,
-      effectiveDate(t).toLocaleDateString(),
-      cardDate(t),
-      monthLabel(t)
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase()
+      const ts = effectiveDate(t).getTime()
+      const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
+      const toMatch = dateTo ? ts <= new Date(`${dateTo}T23:59:59`).getTime() : true
 
-    const searchWords = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    const searchMatch = searchWords.length === 0 || searchWords.every((word) => searchHaystack.includes(word))
+      // Skipped entirely with no query -- no point building the haystack
+      // (several Date formatting calls per row) just to match "" against it.
+      let searchMatch = true
+      if (searchWords.length > 0) {
+        // Every word in the query has to appear somewhere in the haystack,
+        // but not necessarily adjacent to (or in the same field as) each
+        // other -- e.g. "Vhan BDO" should match a row where the member name
+        // and bank badge are two separate fields, not a literal "vhan bdo"
+        // substring.
+        const searchHaystack = [
+          t.members?.name,
+          t.description,
+          t.bank,
+          bankAccountLabel(t.from_bank_account),
+          bankAccountLabel(t.to_bank_account),
+          t.classification,
+          typeLabels[t.classification],
+          t.loans?.name,
+          t.loans?.borrowers?.name,
+          t.investments?.name,
+          t._transferLabel,
+          t.txn_date,
+          effectiveDate(t).toLocaleDateString(),
+          cardDate(t),
+          monthLabel(t)
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
 
-    return memberMatch && typeMatch && loanMatch && investmentMatch && fromMatch && toMatch && searchMatch
-  })
+        searchMatch = searchWords.every((word) => searchHaystack.includes(word))
+      }
+
+      return memberMatch && typeMatch && loanMatch && investmentMatch && fromMatch && toMatch && searchMatch
+    })
+  }, [transactions, selectedMemberId, selectedType, loanFilter, investmentFilter, dateFrom, dateTo, debouncedSearchQuery])
 
   // For the loan/investment filter pills' labels -- neither name is known
   // until at least one matching transaction has loaded.
@@ -474,7 +499,10 @@ function TransactionsPageInner() {
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => {
+                    setSearchQuery("")
+                    setDebouncedSearchQuery("")
+                  }}
                   aria-label="Clear search"
                   className="absolute right-9 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-hairline text-ink-soft text-[11px] font-semibold flex items-center justify-center shrink-0"
                 >
