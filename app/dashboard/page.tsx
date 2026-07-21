@@ -360,7 +360,7 @@ export default function DashboardPage() {
           {activeTab === "fund" && (
             <section>
               <button
-                onClick={() => router.push("/bank")}
+                onClick={() => router.push("/fund-breakdown?tab=banks")}
                 className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 hover:bg-paper transition-colors"
               >
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
@@ -448,7 +448,7 @@ export default function DashboardPage() {
 
               {fund != null && fund.open_loans_count > 0 && (
                 <button
-                  onClick={() => router.push("/loans")}
+                  onClick={() => router.push("/fund-breakdown?tab=loans")}
                   className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 py-4 mt-4 hover:bg-paper transition-colors"
                 >
                   <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">

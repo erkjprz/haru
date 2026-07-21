@@ -249,7 +249,7 @@ export default function MemberBreakdownPage() {
   }
 
   const backLabel = isSelf ? "Dashboard" : "Fund Breakdown"
-  const backHref = isSelf ? "/dashboard" : "/fund-breakdown"
+  const backHref = isSelf ? "/dashboard" : "/fund-breakdown?tab=fund"
 
   return (
     <>

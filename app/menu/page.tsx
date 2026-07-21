@@ -85,13 +85,6 @@ export default function MenuPage() {
             Everything that doesn&apos;t live on the main bar.
           </p>
 
-          <MenuSection title="Portfolio">
-            <ChevronRow label="My Breakdown" onClick={() => router.push(`/member-breakdown/${member.member_id}`)} />
-            <ChevronRow label="Investments" onClick={() => router.push("/investment")} />
-            <ChevronRow label="Banks" onClick={() => router.push("/bank")} />
-            <ChevronRow label="Loans" onClick={() => router.push("/loans")} />
-          </MenuSection>
-
           <MenuSection title="You">
             <ChevronRow label="Account" onClick={() => router.push("/account")} />
             <ChevronRow label="Help" onClick={() => router.push("/help")} />
