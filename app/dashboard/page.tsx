@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
-import { dateOnly } from "@/lib/currentValue"
 
 const TXN_TYPE_LABELS: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -32,11 +31,6 @@ type RecentTransaction = {
   status: string
 }
 
-// How far back "Approved" and "Distributed" in the activity banner look --
-// there's no separate approved-at/distributed-at timestamp in the schema,
-// so a recent date window on txn_date/allocation_date is the closest
-// available proxy for "recent activity."
-const ACTIVITY_WINDOW_DAYS = 30
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -78,10 +72,6 @@ export default function DashboardPage() {
     async function loadDashboard() {
       if (!member) return
 
-      const sinceDate = new Date()
-      sinceDate.setDate(sinceDate.getDate() - ACTIVITY_WINDOW_DAYS)
-      const since = dateOnly(sinceDate)
-
       // v_fund_summary.total_cash is the same figure the Breakdown hub's
       // Fund tab shows as "Fund Total Cash" -- reuse it rather than
       // recomputing from bank balances.
@@ -106,30 +96,31 @@ export default function DashboardPage() {
         .eq("member_id", member.member_id)
         .eq("status", "pending")
 
+      // Approved/Distributed are all-time totals, not a recent window --
+      // this fund transacts every few months rather than daily, so a
+      // rolling 30-day (or even year-to-date) window reads as "broken zero"
+      // for most members most of the time. Pending stays unwindowed too,
+      // since a pending item is relevant for as long as it's pending.
       const myApprovedPromise = supabase
         .from("transactions")
         .select("transaction_id", { count: "exact", head: true })
         .eq("member_id", member.member_id)
         .eq("status", "approved")
-        .gte("txn_date", since)
 
       const bankInterestPromise = supabase
         .from("bank_interest_allocations")
         .select("amount")
         .eq("member_id", member.member_id)
-        .gte("allocation_date", since)
 
       const loanGainPromise = supabase
         .from("loan_gain_allocations")
         .select("amount")
         .eq("member_id", member.member_id)
-        .gte("allocation_date", since)
 
       const investmentAllocPromise = supabase
         .from("investment_allocations")
         .select("amount, allocation_type")
         .eq("member_id", member.member_id)
-        .gte("allocation_date", since)
 
       const recentTransactionsPromise = supabase
         .from("transactions")
@@ -336,8 +327,10 @@ export default function DashboardPage() {
           </div>
 
           {/* At-a-glance activity for this member -- pending count mirrors
-              what used to be its own banner, now folded in alongside a
-              recent-approvals count and recent distributions total. */}
+              what used to be its own banner. Approved/Distributed are
+              all-time totals rather than a recent window (see comment by
+              the queries above for why), so the labels say so -- otherwise
+              a quiet month reads as "broken zero" instead of "no activity." */}
           <button
             onClick={() => router.push("/transactions")}
             className="w-full flex bg-paper-2 border border-hairline rounded-md overflow-hidden mt-5 hover:bg-paper transition-colors"
@@ -348,11 +341,19 @@ export default function DashboardPage() {
             </div>
             <div className="flex-1 px-2.5 py-3.5 text-center border-r border-hairline">
               <p className="font-mono text-xl font-bold text-ink leading-none mb-1">{myApprovedCount}</p>
-              <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Approved</p>
+              <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">
+                All-Time
+                <br />
+                Approved
+              </p>
             </div>
             <div className="flex-1 px-2.5 py-3.5 text-center">
               <p className="font-mono text-xl font-bold text-sage leading-none mb-1">₱{fmt(myDistributed)}</p>
-              <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Distributed</p>
+              <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">
+                All-Time
+                <br />
+                Distributed
+              </p>
             </div>
           </button>
 

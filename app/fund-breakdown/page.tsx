@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -11,6 +11,7 @@ import { formatInterestLabel } from "@/lib/loanFormat"
 
 type Tab = "fund" | "loans" | "banks" | "investments"
 type FundView = "you" | "group"
+type TrendPoint = { value: number; date: string }
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "fund", label: "Fund" },
@@ -175,6 +176,7 @@ function YouPanel({ memberId }: { memberId: string }) {
   const [dataLoading, setDataLoading] = useState(true)
   const [performance, setPerformance] = useState<MemberPerformance | null>(null)
   const [years, setYears] = useState<YearRow[]>([])
+  const [myTrend, setMyTrend] = useState<TrendPoint[]>([])
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
@@ -188,6 +190,12 @@ function YouPanel({ memberId }: { memberId: string }) {
         )
         .eq("member_id", memberId)
         .single()
+
+      const trendPromise = supabase
+        .from("v_member_value_timeline")
+        .select("event_date, running_total")
+        .eq("member_id", memberId)
+        .order("event_date", { ascending: true })
 
       const txPromise = supabase
         .from("transactions")
@@ -213,9 +221,10 @@ function YouPanel({ memberId }: { memberId: string }) {
 
       const investmentDatesPromise = supabase.from("v_investment_dates").select("investment_id, last_txn_date")
 
-      const [performanceResult, txResult, bankInterestResult, loanGainResult, investmentAllocResult, investmentDatesResult] =
+      const [performanceResult, trendResult, txResult, bankInterestResult, loanGainResult, investmentAllocResult, investmentDatesResult] =
         await Promise.all([
           performancePromise,
+          trendPromise,
           txPromise,
           bankInterestPromise,
           loanGainPromise,
@@ -227,12 +236,17 @@ function YouPanel({ memberId }: { memberId: string }) {
 
       const firstError =
         performanceResult.error ||
+        trendResult.error ||
         txResult.error ||
         bankInterestResult.error ||
         loanGainResult.error ||
         investmentAllocResult.error ||
         investmentDatesResult.error
       if (firstError) setLoadError(firstError.message)
+
+      if (!trendResult.error && trendResult.data) {
+        setMyTrend(trendResult.data.map((r: any) => ({ value: Number(r.running_total), date: r.event_date })))
+      }
 
       if (!performanceResult.error && performanceResult.data) {
         setPerformance({
@@ -340,6 +354,7 @@ function YouPanel({ memberId }: { memberId: string }) {
               of ₱{fmt(performance.total_value)} total — ₱{fmt(performance.money_on_hold)} currently tied up in loans/investments
             </p>
           )}
+          <Sparkline points={myTrend} color="#5F7A5A" />
 
           <InfoBox label="Capital (All-Time)">
             <InfoRow label="Total Contribution" value={`₱${fmt(performance.total_contribution)}`} />
@@ -485,6 +500,7 @@ function GroupPanel() {
   const router = useRouter()
   const [members, setMembers] = useState<MemberRow[]>([])
   const [totalCash, setTotalCash] = useState<number | null>(null)
+  const [fundTrend, setFundTrend] = useState<TrendPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [activeIndex, setActiveIndex] = useState(0)
@@ -509,10 +525,16 @@ function GroupPanel() {
 
       const fundPromise = supabase.from("v_fund_summary").select("total_cash").single()
 
-      const [memberResult, performanceResult, fundResult] = await Promise.all([
+      const fundTrendPromise = supabase
+        .from("v_fund_cash_timeline")
+        .select("month, running_balance")
+        .order("month", { ascending: true })
+
+      const [memberResult, performanceResult, fundResult, fundTrendResult] = await Promise.all([
         memberPromise,
         performancePromise,
-        fundPromise
+        fundPromise,
+        fundTrendPromise
       ])
 
       if (cancelled) return
@@ -526,6 +548,10 @@ function GroupPanel() {
       }
 
       setTotalCash(Number(fundResult.data?.total_cash ?? 0))
+
+      if (!fundTrendResult.error && fundTrendResult.data) {
+        setFundTrend(fundTrendResult.data.map((r: any) => ({ value: Number(r.running_balance), date: r.month })))
+      }
 
       const performanceByMember: Record<string, any> = {}
       performanceResult.data?.forEach((row: any) => {
@@ -636,11 +662,12 @@ function GroupPanel() {
             <span className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">Fund Total Cash</span>
             <span className="text-[13px] text-ink-soft font-mono">{members.length} members</span>
           </div>
-          <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl sm:text-3xl font-bold text-ink mb-3.5">
+          <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl sm:text-3xl font-bold text-ink">
             ₱{totalCash != null ? fmt(totalCash) : "—"}
           </p>
+          <Sparkline points={fundTrend} color="#B8912F" />
 
-          <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Ownership Share</p>
+          <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono mb-1.5 mt-3.5">Ownership Share</p>
           <div className="flex h-2 rounded-full overflow-hidden bg-hairline">
             {members.map((m, i) => (
               <div
@@ -1877,6 +1904,81 @@ function InvestmentForm({
 }
 
 /* ============================== Shared info-box helpers ============================== */
+
+function Sparkline({ points, color }: { points: TrendPoint[]; color: string }) {
+  const { linePoints, ticks } = useMemo(() => {
+    if (!points || points.length < 2) return { linePoints: "", ticks: [] as { x: number; label: string }[] }
+
+    const values = points.map((p) => p.value)
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const range = max - min || 1
+    const w = 300
+    const h = 34
+    const step = w / (points.length - 1)
+
+    const linePoints = points
+      .map((p, i) => {
+        const x = i * step
+        const y = h - ((p.value - min) / range) * (h - 4) - 2
+        return `${x.toFixed(1)},${y.toFixed(1)}`
+      })
+      .join(" ")
+
+    // One tick per calendar year, placed at that year's first data point.
+    // Consecutive real-world years can land very close together in index-
+    // space if a member had a burst of activity recently, so enforce a
+    // minimum pixel gap and let the later year win a collision rather than
+    // overlapping the text.
+    const minGap = 26
+    const rawTicks: { x: number; label: string }[] = []
+    let lastYear = ""
+    points.forEach((p, i) => {
+      const year = (p.date || "").slice(0, 4)
+      if (year && year !== lastYear) {
+        rawTicks.push({ x: i * step, label: year })
+        lastYear = year
+      }
+    })
+
+    const ticks: { x: number; label: string }[] = []
+    rawTicks.forEach((t) => {
+      if (ticks.length > 0 && t.x - ticks[ticks.length - 1].x < minGap) {
+        ticks[ticks.length - 1] = t
+      } else {
+        ticks.push(t)
+      }
+    })
+
+    return { linePoints, ticks }
+  }, [points])
+
+  if (!linePoints) {
+    return <div className="h-[48px] mt-2.5" />
+  }
+
+  return (
+    <div className="mt-2.5">
+      <svg className="block" width="100%" height="34" viewBox="0 0 300 34" preserveAspectRatio="none">
+        <polyline points={linePoints} fill="none" stroke={color} strokeWidth="2" />
+      </svg>
+      <div className="relative h-[14px] mt-1">
+        {ticks.map((t, i) => (
+          <span
+            key={i}
+            className="absolute text-[9.5px] text-ink-soft font-mono"
+            style={{
+              left: `${(t.x / 300) * 100}%`,
+              transform: i === 0 ? "translateX(0)" : i === ticks.length - 1 ? "translateX(-100%)" : "translateX(-50%)"
+            }}
+          >
+            {t.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function InfoBox({ label, children }: { label: string; children: React.ReactNode }) {
   return (
