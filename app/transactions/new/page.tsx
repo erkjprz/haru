@@ -121,7 +121,13 @@ function NewTransactionForm() {
   useEffect(() => {
     const el = bottomBarRef.current
     if (!el) return
-    const observer = new ResizeObserver(([entry]) => setBottomBarHeight(entry.contentRect.height))
+    // entry.contentRect excludes the element's own padding, and the bar
+    // carries its safe-area padding directly -- reading offsetHeight instead
+    // (on every resize, not just once) is what actually includes it, so this
+    // doesn't quietly under-measure by that padding on notched phones.
+    const update = () => setBottomBarHeight(el.offsetHeight)
+    update()
+    const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
@@ -542,7 +548,7 @@ function NewTransactionForm() {
     chips.push({ done: false, text: "No receipt needed" })
   } else if (isLoanRequest) {
     chips.push(
-      previewTotalRepayable > 0
+      previewTotalRepayable > 0 && isValidPositiveNumber(termMonths)
         ? { done: true, text: `Total ₱${fmt(previewTotalRepayable)}` }
         : { done: false, text: "Enter interest & term" }
     )

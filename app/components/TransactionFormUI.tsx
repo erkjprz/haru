@@ -200,6 +200,13 @@ export function AmountHero({
           placeholder="0.00"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          // There's no <form> wrapping this field (submission is a plain
+          // button onClick, not a form submit), so without this the return
+          // key on the numeric keypad does nothing at all -- this makes it
+          // dismiss the keyboard instead, the closest equivalent to "done".
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur()
+          }}
           className="font-mono [font-variant-numeric:tabular-nums] text-6xl font-bold text-ink bg-transparent text-center focus:outline-none w-full max-w-[280px] placeholder:text-hairline"
         />
       </div>
