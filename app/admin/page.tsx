@@ -360,7 +360,7 @@ export default function AdminPage() {
       <>
         <Navbar />
         <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-          <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+          <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
             <SkeletonCardList rows={3} />
           </div>
         </main>
@@ -379,7 +379,7 @@ export default function AdminPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+        <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Administration
           </div>

@@ -1,79 +1,110 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
-import { useTheme } from "@/app/components/ThemeProvider"
 import { useAuth } from "@/app/auth-context"
+
+function IconHome({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className="w-[22px] h-[22px]">
+      <path d="M4 11l8-7 8 7v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8z" />
+    </svg>
+  )
+}
+
+function IconTransactions({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className="w-[22px] h-[22px]">
+      <path d="M4 7h16M4 12h16M4 17h10" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconBreakdown({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className="w-[22px] h-[22px]">
+      <path d="M12 2a10 10 0 100 20 10 10 0 000-20z" />
+      <path d="M12 2v10l7 7" />
+    </svg>
+  )
+}
+
+function IconAdmin({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className="w-[22px] h-[22px]">
+      <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
+    </svg>
+  )
+}
+
+function IconMenu({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className="w-[22px] h-[22px]">
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </svg>
+  )
+}
+
+type DockItem = {
+  label: string
+  path: string
+  icon: (props: { active: boolean }) => React.ReactNode
+  // Highlights this tab for any page "owned" by it, not just an exact
+  // match -- e.g. Transactions stays highlighted on its own detail pages.
+  activeWhen?: (pathname: string) => boolean
+}
 
 export default function Navbar() {
   const router = useRouter()
   const pathname = usePathname()
-  const { theme, toggleTheme } = useTheme()
-  const [isOpen, setIsOpen] = useState(false)
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
 
-  useEffect(() => {
-    setIsOpen(false)
-  }, [pathname])
-
-  async function logout() {
-    await supabase.auth.signOut()
-    router.push("/login")
-  }
-
-  const links = [
-    { label: "Dashboard", path: "/dashboard" },
-    { label: "Fund Breakdown", path: "/fund-breakdown" },
-    ...(member ? [{ label: "My Breakdown", path: `/member-breakdown/${member.member_id}` }] : []),
-    { label: "Transactions", path: "/transactions" },
-    { label: "Investments", path: "/investment" },
-    { label: "Banks", path: "/bank" },
-    { label: "Loans", path: "/loans" },
-    { label: "Account", path: "/account" },
-    { label: "Help", path: "/help" },
-    ...(isAdmin ? [{ label: "Admin", path: "/admin" }] : [])
-  ]
-
-  function isActive(path: string) {
-    const matches = links.filter(
-      (l) => pathname === l.path || pathname.startsWith(l.path + "/")
-    )
-    if (matches.length === 0) return false
-    const best = matches.reduce((a, b) =>
-      a.path.length >= b.path.length ? a : b
-    )
-    return best.path === path
-  }
+  // The transaction forms have their own sticky Amount/Save footer -- a
+  // second fixed bar at the bottom would stack on top of it.
+  const hideDock =
+    pathname === "/transactions/new" || (pathname.startsWith("/transactions/") && pathname.endsWith("/edit"))
 
   const onNewTransactionPage = pathname.startsWith("/transactions/new")
+
+  // Everything that doesn't get its own docked tab still lives somewhere
+  // -- on the Menu page -- so Menu reads as "active" while browsing any of
+  // it, the same way Transactions stays active on a transaction's own
+  // pages even though there's no separate "Transactions" sub-route tab.
+  const MENU_OWNED_PREFIXES = ["/menu", "/account", "/help", "/investment", "/bank", "/loans", "/member-breakdown"]
+
+  const dockItems: DockItem[] = [
+    { label: "Dashboard", path: "/dashboard", icon: IconHome },
+    { label: "Transactions", path: "/transactions", icon: IconTransactions },
+    { label: "Breakdown", path: "/fund-breakdown", icon: IconBreakdown },
+    ...(isAdmin ? [{ label: "Admin", path: "/admin", icon: IconAdmin } as DockItem] : []),
+    {
+      label: "Menu",
+      path: "/menu",
+      icon: IconMenu,
+      activeWhen: (p) => MENU_OWNED_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix + "/"))
+    }
+  ]
+
+  function isActive(item: DockItem) {
+    if (item.activeWhen) return item.activeWhen(pathname)
+    return pathname === item.path || pathname.startsWith(item.path + "/")
+  }
 
   return (
     <>
       <nav className="border-b border-hairline bg-paper sticky top-0 z-40">
-        <div className="flex items-center justify-between px-5 py-4 max-w-3xl mx-auto">
-          <button
-            onClick={() => setIsOpen(true)}
-            aria-label="Open menu"
-            className="flex flex-col justify-center gap-[5px] w-9 h-9 -ml-2"
-          >
-            <span className="block h-[1.5px] w-6 bg-ink" />
-            <span className="block h-[1.5px] w-6 bg-ink" />
-            <span className="block h-[1.5px] w-6 bg-ink" />
-          </button>
-
+        <div className="flex items-center justify-center px-5 py-4 max-w-3xl mx-auto">
           <span className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono">
             Est. 2017
           </span>
-
-          {/* Spacer to balance the hamburger button so the label stays centered */}
-          <div className="w-9 h-9" />
         </div>
       </nav>
 
-      {/* Fixed top-right button, opposite the hamburger, so it shows in the
-          same spot on every page regardless of that page's own layout. */}
+      {/* Fixed top-right button, so it shows in the same spot on every
+          page regardless of that page's own layout. */}
       {!onNewTransactionPage && (
         <button
           onClick={() => router.push("/transactions/new")}
@@ -85,70 +116,30 @@ export default function Navbar() {
         </button>
       )}
 
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm"
-          onClick={() => setIsOpen(false)}
+      {!hideDock && (
+        <nav
+          className="fixed bottom-0 left-0 right-0 z-40 bg-paper border-t border-hairline"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
-          <div
-            className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-paper border-r border-hairline flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-5 border-b border-hairline">
-              <span className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono">
-                Est. 2017
-              </span>
-              <button
-                onClick={() => setIsOpen(false)}
-                aria-label="Close menu"
-                className="w-8 h-8 flex items-center justify-center text-xl text-ink-soft"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto py-3">
-              {links.map((link) => (
+          <div className="max-w-3xl mx-auto flex items-stretch" style={{ height: "var(--dock-h)" }}>
+            {dockItems.map((item) => {
+              const active = isActive(item)
+              const Icon = item.icon
+              return (
                 <button
-                  key={link.label}
-                  onClick={() => {
-                    router.push(link.path)
-                    setIsOpen(false)
-                  }}
-                  className={`
-                    w-full text-left px-5 py-3 text-sm font-mono
-                    border-l-[3px] transition-colors
-                    ${
-                      isActive(link.path)
-                        ? "border-gold text-ink bg-paper-2"
-                        : "border-transparent text-ink-soft"
-                    }
-                  `}
+                  key={item.label}
+                  onClick={() => router.push(item.path)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
+                    active ? "text-gold" : "text-ink-soft"
+                  }`}
                 >
-                  {link.label}
+                  <Icon active={active} />
+                  <span className={`text-[10px] font-mono ${active ? "font-semibold" : ""}`}>{item.label}</span>
                 </button>
-              ))}
-            </div>
-
-            <button
-              onClick={toggleTheme}
-              className="border-t border-hairline px-5 py-3 text-sm font-mono text-ink-soft flex items-center justify-between"
-            >
-              <span>Appearance</span>
-              <span>{theme === "light" ? "🌙 Dark mode" : "☀️ Light mode"}</span>
-            </button>
-
-            <div className="border-t border-hairline p-5">
-              <button
-                onClick={logout}
-                className="w-full flex items-center justify-center gap-2 bg-ink text-paper rounded-sm py-3 text-sm font-medium"
-              >
-                <span>⏻</span>
-                Sign Out
-              </button>
-            </div>
+              )
+            })}
           </div>
-        </div>
+        </nav>
       )}
     </>
   )
