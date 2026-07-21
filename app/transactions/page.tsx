@@ -197,6 +197,68 @@ function FilterPill({
   )
 }
 
+// Owns the raw keystroke-by-keystroke input state itself and only reports
+// upward once typing pauses -- debouncing the *value* passed up wasn't
+// enough on its own, since the parent still re-rendered (and re-diffed its
+// full, possibly ~1000-row, transaction list) on every keystroke just to
+// reflect the input's own updated text. Isolating that state here means a
+// keystroke only re-renders this small subtree; the parent, and the list,
+// re-render solely when onDebouncedChange actually fires.
+function SearchBox({ onDebouncedChange }: { onDebouncedChange: (value: string) => void }) {
+  const [value, setValue] = useState("")
+  const [showHint, setShowHint] = useState(false)
+
+  useEffect(() => {
+    const timeout = setTimeout(() => onDebouncedChange(value), 300)
+    return () => clearTimeout(timeout)
+  }, [value, onDebouncedChange])
+
+  return (
+    <div className="mt-6">
+      <div className="relative">
+        <input
+          type="text"
+          placeholder="Search transactions..."
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className={`w-full border border-hairline bg-paper-2 text-ink rounded-md pl-4 py-3 text-sm placeholder:text-ink-soft focus:outline-none ${
+            value ? "pr-16" : "pr-10"
+          }`}
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => {
+              setValue("")
+              onDebouncedChange("")
+            }}
+            aria-label="Clear search"
+            className="absolute right-9 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-hairline text-ink-soft text-[11px] font-semibold flex items-center justify-center shrink-0"
+          >
+            ×
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowHint((v) => !v)}
+          aria-label="What does search look at?"
+          aria-expanded={showHint}
+          className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-hairline text-ink-soft text-[11px] font-semibold flex items-center justify-center shrink-0"
+        >
+          ?
+        </button>
+      </div>
+      {showHint && (
+        <p className="mt-2 text-xs text-ink-soft">
+          Matches member names, banks, descriptions, loan/investment names, transaction types, and dates.
+          Multiple words narrow the results -- e.g. "Vhan BDO" finds Vhan's transactions on BDO, even
+          though the two words aren't next to each other on the card.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function TransactionsPage() {
   return (
     <Suspense fallback={null}>
@@ -218,13 +280,11 @@ function TransactionsPageInner() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  // Filtering re-renders every visible transaction card, which is heavy
-  // enough on a long list that doing it on every keystroke made typing feel
-  // laggy. The input itself stays bound to searchQuery for instant visual
-  // feedback; only the actual filtering waits for typing to pause.
+  // The raw, keystroke-by-keystroke value lives in SearchBox itself (see
+  // above) -- this only ever updates once typing pauses, which keeps this
+  // component (and the potentially long list it renders) from re-rendering
+  // on every keystroke.
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
-  const [showSearchHint, setShowSearchHint] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
@@ -348,11 +408,6 @@ function TransactionsPageInner() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member])
-
-  useEffect(() => {
-    const timeout = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300)
-    return () => clearTimeout(timeout)
-  }, [searchQuery])
 
   function clearFilters() {
     setSelectedMemberId("")
@@ -502,48 +557,7 @@ function TransactionsPageInner() {
             </p>
           )}
 
-          <div className="mt-6">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search transactions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full border border-hairline bg-paper-2 text-ink rounded-md pl-4 py-3 text-sm placeholder:text-ink-soft focus:outline-none ${
-                  searchQuery ? "pr-16" : "pr-10"
-                }`}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery("")
-                    setDebouncedSearchQuery("")
-                  }}
-                  aria-label="Clear search"
-                  className="absolute right-9 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-hairline text-ink-soft text-[11px] font-semibold flex items-center justify-center shrink-0"
-                >
-                  ×
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowSearchHint((v) => !v)}
-                aria-label="What does search look at?"
-                aria-expanded={showSearchHint}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-hairline text-ink-soft text-[11px] font-semibold flex items-center justify-center shrink-0"
-              >
-                ?
-              </button>
-            </div>
-            {showSearchHint && (
-              <p className="mt-2 text-xs text-ink-soft">
-                Matches member names, banks, descriptions, loan/investment names, transaction types, and dates.
-                Multiple words narrow the results -- e.g. "Vhan BDO" finds Vhan's transactions on BDO, even
-                though the two words aren't next to each other on the card.
-              </p>
-            )}
-          </div>
+          <SearchBox onDebouncedChange={setDebouncedSearchQuery} />
 
           {/* Each pill turns gold once it holds a real value, with its own
               separate × alongside (never on top of) it -- see FilterPill.
@@ -623,7 +637,7 @@ function TransactionsPageInner() {
 
           <div className="mt-4 text-xs text-ink-soft font-mono [font-variant-numeric:tabular-nums]">
             Showing {filteredTransactions.length} of {totalCount}
-            {searchQuery && ` matching "${searchQuery}"`}
+            {debouncedSearchQuery && ` matching "${debouncedSearchQuery}"`}
           </div>
 
           <div className="mt-4">
