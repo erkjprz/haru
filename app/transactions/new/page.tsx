@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
@@ -119,7 +119,16 @@ function TypeSelector({
 }
 
 export default function NewTransactionPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewTransactionForm />
+    </Suspense>
+  )
+}
+
+function NewTransactionForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { loading: authLoading, member } = useAuth()
   const [dataLoading, setDataLoading] = useState(true)
   const checkingAccess = authLoading || dataLoading
@@ -130,7 +139,13 @@ export default function NewTransactionPage() {
   const [myLoans, setMyLoans] = useState<any[]>([])
   const [investmentsList, setInvestmentsList] = useState<any[]>([])
 
-  const [selectedType, setSelectedType] = useState("contribution")
+  // Dashboard shortcuts (Add Contribution, Request Withdrawal, etc.) deep
+  // link here with ?type= so the form opens straight to the right entry
+  // type instead of always defaulting to Contribution.
+  const [selectedType, setSelectedType] = useState(() => {
+    const requested = searchParams.get("type")
+    return MEMBER_TYPES.some((t) => t.key === requested) ? requested! : "contribution"
+  })
   const [onBehalfOfId, setOnBehalfOfId] = useState("")
   const [investmentId, setInvestmentId] = useState("")
   const [bankId, setBankId] = useState("")
