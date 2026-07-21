@@ -1,13 +1,21 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
-import { SectionLabel, FlowBadge, Chip } from "@/app/components/TransactionFormUI"
+import {
+  RowGroup,
+  SelectRow,
+  TextRow,
+  NumberRow,
+  AmountHero,
+  TypeTabs,
+  TypeChipRow
+} from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 import { dateOnly } from "@/lib/currentValue"
@@ -26,22 +34,6 @@ const ENTRY_TYPES = [
 
 const MEMBER_LINKED_TYPES = ["contribution", "withdrawal", "loan_request", "loan_payment"]
 const MEMBER_TYPES = ENTRY_TYPES.filter((t) => !t.adminOnly)
-
-// Direction the fund's cash moves for each entry type -- "in" (member pays
-// the fund), "out" (fund pays a member/expense), or "neutral" (moves
-// between the fund's own banks, doesn't change the total).
-const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = {
-  contribution: { arrow: "↑", tone: "in" },
-  withdrawal: { arrow: "↓", tone: "out" },
-  loan_request: { arrow: "↓", tone: "out" },
-  loan_payment: { arrow: "↑", tone: "in" },
-  bank_interest: { arrow: "↑", tone: "in" },
-  expense: { arrow: "↓", tone: "out" },
-  bank_transfer: { arrow: "⇄", tone: "neutral" },
-  investment: { arrow: "↓", tone: "out" },
-  investment_return: { arrow: "↑", tone: "in" }
-}
-
 // A number input is "valid" here if it's not empty, parses to a real
 // number (not NaN -- e.g. a stray non-numeric paste), and clears the given
 // floor. Number(amount) <= 0 alone lets NaN slip through silently, since
@@ -51,71 +43,6 @@ function isValidPositiveNumber(value: string, allowZero = false): boolean {
   const n = Number(value)
   if (Number.isNaN(n)) return false
   return allowZero ? n >= 0 : n > 0
-}
-
-// Collapsed by default -- just the current selection -- and expands in
-// place into the full list on tap. Admin-only entries sit inline with an
-// "Admin" tag rather than a separate section, since the tag travels with
-// the item wherever it sorts.
-function TypeSelector({
-  options,
-  value,
-  onChange
-}: {
-  options: { key: string; label: string; adminOnly: boolean }[]
-  value: string
-  onChange: (key: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const selected = options.find((o) => o.key === value)
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-3 border border-hairline bg-paper rounded-sm px-3.5 py-3"
-      >
-        <span className="flex items-center gap-2.5 min-w-0">
-          <FlowBadge {...(FLOW[value] ?? { arrow: "•", tone: "neutral" })} />
-          <span className="text-sm font-semibold text-ink truncate">{selected?.label}</span>
-        </span>
-        <span
-          className={`text-ink-soft text-xs shrink-0 motion-safe:transition-transform ${open ? "rotate-180" : ""}`}
-        >
-          ▾
-        </span>
-      </button>
-
-      {open && (
-        <div className="mt-1.5 border border-hairline rounded-sm overflow-hidden">
-          {options.map((o) => (
-            <button
-              key={o.key}
-              type="button"
-              onClick={() => {
-                onChange(o.key)
-                setOpen(false)
-              }}
-              className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 text-sm text-left border-b border-hairline last:border-b-0 transition-colors ${
-                o.key === value ? "bg-gold/10 text-ink font-semibold" : "bg-paper text-ink-soft"
-              }`}
-            >
-              <span className="flex items-center gap-2.5 min-w-0">
-                <FlowBadge {...(FLOW[o.key] ?? { arrow: "•", tone: "neutral" })} />
-                <span className="truncate">{o.label}</span>
-              </span>
-              {o.adminOnly && (
-                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-gold border border-gold/40 rounded-full px-2 py-0.5">
-                  Admin
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
 }
 
 export default function NewTransactionPage() {
@@ -176,6 +103,38 @@ function NewTransactionForm() {
 
     setMyLoans(data ?? [])
   }
+
+  // Defensive against iOS Safari restoring a previous scroll position on
+  // back-forward-cache navigation -- this form should always start at the
+  // top regardless of where the last page (or the last visit here) left off.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
+
+  // The sticky bottom bar's height isn't fixed -- it grows when chips wrap
+  // to a second line or a validation message appears. Measuring it and
+  // feeding that back into the content's bottom padding means the last row
+  // never sits hidden behind the bar, without having to pad every page for
+  // the tallest bar that could ever occur.
+  const bottomBarRef = useRef<HTMLDivElement>(null)
+  const [bottomBarHeight, setBottomBarHeight] = useState(0)
+  // useLayoutEffect, not useEffect -- this runs before the browser paints,
+  // so the correct padding is in place for the very first frame instead of
+  // a brief window at the old default (0) that a fast scroll could reach
+  // and settle inside before the real measurement ever lands.
+  useLayoutEffect(() => {
+    const el = bottomBarRef.current
+    if (!el) return
+    // entry.contentRect excludes the element's own padding, and the bar
+    // carries its safe-area padding directly -- reading offsetHeight instead
+    // (on every resize, not just once) is what actually includes it, so this
+    // doesn't quietly under-measure by that padding on notched phones.
+    const update = () => setBottomBarHeight(el.offsetHeight)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     if (authLoading) return
@@ -300,6 +259,15 @@ function NewTransactionForm() {
 
   async function handleTypeChange(newType: string) {
     setSelectedType(newType)
+    // A validation error from the previous type (e.g. "Select a source
+    // bank.") has nothing to do with the newly selected type's own fields --
+    // leaving it on screen reads as a leftover complaint about a form that
+    // no longer exists.
+    setMessage("")
+    // Switching type can swap in a much shorter (or longer) set of fields --
+    // same idiom as Dashboard's You/Fund tabs, so the new fields are never
+    // left scrolled halfway down a page whose content just changed height.
+    window.scrollTo(0, 0)
     setReceiptFile(null)
     setBankId("")
     setToBankId("")
@@ -589,15 +557,15 @@ function NewTransactionForm() {
     chips.push({ done: false, text: "No receipt needed" })
   } else if (isLoanRequest) {
     chips.push(
-      previewTotalRepayable > 0
+      previewTotalRepayable > 0 && isValidPositiveNumber(termMonths)
         ? { done: true, text: `Total ₱${fmt(previewTotalRepayable)}` }
         : { done: false, text: "Enter interest & term" }
     )
   } else if (isBankTransfer) {
     chips.push(
-      bankId && toBankId
+      bankId && toBankId && bankId !== toBankId
         ? { done: true, text: `✓ ${bankLabel(bankId)} → ${bankLabel(toBankId)}` }
-        : { done: false, text: "Select both banks" }
+        : { done: false, text: bankId && bankId === toBankId ? "Banks must differ" : "Select both banks" }
     )
     chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
     chips.push({ done: true, text: "Doesn't affect cash total" })
@@ -611,6 +579,19 @@ function NewTransactionForm() {
     chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
     chips.push({ done: true, text: "Posts as approved" })
   }
+
+  // The submit button's label doubles as the readiness indicator instead of
+  // a separate chip row -- "No receipt needed" is informational rather than
+  // a requirement (withdrawal has nothing else to fill in), so it's the one
+  // chip excluded from gating the button.
+  const amountReady = isValidPositiveNumber(amount)
+  const blockingChip = chips.find((c) => !c.done && c.text !== "No receipt needed")
+  const readyToSubmit = amountReady && !blockingChip
+  const submitLabel = !amountReady
+    ? "Enter an amount to continue"
+    : blockingChip
+      ? blockingChip.text
+      : `Submit ₱${fmt(Number(amount))}`
 
   if (checkingAccess) {
     return (
@@ -648,7 +629,7 @@ function NewTransactionForm() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8 pb-48">
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8" style={{ paddingBottom: bottomBarHeight + 96 }}>
           <button
             onClick={() => router.push("/transactions")}
             className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
@@ -663,364 +644,257 @@ function NewTransactionForm() {
           </h1>
           <p className="text-[13px] text-ink-soft mb-6">Add a new ledger entry for the fund.</p>
 
-          <div className="bg-paper-2 border border-hairline rounded-md p-5">
-              <SectionLabel first>① Entry type</SectionLabel>
-              <TypeSelector
-                options={isAdmin ? ENTRY_TYPES : MEMBER_TYPES}
-                value={selectedType}
-                onChange={handleTypeChange}
-              />
+          {isAdmin ? (
+            <TypeChipRow options={ENTRY_TYPES} value={selectedType} onChange={handleTypeChange} />
+          ) : (
+            <TypeTabs options={MEMBER_TYPES} value={selectedType} onChange={handleTypeChange} />
+          )}
 
-              <p className="text-sm text-ink-soft mt-3">
-                {helperText[selectedType]}
-              </p>
+          <AmountHero
+            label={isLoanRequest ? "Amount to borrow" : "Amount"}
+            value={amount}
+            onChange={setAmount}
+            helper={helperText[selectedType]}
+          />
 
-              <SectionLabel>② Amount &amp; details</SectionLabel>
-
-              <div className="space-y-4">
-              {isAdmin && isMemberLinkedType && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    On behalf of
-                  </label>
-                  <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    value={onBehalfOfId}
-                    onChange={(e) => handleOnBehalfChange(e.target.value)}
-                  >
-                    <option value="">Myself</option>
-                    {allMembers
-                      .filter((m) => m.member_id !== memberId)
-                      .map((m) => (
-                        <option key={m.member_id} value={m.member_id}>
-                          {m.name}
-                        </option>
-                      ))}
-                  </select>
-                  {onBehalfOfId && (
-                    <p className="text-sm text-gold mt-2">
-                      This will be recorded as approved immediately for {allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {isInvestmentEntry && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Investment
-                  </label>
-                  <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    value={investmentId}
-                    onChange={(e) => setInvestmentId(e.target.value)}
-                  >
-                    <option value="">Select an investment</option>
-                    {investmentsList.map((inv) => (
-                      <option key={inv.investment_id} value={inv.investment_id}>
-                        {inv.name}
-                      </option>
-                    ))}
-                  </select>
-                  {investmentsList.length === 0 && (
-                    <p className="text-sm text-ink-soft mt-2">
-                      No investments yet -- add one from the Investments page first.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {isLoanPayment && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Which loan
-                  </label>
-                  {myLoans.filter((l) => l.status === "active").length === 0 ? (
-                    <p className="text-sm text-rust">
-                      No active loans to pay against.
-                    </p>
-                  ) : (
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={selectedLoanId}
-                      onChange={(e) => setSelectedLoanId(e.target.value)}
+          {isLoanRequest && (
+            <>
+              <p className="text-xs font-bold uppercase tracking-wide text-ink-soft font-mono mb-2">Loan Terms</p>
+              <RowGroup>
+                <div className="px-4 py-3.5 border-b border-hairline">
+                  <p className="text-sm text-ink-soft mb-2.5">Interest</p>
+                  <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setInterestType("rate")}
+                      className={`flex-1 text-sm font-semibold py-2 transition-colors ${
+                        interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                      }`}
                     >
-                      <option value="">Select a loan</option>
-                      {myLoans
-                        .filter((l) => l.status === "active")
-                        .map((loan) => (
-                          <option key={loan.loan_id} value={loan.loan_id}>
-                            ₱{fmt(loan.principal)} from {loan.start_date}
-                          </option>
-                        ))}
-                    </select>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                  {isLoanRequest ? "Amount to borrow" : "Amount"}
-                </label>
-                <input
-                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </div>
-
-              {isLoanRequest && (
-                <>
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Interest
-                    </label>
-                    <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
-                      <button
-                        type="button"
-                        onClick={() => setInterestType("rate")}
-                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                          interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                        }`}
-                      >
-                        Rate (%)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setInterestType("amount")}
-                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                          interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                        }`}
-                      >
-                        Fixed amount (₱)
-                      </button>
-                    </div>
-                    {interestType === "rate" ? (
-                      <input
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="e.g. 5"
-                        value={interestRate}
-                        onChange={(e) => setInterestRate(e.target.value)}
-                      />
-                    ) : (
-                      <input
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="e.g. 5000"
-                        value={interestAmount}
-                        onChange={(e) => setInterestAmount(e.target.value)}
-                      />
-                    )}
+                      Rate (%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInterestType("amount")}
+                      className={`flex-1 text-sm font-semibold py-2 transition-colors ${
+                        interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                      }`}
+                    >
+                      Fixed amount (₱)
+                    </button>
                   </div>
-
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Term (months)
-                    </label>
+                  {interestType === "rate" ? (
                     <input
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full font-mono [font-variant-numeric:tabular-nums]"
                       type="number"
-                      min="1"
-                      step="1"
-                      placeholder="e.g. 6"
-                      value={termMonths}
-                      onChange={(e) => setTermMonths(e.target.value)}
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 5"
+                      value={interestRate}
+                      onChange={(e) => setInterestRate(e.target.value)}
                     />
-                  </div>
-
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Repayment mode
-                    </label>
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={repaymentFrequency}
-                      onChange={(e) => setRepaymentFrequency(e.target.value)}
-                    >
-                      <option value="monthly">Monthly installments</option>
-                      <option value="lump_sum">One lump sum at end of term</option>
-                    </select>
-                  </div>
-
-                  {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                    <div className="border border-hairline rounded-md p-4 bg-paper">
-                      <p className="text-sm text-ink-soft font-mono mb-2">
-                        Estimated repayment
-                      </p>
-                      <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
-                        <span className="text-ink-soft">Total repayable</span>
-                        <span>₱{fmt(previewTotalRepayable)}</span>
-                      </div>
-                      <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
-                        <span className="text-ink-soft">
-                          {repaymentFrequency === "monthly"
-                            ? `Per month × ${termMonths}`
-                            : `Due at ${termMonths} months`}
-                        </span>
-                        <span className="font-semibold">
-                          ₱{fmt(previewPerInstallment)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {needsBank && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    {isBankTransfer ? "From bank" : "Bank"}
-                  </label>
-                  <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    value={bankId}
-                    onChange={(e) => setBankId(e.target.value)}
-                  >
-                    <option value="">Select a bank</option>
-                    {banks.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.account_name || bank.bank_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {isBankTransfer && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    To bank
-                  </label>
-                  <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    value={toBankId}
-                    onChange={(e) => setToBankId(e.target.value)}
-                  >
-                    <option value="">Select a bank</option>
-                    {banks.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.account_name || bank.bank_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                  Description
-                </label>
-                <input
-                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                  placeholder="Add a note"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </div>
-
-              {needsReceipt && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Receipt
-                  </label>
-
-                  {!receiptPreview ? (
-                    <label
-                      onDragOver={(e) => {
-                        e.preventDefault()
-                        setDragActive(true)
-                      }}
-                      onDragLeave={() => setDragActive(false)}
-                      onDrop={handleDrop}
-                      className={`
-                        flex flex-col items-center justify-center gap-2
-                        border-2 border-dashed rounded-md
-                        py-10 px-4 cursor-pointer text-center transition-colors
-                        ${dragActive ? "border-gold bg-gold/5" : "border-hairline"}
-                      `}
-                    >
-                      <span className="text-2xl">📎</span>
-                      <span className="text-base text-ink">
-                        Tap to upload, or drag a photo here
-                      </span>
-                      <span className="text-sm text-ink-soft">
-                        Screenshot or photo of your deposit slip
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-                      />
-                    </label>
                   ) : (
-                    <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
-                      <img
-                        src={receiptPreview}
-                        alt="Receipt preview"
-                        className="w-16 h-16 object-cover rounded-md border border-hairline"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base text-ink truncate">
-                          {receipt?.name}
-                        </p>
-                        <p className="text-sm text-ink-soft">
-                          {receipt ? `${(receipt.size / 1024).toFixed(0)} KB` : ""}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setReceiptFile(null)}
-                        className="text-sm text-rust border border-rust rounded-full px-2.5 py-1 shrink-0"
-                      >
-                        Remove
-                      </button>
-                    </div>
+                    <input
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full font-mono [font-variant-numeric:tabular-nums]"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 5000"
+                      value={interestAmount}
+                      onChange={(e) => setInterestAmount(e.target.value)}
+                    />
                   )}
                 </div>
+
+                <NumberRow label="Term" value={termMonths} onChange={setTermMonths} placeholder="e.g. 6" suffix="months" />
+
+                <SelectRow
+                  label="Repayment"
+                  value={repaymentFrequency}
+                  onChange={setRepaymentFrequency}
+                  includeEmptyOption={false}
+                  options={[
+                    { value: "monthly", label: "Monthly installments" },
+                    { value: "lump_sum", label: "Lump sum at end" }
+                  ]}
+                />
+              </RowGroup>
+
+              {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
+                <div className="border border-hairline rounded-md p-4 bg-paper-2 mt-3">
+                  <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
+                  <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
+                    <span className="text-ink-soft">Total repayable</span>
+                    <span>₱{fmt(previewTotalRepayable)}</span>
+                  </div>
+                  <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
+                    <span className="text-ink-soft">
+                      {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
+                    </span>
+                    <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
+                  </div>
+                </div>
               )}
-              </div>
-          </div>
+
+              <div className="h-5" />
+            </>
+          )}
+
+          <RowGroup>
+            {isAdmin && isMemberLinkedType && (
+              <SelectRow
+                label="On behalf of"
+                value={onBehalfOfId}
+                onChange={handleOnBehalfChange}
+                placeholder="Myself"
+                options={allMembers
+                  .filter((m) => m.member_id !== memberId)
+                  .map((m) => ({ value: m.member_id, label: m.name }))}
+              />
+            )}
+
+            {isInvestmentEntry && (
+              <SelectRow
+                label="Investment"
+                value={investmentId}
+                onChange={setInvestmentId}
+                placeholder="Select an investment"
+                options={investmentsList.map((inv) => ({ value: inv.investment_id, label: inv.name }))}
+              />
+            )}
+
+            {isLoanPayment && (
+              <SelectRow
+                label="Loan"
+                value={selectedLoanId}
+                onChange={setSelectedLoanId}
+                placeholder="Select a loan"
+                options={myLoans
+                  .filter((l) => l.status === "active")
+                  .map((loan) => ({ value: loan.loan_id, label: `₱${fmt(loan.principal)} from ${loan.start_date}` }))}
+              />
+            )}
+
+            {needsBank && (
+              <SelectRow
+                label={isBankTransfer ? "From bank" : "Bank"}
+                value={bankId}
+                onChange={setBankId}
+                placeholder="Select a bank"
+                options={banks.map((bank) => ({ value: bank.id, label: bank.account_name || bank.bank_name }))}
+              />
+            )}
+
+            {isBankTransfer && (
+              <SelectRow
+                label="To bank"
+                value={toBankId}
+                onChange={setToBankId}
+                placeholder="Select a bank"
+                options={banks.map((bank) => ({ value: bank.id, label: bank.account_name || bank.bank_name }))}
+              />
+            )}
+
+            <TextRow label="Description" value={description} onChange={setDescription} placeholder="Add a note" />
+          </RowGroup>
+
+          {isAdmin && isMemberLinkedType && onBehalfOfId && (
+            <p className="text-sm text-gold mt-3">
+              This will be recorded as approved immediately for{" "}
+              {allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.
+            </p>
+          )}
+          {isInvestmentEntry && investmentsList.length === 0 && (
+            <p className="text-sm text-ink-soft mt-3">
+              No investments yet -- add one from the Investments page first.
+            </p>
+          )}
+          {isLoanPayment && myLoans.filter((l) => l.status === "active").length === 0 && (
+            <p className="text-sm text-rust mt-3">No active loans to pay against.</p>
+          )}
+
+          {needsReceipt && (
+            <div className="mt-5">
+              <p className="text-xs font-bold uppercase tracking-wide text-ink-soft font-mono mb-2">Receipt</p>
+
+              {!receiptPreview ? (
+                <label
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    setDragActive(true)
+                  }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={handleDrop}
+                  className={`
+                    flex flex-col items-center justify-center gap-2
+                    border-2 border-dashed rounded-md
+                    py-10 px-4 cursor-pointer text-center transition-colors
+                    ${dragActive ? "border-gold bg-gold/5" : "border-hairline"}
+                  `}
+                >
+                  <span className="text-2xl">📎</span>
+                  <span className="text-base text-ink">Tap to upload, or drag a photo here</span>
+                  <span className="text-sm text-ink-soft">Screenshot or photo of your deposit slip</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+              ) : (
+                <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
+                  <img
+                    src={receiptPreview}
+                    alt="Receipt preview"
+                    className="w-16 h-16 object-cover rounded-md border border-hairline"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base text-ink truncate">{receipt?.name}</p>
+                    <p className="text-sm text-ink-soft">{receipt ? `${(receipt.size / 1024).toFixed(0)} KB` : ""}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReceiptFile(null)}
+                    className="text-sm text-rust border border-rust rounded-full px-2.5 py-1 shrink-0"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
 
       <div
+        ref={bottomBarRef}
         className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline"
-        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+        // Same iOS Safari fix as Navbar's own fixed dock: without its own
+        // GPU compositing layer, a `fixed` element can flicker, misplace
+        // itself, or misjudge its own height mid-scroll -- exactly the
+        // territory the ResizeObserver measurement above lives in.
+        style={{
+          paddingBottom: "calc(1rem + env(safe-area-inset-bottom))",
+          transform: "translateZ(0)",
+          willChange: "transform"
+        }}
       >
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4 flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-xs uppercase tracking-wide text-ink-soft font-mono">
-              Amount
-            </div>
-            <div className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink truncate">
-              ₱{isValidPositiveNumber(amount) ? fmt(Number(amount)) : "0.00"}
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {chips.map((chip, i) => (
-                <Chip key={i} done={chip.done}>{chip.text}</Chip>
-              ))}
-            </div>
-          </div>
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4">
           <button
-            className="shrink-0 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+            className={
+              readyToSubmit
+                ? "w-full bg-ink text-paper py-3.5 rounded-md text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.99] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                : "w-full bg-transparent text-ink-soft py-3.5 rounded-md text-base font-bold border border-hairline motion-safe:transition-transform motion-safe:active:scale-[0.99] disabled:opacity-50"
+            }
             onClick={handleSubmit}
             disabled={submitting}
           >
-            {submitting ? "Submitting…" : "Submit"}
+            {submitting ? "Submitting…" : submitLabel}
           </button>
         </div>
         {message && (
-          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-2">
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-2 pb-1">
             <p className="text-sm text-rust">{message}</p>
           </div>
         )}
