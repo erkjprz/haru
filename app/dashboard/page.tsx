@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const [pendingCount, setPendingCount] = useState(0)
   const [myPendingCount, setMyPendingCount] = useState(0)
   const [myApprovedCount, setMyApprovedCount] = useState(0)
-  const [myDistributed, setMyDistributed] = useState(0)
+  const [myGainLoss, setMyGainLoss] = useState(0)
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
   const [loadError, setLoadError] = useState("")
 
@@ -96,7 +96,7 @@ export default function DashboardPage() {
         .eq("member_id", member.member_id)
         .eq("status", "pending")
 
-      // Approved/Distributed are all-time totals, not a recent window --
+      // Approved/Gain-Loss are all-time totals, not a recent window --
       // this fund transacts every few months rather than daily, so a
       // rolling 30-day (or even year-to-date) window reads as "broken zero"
       // for most members most of the time. Pending stays unwindowed too,
@@ -122,6 +122,18 @@ export default function DashboardPage() {
         .select("amount, allocation_type")
         .eq("member_id", member.member_id)
 
+      // Bank write-offs aren't tracked in an allocations table like the
+      // other three -- they're a signed "Bank Write-off" transaction
+      // against the member directly. Has to be included here too, or this
+      // total silently disagrees with Breakdown's "Total Gain/Loss" (which
+      // does include it).
+      const bankWriteoffPromise = supabase
+        .from("transactions")
+        .select("amount")
+        .eq("member_id", member.member_id)
+        .eq("status", "approved")
+        .eq("classification", "Bank Write-off")
+
       const recentTransactionsPromise = supabase
         .from("transactions")
         .select("transaction_id, txn_date, created_at, classification, amount, status")
@@ -140,6 +152,7 @@ export default function DashboardPage() {
         bankInterestResult,
         loanGainResult,
         investmentAllocResult,
+        bankWriteoffResult,
         recentTransactionsResult
       ] = await Promise.all([
         fundPromise,
@@ -150,6 +163,7 @@ export default function DashboardPage() {
         bankInterestPromise,
         loanGainPromise,
         investmentAllocPromise,
+        bankWriteoffPromise,
         recentTransactionsPromise
       ])
 
@@ -168,14 +182,17 @@ export default function DashboardPage() {
       setMyPendingCount(myPendingResult.count ?? 0)
       setMyApprovedCount(myApprovedResult.count ?? 0)
 
-      const distributed =
+      // Matches Breakdown's "Total Gain/Loss" exactly: bank interest + loan
+      // gain share + investment gain/loss + bank write-off share, all-time.
+      const gainLoss =
         (bankInterestResult.data ?? []).reduce((sum, r: any) => sum + Number(r.amount), 0) +
         (loanGainResult.data ?? []).reduce((sum, r: any) => sum + Number(r.amount), 0) +
         (investmentAllocResult.data ?? []).reduce(
           (sum, r: any) => sum + (r.allocation_type === "Investment Loss" ? -Number(r.amount) : Number(r.amount)),
           0
-        )
-      setMyDistributed(distributed)
+        ) +
+        (bankWriteoffResult.data ?? []).reduce((sum, r: any) => sum + Number(r.amount), 0)
+      setMyGainLoss(gainLoss)
 
       if (!recentTransactionsResult.error && recentTransactionsResult.data) {
         setRecentTransactions(
@@ -327,10 +344,15 @@ export default function DashboardPage() {
           </div>
 
           {/* At-a-glance activity for this member -- pending count mirrors
-              what used to be its own banner. Approved/Distributed are
+              what used to be its own banner. Approved/Gain-Loss are
               all-time totals rather than a recent window (see comment by
               the queries above for why), so the labels say so -- otherwise
-              a quiet month reads as "broken zero" instead of "no activity." */}
+              a quiet month reads as "broken zero" instead of "no activity."
+              Gain/Loss deliberately sums the same four figures as
+              Breakdown's "Total Gain/Loss" so the two numbers always
+              agree -- an earlier version called this "Distributed" and
+              left out Bank Write-off Share, which made it disagree with
+              Breakdown for no good reason. */}
           <button
             onClick={() => router.push("/transactions")}
             className="w-full flex bg-paper-2 border border-hairline rounded-md overflow-hidden mt-5 hover:bg-paper transition-colors"
@@ -348,11 +370,17 @@ export default function DashboardPage() {
               </p>
             </div>
             <div className="flex-1 px-2.5 py-3.5 text-center">
-              <p className="font-mono text-xl font-bold text-sage leading-none mb-1">₱{fmt(myDistributed)}</p>
+              <p
+                className={`font-mono text-xl font-bold leading-none mb-1 ${
+                  myGainLoss > 0 ? "text-sage" : myGainLoss < 0 ? "text-rust" : "text-ink"
+                }`}
+              >
+                {myGainLoss < 0 ? "-" : "+"}₱{fmt(Math.abs(myGainLoss))}
+              </p>
               <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">
                 All-Time
                 <br />
-                Distributed
+                Gain/Loss
               </p>
             </div>
           </button>
@@ -411,18 +439,12 @@ function Shortcut({ label, onClick, icon }: { label: string; onClick: () => void
   return (
     <button
       onClick={onClick}
-      className="bg-paper-2 border border-hairline rounded-md px-1.5 pt-3.5 pb-2.5 text-center hover:bg-paper transition-colors"
+      className="flex flex-col items-center gap-2 bg-paper-2 border border-hairline rounded-md px-1.5 pt-3.5 pb-2.5 hover:bg-paper transition-colors"
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.75}
-        className="w-[22px] h-[22px] mx-auto mb-2 text-gold"
-      >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-[22px] h-[22px] text-gold">
         {icon}
       </svg>
-      <span className="text-[10.5px] leading-tight text-ink-soft">{label}</span>
+      <span className="text-[10.5px] leading-tight text-ink-soft text-center">{label}</span>
     </button>
   )
 }
