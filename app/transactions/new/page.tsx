@@ -244,8 +244,13 @@ function NewTransactionForm() {
     selectedType === "expense" ||
     selectedType === "bank_transfer" ||
     isInvestmentEntry
-  const needsReceipt =
-    (selectedType === "contribution" || selectedType === "loan_payment") && !isAdminEntry
+  // Every type requires a receipt except the two "request" types --
+  // withdrawal and loan_request -- where nothing has actually moved yet at
+  // the moment the entry is created. Everything else, admin-entered types
+  // included, represents real money already having moved, with a real-world
+  // equivalent to point to (a bank statement, an expense receipt, a
+  // transfer confirmation, a wire receipt).
+  const needsReceipt = selectedType !== "withdrawal" && selectedType !== "loan_request"
   const needsBank =
     selectedType === "contribution" ||
     selectedType === "loan_payment" ||
@@ -261,11 +266,11 @@ function NewTransactionForm() {
     withdrawal: "You're requesting money to be sent to you. No receipt needed yet.",
     loan_request: "You're requesting to borrow from the fund. No receipt needed yet.",
     loan_payment: "You've already sent this repayment. Attach proof of deposit.",
-    bank_interest: "Recording interest earned by a bank account. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
-    expense: "Recording money spent out of the fund. Goes straight in as approved.",
-    bank_transfer: "Moving money between two of the fund's own banks. Doesn't affect total contributions or cash — it's just internal.",
-    investment: "Moving fund cash into a venture. Pick which investment this funds. Goes in as approved.",
-    investment_return: "Cash coming back from a venture -- a payout, sale, or exit. Goes in as approved."
+    bank_interest: "Recording interest earned by a bank account. Attach the bank statement or screenshot showing it credited. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
+    expense: "Recording money spent out of the fund. Attach a receipt or proof of payment. Goes straight in as approved.",
+    bank_transfer: "Moving money between two of the fund's own banks. Attach a screenshot of the transfer confirmation. Doesn't affect total contributions or cash — it's just internal.",
+    investment: "Moving fund cash into a venture. Pick which investment this funds, and attach proof it went out (wire confirmation, receipt, etc). Goes in as approved.",
+    investment_return: "Cash coming back from a venture -- a payout, sale, or exit. Attach proof of deposit. Goes in as approved."
   }
 
   const previewTotalRepayable =
@@ -594,13 +599,16 @@ function NewTransactionForm() {
         ? { done: true, text: `✓ ${bankLabel(bankId)} → ${bankLabel(toBankId)}` }
         : { done: false, text: "Select both banks" }
     )
+    chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
     chips.push({ done: true, text: "Doesn't affect cash total" })
   } else if (isInvestmentEntry) {
     chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
     chips.push(investmentId ? { done: true, text: "✓ Investment selected" } : { done: false, text: "Investment required" })
+    chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
     chips.push({ done: true, text: "Posts as approved" })
   } else if (selectedType === "bank_interest" || selectedType === "expense") {
     chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
+    chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
     chips.push({ done: true, text: "Posts as approved" })
   }
 
