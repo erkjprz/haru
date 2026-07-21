@@ -815,34 +815,18 @@ function TransactionsPageInner() {
 
               <div className="mb-6">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Who</p>
-                <div className="flex flex-col gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMemberId("")}
-                    className={`flex items-center justify-between border rounded-md px-3.5 py-2.5 text-sm text-left ${
-                      !selectedMemberId ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
-                    }`}
-                  >
-                    Everyone
-                    {!selectedMemberId && <span className="text-gold">✓</span>}
-                  </button>
-                  {members.map((m) => {
-                    const active = selectedMemberId === m.member_id
-                    return (
-                      <button
-                        key={m.member_id}
-                        type="button"
-                        onClick={() => setSelectedMemberId(m.member_id)}
-                        className={`flex items-center justify-between border rounded-md px-3.5 py-2.5 text-sm text-left ${
-                          active ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
-                        }`}
-                      >
-                        {m.member_id === member?.member_id ? "You" : m.name}
-                        {active && <span className="text-gold">✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
+                <select
+                  value={selectedMemberId}
+                  onChange={(e) => setSelectedMemberId(e.target.value)}
+                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3.5 text-sm text-ink focus:outline-none focus:border-gold"
+                >
+                  <option value="">Everyone</option>
+                  {members.map((m) => (
+                    <option key={m.member_id} value={m.member_id}>
+                      {m.member_id === member?.member_id ? "You" : m.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="mb-6">
