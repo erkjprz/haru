@@ -120,7 +120,11 @@ export default function Navbar() {
       {!hideDock && (
         <nav
           className="fixed bottom-0 left-0 right-0 z-40 bg-paper border-t border-hairline"
-          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          // iOS Safari can flicker/hide a `fixed` element mid-touch-drag
+          // (e.g. swiping Fund Breakdown's member carousel while this dock
+          // sits over a scrollable page) unless it's promoted to its own
+          // GPU compositing layer -- translateZ(0) forces that.
+          style={{ paddingBottom: "env(safe-area-inset-bottom)", transform: "translateZ(0)", willChange: "transform" }}
         >
           <div className="max-w-3xl mx-auto flex items-stretch" style={{ height: "var(--dock-h)" }}>
             {dockItems.map((item) => {
