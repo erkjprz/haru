@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -130,7 +130,11 @@ export default function EditTransactionPage() {
   // the tallest bar that could ever occur.
   const bottomBarRef = useRef<HTMLDivElement>(null)
   const [bottomBarHeight, setBottomBarHeight] = useState(0)
-  useEffect(() => {
+  // useLayoutEffect, not useEffect -- this runs before the browser paints,
+  // so the correct padding is in place for the very first frame instead of
+  // a brief window at the old default (0) that a fast scroll could reach
+  // and settle inside before the real measurement ever lands.
+  useLayoutEffect(() => {
     const el = bottomBarRef.current
     if (!el) return
     // entry.contentRect excludes the element's own padding, and the bar
@@ -575,7 +579,7 @@ export default function EditTransactionPage() {
             below short content -- the old bottom bar crammed amount + chips
             + button into one row and needed much more headroom than the
             single-button bar this page has now. */}
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8" style={{ paddingBottom: bottomBarHeight + 32 }}>
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-8" style={{ paddingBottom: bottomBarHeight + 96 }}>
           <button
             type="button"
             onClick={() => router.push(backHref)}
