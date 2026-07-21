@@ -178,6 +178,8 @@ function YouPanel({ memberId }: { memberId: string }) {
   const [years, setYears] = useState<YearRow[]>([])
   const [myTrend, setMyTrend] = useState<TrendPoint[]>([])
   const [loadError, setLoadError] = useState("")
+  const [yearIndex, setYearIndex] = useState(0)
+  const yearTouchStartX = useRef<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -335,9 +337,27 @@ function YouPanel({ memberId }: { memberId: string }) {
   const signed = (n: number) => `${n < 0 ? "-" : "+"}₱${fmt(Math.abs(n))}`
   const tone = (n: number) => (n > 0 ? "text-sage" : n < 0 ? "text-rust" : "text-ink-soft")
 
+  // Same touchend-only swipe detection as the Group carousel -- no
+  // touchmove listener, so the page's own vertical scroll is never fought
+  // over mid-gesture.
+  function handleYearTouchStart(e: React.TouchEvent) {
+    yearTouchStartX.current = e.touches[0].clientX
+  }
+
+  function handleYearTouchEnd(e: React.TouchEvent) {
+    if (yearTouchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - yearTouchStartX.current
+    yearTouchStartX.current = null
+
+    if (Math.abs(dx) < 32) return
+    setYearIndex((i) => Math.max(0, Math.min(years.length - 1, dx < 0 ? i + 1 : i - 1)))
+  }
+
   if (dataLoading) {
     return <SkeletonPanel />
   }
+
+  const clampedYearIndex = Math.min(yearIndex, Math.max(0, years.length - 1))
 
   return (
     <div>
@@ -354,7 +374,9 @@ function YouPanel({ memberId }: { memberId: string }) {
               of ₱{fmt(performance.total_value)} total — ₱{fmt(performance.money_on_hold)} currently tied up in loans/investments
             </p>
           )}
-          <Sparkline points={myTrend} color="#5F7A5A" />
+          <div className="mb-4">
+            <Sparkline points={myTrend} color="#5F7A5A" />
+          </div>
 
           <InfoBox label="Capital (All-Time)">
             <InfoRow label="Total Contribution" value={`₱${fmt(performance.total_contribution)}`} />
@@ -421,54 +443,85 @@ function YouPanel({ memberId }: { memberId: string }) {
           </p>
         )}
 
-        <div className="space-y-4">
-          {years.map((y) => {
-            const yearTotal = y.netContribution + y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
-            return (
-              <div key={y.year} className="bg-paper-2 border border-hairline rounded-md p-5">
-                <div className="flex justify-between items-baseline mb-3">
-                  <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
-                  <span className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearTotal)}`}>
-                    {signed(yearTotal)}
-                  </span>
-                </div>
+        {years.length > 0 && (
+          <>
+            <div className="overflow-hidden" onTouchStart={handleYearTouchStart} onTouchEnd={handleYearTouchEnd}>
+              <div
+                className="flex transition-transform duration-300 ease-out will-change-transform motion-reduce:transition-none"
+                style={{ transform: `translateX(-${clampedYearIndex * 100}%)` }}
+              >
+                {years.map((y) => {
+                  const yearTotal =
+                    y.netContribution + y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
+                  return (
+                    <div key={y.year} className="w-full shrink-0 bg-paper-2 border border-hairline rounded-md p-5">
+                      <div className="flex justify-between items-baseline mb-3">
+                        <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
+                        <span
+                          className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearTotal)}`}
+                        >
+                          {signed(yearTotal)}
+                        </span>
+                      </div>
 
-                <InfoBox label="Capital">
-                  <InfoRow label="Contribution" value={`₱${fmt(y.contribution)}`} />
-                  {y.withdrawal !== 0 && (
-                    <InfoRow label="Withdrawal" value={`-₱${fmt(Math.abs(y.withdrawal))}`} valueClass="text-rust" />
-                  )}
-                  <InfoRow label="Net Contribution" value={`₱${fmt(y.netContribution)}`} bold />
-                </InfoBox>
+                      <InfoBox label="Capital">
+                        <InfoRow label="Contribution" value={`₱${fmt(y.contribution)}`} />
+                        {y.withdrawal !== 0 && (
+                          <InfoRow label="Withdrawal" value={`-₱${fmt(Math.abs(y.withdrawal))}`} valueClass="text-rust" />
+                        )}
+                        <InfoRow label="Net Contribution" value={`₱${fmt(y.netContribution)}`} bold />
+                      </InfoBox>
 
-                {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
-                  <InfoBox label="Performance">
-                    {y.bankInterest !== 0 && (
-                      <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
-                    )}
-                    {y.investmentGainLoss !== 0 && (
-                      <InfoRow
-                        label="Investment Gain/Loss"
-                        value={signed(y.investmentGainLoss)}
-                        valueClass={tone(y.investmentGainLoss)}
-                      />
-                    )}
-                    {y.loanGain !== 0 && (
-                      <InfoRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
-                    )}
-                    {y.bankWriteoff !== 0 && (
-                      <InfoRow
-                        label="Bank Write-off Share"
-                        value={signed(y.bankWriteoff)}
-                        valueClass={tone(y.bankWriteoff)}
-                      />
-                    )}
-                  </InfoBox>
-                )}
+                      {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
+                        <InfoBox label="Performance">
+                          {y.bankInterest !== 0 && (
+                            <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
+                          )}
+                          {y.investmentGainLoss !== 0 && (
+                            <InfoRow
+                              label="Investment Gain/Loss"
+                              value={signed(y.investmentGainLoss)}
+                              valueClass={tone(y.investmentGainLoss)}
+                            />
+                          )}
+                          {y.loanGain !== 0 && (
+                            <InfoRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
+                          )}
+                          {y.bankWriteoff !== 0 && (
+                            <InfoRow
+                              label="Bank Write-off Share"
+                              value={signed(y.bankWriteoff)}
+                              valueClass={tone(y.bankWriteoff)}
+                            />
+                          )}
+                        </InfoBox>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
-        </div>
+            </div>
+
+            {years.length > 1 && (
+              <div className="flex items-center justify-center gap-1.5 mt-4">
+                {years.map((y, i) => (
+                  <button
+                    key={y.year}
+                    onClick={() => setYearIndex(i)}
+                    aria-label={`Go to ${y.year}`}
+                    className="w-6 h-6 flex items-center justify-center"
+                  >
+                    <span
+                      className={`block rounded-full transition-all ${
+                        i === clampedYearIndex ? "w-4 h-1.5 rounded-[3px] bg-gold" : "w-1.5 h-1.5 bg-hairline"
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </section>
     </div>
   )
@@ -496,10 +549,20 @@ type MemberRow = {
 
 const SHARE_COLORS = ["#B8912F", "#5F7A5A", "#8FA88A", "#D4B65C", "#A99B84", "#C97B63", "#7A8FA6", "#9C8AA5"]
 
+type FundTotals = {
+  total_cash: number
+  total_contribution: number
+  total_withdrawal: number
+  net_contribution: number
+  total_bank_interest: number
+  net_investment_gain_loss: number
+  total_loan_gain_distributed: number
+}
+
 function GroupPanel() {
   const router = useRouter()
   const [members, setMembers] = useState<MemberRow[]>([])
-  const [totalCash, setTotalCash] = useState<number | null>(null)
+  const [fund, setFund] = useState<FundTotals | null>(null)
   const [fundTrend, setFundTrend] = useState<TrendPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
@@ -523,7 +586,12 @@ function GroupPanel() {
           "member_id, total_contribution, total_withdrawal, net_contribution, bank_interest, investment_gain_loss, loan_gain, bank_writeoff, total_value, money_on_hold, withdrawable_now"
         )
 
-      const fundPromise = supabase.from("v_fund_summary").select("total_cash").single()
+      const fundPromise = supabase
+        .from("v_fund_summary")
+        .select(
+          "total_cash, total_contribution, total_withdrawal, net_contribution, total_bank_interest, net_investment_gain_loss, total_loan_gain_distributed"
+        )
+        .single()
 
       const fundTrendPromise = supabase
         .from("v_fund_cash_timeline")
@@ -547,7 +615,17 @@ function GroupPanel() {
         return
       }
 
-      setTotalCash(Number(fundResult.data?.total_cash ?? 0))
+      if (fundResult.data) {
+        setFund({
+          total_cash: Number(fundResult.data.total_cash),
+          total_contribution: Number(fundResult.data.total_contribution),
+          total_withdrawal: Number(fundResult.data.total_withdrawal),
+          net_contribution: Number(fundResult.data.net_contribution),
+          total_bank_interest: Number(fundResult.data.total_bank_interest),
+          net_investment_gain_loss: Number(fundResult.data.net_investment_gain_loss),
+          total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed)
+        })
+      }
 
       if (!fundTrendResult.error && fundTrendResult.data) {
         setFundTrend(fundTrendResult.data.map((r: any) => ({ value: Number(r.running_balance), date: r.month })))
@@ -663,7 +741,7 @@ function GroupPanel() {
             <span className="text-[13px] text-ink-soft font-mono">{members.length} members</span>
           </div>
           <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl sm:text-3xl font-bold text-ink">
-            ₱{totalCash != null ? fmt(totalCash) : "—"}
+            ₱{fund != null ? fmt(fund.total_cash) : "—"}
           </p>
           <Sparkline points={fundTrend} color="#B8912F" />
 
@@ -795,6 +873,42 @@ function GroupPanel() {
               />
             </button>
           ))}
+        </div>
+      )}
+
+      {fund != null && (
+        <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-6">
+          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-3">Fund Breakdown</p>
+
+          <InfoBox label="Capital">
+            <InfoRow label="Total Contribution" value={`₱${fmt(fund.total_contribution)}`} />
+            {fund.total_withdrawal !== 0 && (
+              <InfoRow
+                label="Total Withdrawal"
+                value={`-₱${fmt(Math.abs(fund.total_withdrawal))}`}
+                valueClass="text-rust"
+              />
+            )}
+            <InfoRow label="Net Contribution" value={`₱${fmt(fund.net_contribution)}`} bold />
+          </InfoBox>
+
+          <InfoBox label="Performance">
+            <InfoRow
+              label="Total Fund Gain/Loss"
+              value={signed(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
+              valueClass={tone(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
+              bold
+            />
+            <div className="pt-1 space-y-1.5">
+              <InfoSubRow label="Bank Interest (all-time)" value={signed(fund.total_bank_interest)} valueClass="text-sage" />
+              <InfoSubRow
+                label="Investment Position"
+                value={signed(fund.net_investment_gain_loss)}
+                valueClass={tone(fund.net_investment_gain_loss)}
+              />
+              <InfoSubRow label="Loan Gains Distributed" value={`₱${fmt(fund.total_loan_gain_distributed)}`} />
+            </div>
+          </InfoBox>
         </div>
       )}
     </div>

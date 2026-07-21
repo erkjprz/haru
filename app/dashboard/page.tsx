@@ -439,18 +439,12 @@ function Shortcut({ label, onClick, icon }: { label: string; onClick: () => void
   return (
     <button
       onClick={onClick}
-      className="bg-paper-2 border border-hairline rounded-md px-1.5 pt-3.5 pb-2.5 text-center hover:bg-paper transition-colors"
+      className="flex flex-col items-center gap-2 bg-paper-2 border border-hairline rounded-md px-1.5 pt-3.5 pb-2.5 hover:bg-paper transition-colors"
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.75}
-        className="w-[22px] h-[22px] mx-auto mb-2 text-gold"
-      >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-[22px] h-[22px] text-gold">
         {icon}
       </svg>
-      <span className="text-[10.5px] leading-tight text-ink-soft">{label}</span>
+      <span className="text-[10.5px] leading-tight text-ink-soft text-center">{label}</span>
     </button>
   )
 }
