@@ -861,7 +861,15 @@ function NewTransactionForm() {
       <div
         ref={bottomBarRef}
         className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline"
-        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+        // Same iOS Safari fix as Navbar's own fixed dock: without its own
+        // GPU compositing layer, a `fixed` element can flicker, misplace
+        // itself, or misjudge its own height mid-scroll -- exactly the
+        // territory the ResizeObserver measurement above lives in.
+        style={{
+          paddingBottom: "calc(1rem + env(safe-area-inset-bottom))",
+          transform: "translateZ(0)",
+          willChange: "transform"
+        }}
       >
         <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4">
           <button
