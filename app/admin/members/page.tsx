@@ -183,7 +183,7 @@ export default function AdminMembersPage() {
       <>
         <Navbar />
         <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-          <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+          <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
             <SkeletonCardList rows={3} />
           </div>
         </main>
@@ -195,7 +195,7 @@ export default function AdminMembersPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-5 pt-10 pb-24">
+        <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
           <div className="flex items-start justify-between gap-4">
             <div>
               <button

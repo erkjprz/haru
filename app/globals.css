@@ -14,6 +14,13 @@
   --sage: #5b7a5b;
   --rust: #a34a3a;
   --hairline: #e0e0e0;
+
+  /* Height of the fixed bottom dock (Navbar), excluding the device's own
+     safe-area inset -- every page that renders the dock adds this on top
+     of its usual bottom padding so content never ends up hidden under it.
+     Pages that hide the dock (transaction forms, which have their own
+     sticky footer) don't reference this. */
+  --dock-h: 3.75rem;
 }
 
 .dark {
