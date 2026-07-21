@@ -377,35 +377,18 @@ function TransactionsPageInner() {
     (a, b) => (typeLabels[a] || a).localeCompare(typeLabels[b] || b)
   )
 
-  // Recomputing this list means re-scanning every transaction and (when
-  // there's a search query) rebuilding several toLocaleDateString-formatted
-  // strings per row -- expensive enough on a long list that running it on
-  // every keystroke made typing feel laggy. Memoized so it only reruns when
-  // one of these actually changes, in particular gated on the *debounced*
-  // search query rather than the raw one.
-  const filteredTransactions = useMemo(() => {
-    const searchWords = debouncedSearchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
-
-    return transactions.filter((t) => {
-      const memberMatch = selectedMemberId ? t.member_id === selectedMemberId : true
-      const typeMatch = selectedType ? t.classification === selectedType : true
-      const loanMatch = loanFilter ? t.loan_id === loanFilter : true
-      const investmentMatch = investmentFilter ? t.investment_id === investmentFilter : true
-
-      const ts = effectiveDate(t).getTime()
-      const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
-      const toMatch = dateTo ? ts <= new Date(`${dateTo}T23:59:59`).getTime() : true
-
-      // Skipped entirely with no query -- no point building the haystack
-      // (several Date formatting calls per row) just to match "" against it.
-      let searchMatch = true
-      if (searchWords.length > 0) {
-        // Every word in the query has to appear somewhere in the haystack,
-        // but not necessarily adjacent to (or in the same field as) each
-        // other -- e.g. "Vhan BDO" should match a row where the member name
-        // and bank badge are two separate fields, not a literal "vhan bdo"
-        // substring.
-        const searchHaystack = [
+  // Building each row's searchable text means several toLocaleDateString
+  // calls per row -- cheap in bulk, but the *first* time this ever runs
+  // (cold Intl formatters, unwarmed JIT) is noticeably slower than every
+  // run after it. Precomputed once here, keyed only on `transactions`, so
+  // that one-time cost lands when the data loads rather than when the user
+  // types their first search word -- every search after that, first word or
+  // not, is then just a cheap .includes() over an already-built string.
+  const searchableTransactions = useMemo(
+    () =>
+      transactions.map((t) => ({
+        ...t,
+        _searchHaystack: [
           t.members?.name,
           t.description,
           t.bank,
@@ -425,13 +408,47 @@ function TransactionsPageInner() {
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
+      })),
+    [transactions]
+  )
 
-        searchMatch = searchWords.every((word) => searchHaystack.includes(word))
-      }
+  // Recomputing this list still means re-scanning every transaction, but
+  // now it's just cheap field comparisons plus a .includes() against the
+  // already-built haystack above -- fast enough that gating it on the
+  // debounced query (rather than the raw one) is enough to keep typing
+  // smooth.
+  const filteredTransactions = useMemo(() => {
+    const searchWords = debouncedSearchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+
+    return searchableTransactions.filter((t) => {
+      const memberMatch = selectedMemberId ? t.member_id === selectedMemberId : true
+      const typeMatch = selectedType ? t.classification === selectedType : true
+      const loanMatch = loanFilter ? t.loan_id === loanFilter : true
+      const investmentMatch = investmentFilter ? t.investment_id === investmentFilter : true
+
+      const ts = effectiveDate(t).getTime()
+      const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
+      const toMatch = dateTo ? ts <= new Date(`${dateTo}T23:59:59`).getTime() : true
+
+      // Every word in the query has to appear somewhere in the haystack,
+      // but not necessarily adjacent to (or in the same field as) each
+      // other -- e.g. "Vhan BDO" should match a row where the member name
+      // and bank badge are two separate fields, not a literal "vhan bdo"
+      // substring.
+      const searchMatch = searchWords.length === 0 || searchWords.every((word) => t._searchHaystack.includes(word))
 
       return memberMatch && typeMatch && loanMatch && investmentMatch && fromMatch && toMatch && searchMatch
     })
-  }, [transactions, selectedMemberId, selectedType, loanFilter, investmentFilter, dateFrom, dateTo, debouncedSearchQuery])
+  }, [
+    searchableTransactions,
+    selectedMemberId,
+    selectedType,
+    loanFilter,
+    investmentFilter,
+    dateFrom,
+    dateTo,
+    debouncedSearchQuery
+  ])
 
   // For the loan/investment filter pills' labels -- neither name is known
   // until at least one matching transaction has loaded.
