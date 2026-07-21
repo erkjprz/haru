@@ -165,38 +165,6 @@ function dedupeLegacyTransferPairs(rows: any[]): any[] {
   return rows.filter((row) => !skipIds.has(row.transaction_id))
 }
 
-// A filter pill with its own separate × alongside it (not layered on top
-// of it). An earlier version overlapped the × on the pill's corner, but
-// iOS Safari silently enlarges a native <select>'s tap target to meet the
-// 44pt accessibility minimum, so the select kept swallowing taps meant for
-// the × sitting right above it. Giving the × real physical distance -- its
-// own circle, its own gap -- means their tap regions never overlap.
-function FilterPill({
-  active,
-  onClear,
-  children
-}: {
-  active: boolean
-  onClear: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center gap-1.5 shrink-0">
-      {children}
-      {active && (
-        <button
-          type="button"
-          onClick={onClear}
-          aria-label="Clear filter"
-          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-paper-2 border border-hairline text-ink-soft text-sm"
-        >
-          ×
-        </button>
-      )}
-    </div>
-  )
-}
-
 // Owns the raw keystroke-by-keystroke input state itself and only reports
 // upward once typing pauses -- debouncing the *value* passed up wasn't
 // enough on its own, since the parent still re-rendered (and re-diffed its
@@ -214,7 +182,7 @@ function SearchBox({ onDebouncedChange }: { onDebouncedChange: (value: string) =
   }, [value, onDebouncedChange])
 
   return (
-    <div className="mt-6">
+    <div className="flex-1 min-w-0">
       <div className="relative">
         <input
           type="text"
@@ -279,7 +247,7 @@ function TransactionsPageInner() {
   const [selectedType, setSelectedType] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
-  const [dateFilterOpen, setDateFilterOpen] = useState(false)
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   // The raw, keystroke-by-keystroke value lives in SearchBox itself (see
   // above) -- this only ever updates once typing pauses, which keeps this
   // component (and the potentially long list it renders) from re-rendering
@@ -416,12 +384,6 @@ function TransactionsPageInner() {
     setDateTo("")
     setLoanFilter("")
     setInvestmentFilter("")
-    // Defensive: "Clear all" sits at the end of the horizontally-scrolled
-    // pill row, and removing it shrinks that row's scrollable width --
-    // on some touch browsers the resulting scrollLeft clamp can land a
-    // stray tap on whatever pill (e.g. Date range) ends up under the
-    // finger. Force the date modal closed here so that can never surface.
-    setDateFilterOpen(false)
   }
 
   // Built from what's actually in the loaded data rather than the full
@@ -523,12 +485,6 @@ function TransactionsPageInner() {
     })
 
   const hasDateFilter = Boolean(dateFrom || dateTo)
-  const hasActiveFilters = Boolean(
-    selectedMemberId || selectedType || hasDateFilter || loanFilter || investmentFilter
-  )
-  const pillBase = "shrink-0 border text-sm rounded-full px-3.5 py-2 focus:outline-none"
-  const pillTone = (active: boolean) =>
-    active ? "border-gold bg-gold/10 text-ink" : "border-hairline bg-paper-2 text-ink-soft"
 
   const dateRangeLabel = !hasDateFilter
     ? "Dates"
@@ -537,6 +493,38 @@ function TransactionsPageInner() {
     : dateFrom
     ? `From ${formatShort(dateFrom)}`
     : `Until ${formatShort(dateTo)}`
+
+  const selectedMemberLabel = selectedMemberId
+    ? selectedMemberId === member?.member_id
+      ? "You"
+      : members.find((m) => m.member_id === selectedMemberId)?.name ?? "Member"
+    : ""
+
+  // Drives both the filter icon's badge count and the removable chip row --
+  // one list of "what's currently filtered," each with its own clear
+  // action, instead of maintaining the count and the chips separately.
+  const activeChips = [
+    loanFilter && { key: "loan", label: `Loan: ${loanFilterLabel}`, onClear: () => setLoanFilter("") },
+    investmentFilter && {
+      key: "investment",
+      label: `Investment: ${investmentFilterLabel}`,
+      onClear: () => setInvestmentFilter("")
+    },
+    selectedMemberId && { key: "member", label: selectedMemberLabel, onClear: () => setSelectedMemberId("") },
+    selectedType && {
+      key: "type",
+      label: typeLabels[selectedType] || selectedType,
+      onClear: () => setSelectedType("")
+    },
+    hasDateFilter && {
+      key: "dates",
+      label: dateRangeLabel,
+      onClear: () => {
+        setDateFrom("")
+        setDateTo("")
+      }
+    }
+  ].filter(Boolean) as { key: string; label: string; onClear: () => void }[]
 
   return (
     <>
@@ -557,83 +545,66 @@ function TransactionsPageInner() {
             </p>
           )}
 
-          <SearchBox onDebouncedChange={setDebouncedSearchQuery} />
-
-          {/* Each pill turns gold once it holds a real value, with its own
-              separate × alongside (never on top of) it -- see FilterPill.
-              Static and wrapping instead of horizontally scrollable -- a
-              scroll row here kept fighting the page's own vertical scroll
-              on touch (intermittent "sometimes drags down" mis-scrolls,
-              plus stray taps landing on the wrong pill after the row's
-              width changed mid-gesture). Wrapping sidesteps the scroll
-              gesture entirely; short default labels keep it on one line
-              in the common case where nothing's filtered yet. */}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {loanFilter && (
-              <FilterPill active onClear={() => setLoanFilter("")}>
-                <span className={`${pillBase} max-w-[10rem] truncate ${pillTone(true)}`}>
-                  Loan: {loanFilterLabel}
+          {/* Search stays a plain text input with its own "?" hint (see
+              SearchBox) -- the filter icon next to it is a separate
+              affordance for the structured filters (who/type/dates), opened
+              in the sheet below rather than as a row of always-visible
+              dropdowns. */}
+          <div className="mt-6 flex items-start gap-2">
+            <SearchBox onDebouncedChange={setDebouncedSearchQuery} />
+            <button
+              type="button"
+              onClick={() => setFilterSheetOpen(true)}
+              aria-label="Filters"
+              className={`relative shrink-0 w-[46px] h-[46px] flex items-center justify-center rounded-md border bg-paper-2 ${
+                activeChips.length > 0 ? "border-gold text-gold" : "border-hairline text-ink-soft"
+              }`}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className="w-[19px] h-[19px]">
+                <path d="M4 6h16M7 12h10M10 18h4" strokeLinecap="round" />
+              </svg>
+              {activeChips.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-gold text-ink text-[10px] font-bold font-mono flex items-center justify-center">
+                  {activeChips.length}
                 </span>
-              </FilterPill>
-            )}
-
-            {investmentFilter && (
-              <FilterPill active onClear={() => setInvestmentFilter("")}>
-                <span className={`${pillBase} max-w-[10rem] truncate ${pillTone(true)}`}>
-                  Investment: {investmentFilterLabel}
-                </span>
-              </FilterPill>
-            )}
-
-            <FilterPill active={Boolean(selectedMemberId)} onClear={() => setSelectedMemberId("")}>
-              <select
-                className={`${pillBase} max-w-[8rem] truncate ${pillTone(Boolean(selectedMemberId))}`}
-                value={selectedMemberId}
-                onChange={(e) => setSelectedMemberId(e.target.value)}
-              >
-                <option value="">Members</option>
-                {members.map((m) => (
-                  <option key={m.member_id} value={m.member_id}>
-                    {m.member_id === member?.member_id ? "You" : m.name}
-                  </option>
-                ))}
-              </select>
-            </FilterPill>
-
-            <FilterPill active={Boolean(selectedType)} onClear={() => setSelectedType("")}>
-              <select
-                className={`${pillBase} max-w-[8rem] truncate ${pillTone(Boolean(selectedType))}`}
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-              >
-                <option value="">Types</option>
-                {typeOptions.map((type) => (
-                  <option key={type} value={type}>
-                    {typeLabels[type] || type}
-                  </option>
-                ))}
-              </select>
-            </FilterPill>
-
-            <FilterPill active={hasDateFilter} onClear={() => { setDateFrom(""); setDateTo("") }}>
-              <button
-                type="button"
-                onClick={() => setDateFilterOpen(true)}
-                className={`${pillBase} ${pillTone(hasDateFilter)}`}
-              >
-                {dateRangeLabel}
-              </button>
-            </FilterPill>
-
-            {hasActiveFilters && (
-              <button
-                className="shrink-0 border border-hairline rounded-full px-3.5 py-2 text-sm text-ink-soft"
-                onClick={clearFilters}
-              >
-                Clear
-              </button>
-            )}
+              )}
+            </button>
           </div>
+
+          {/* Small removable tags for whatever's currently filtered -- a
+              plain horizontal scroller rather than a dot-indicator carousel,
+              since chips are variable-width and free scroll reads more
+              naturally here. With one or two chips there's nothing to
+              scroll; it only starts sliding once the row actually overflows. */}
+          {activeChips.length > 0 && (
+            <div className="mt-3 -mx-4 sm:-mx-5 px-4 sm:px-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex items-center gap-2 w-max">
+                {activeChips.map((chip) => (
+                  <span
+                    key={chip.key}
+                    className="shrink-0 flex items-center gap-1.5 bg-gold text-ink rounded-full pl-3.5 pr-1.5 py-1.5 text-[13px] font-semibold whitespace-nowrap max-w-[12rem]"
+                  >
+                    <span className="truncate">{chip.label}</span>
+                    <button
+                      type="button"
+                      onClick={chip.onClear}
+                      aria-label={`Remove ${chip.label} filter`}
+                      className="shrink-0 w-5 h-5 rounded-full bg-black/15 flex items-center justify-center text-[11px] leading-none"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="shrink-0 border border-hairline rounded-full px-3.5 py-1.5 text-[13px] text-ink-soft"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-4 text-xs text-ink-soft font-mono [font-variant-numeric:tabular-nums]">
             Showing {filteredTransactions.length} of {totalCount}
@@ -817,68 +788,129 @@ function TransactionsPageInner() {
           </div>
         </div>
 
-        {/* Fixed viewport modal, capped at 85% of the viewport height and
+        {/* Fixed viewport sheet, capped at 85% of the viewport height and
             scrollable internally. iOS's native date-wheel picker expands
             inline underneath whichever input is focused, which can make
             this sheet's natural content height taller than the screen --
-            without a cap the Clear/Done row could get pushed out of reach
-            entirely instead of just requiring a scroll to see it. */}
-        {dateFilterOpen && (
+            without a cap the Apply button could get pushed out of reach
+            entirely instead of just requiring a scroll to see it. Every
+            control here applies its filter live (same as the old always-
+            visible dropdowns did) -- "Apply Filters" just closes the sheet
+            rather than batching anything. */}
+        {filterSheetOpen && (
           <div
             className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-            onClick={() => setDateFilterOpen(false)}
+            onClick={() => setFilterSheetOpen(false)}
           >
             <div
-              className="w-full sm:w-80 max-h-[85vh] overflow-y-auto bg-paper-2 border border-hairline rounded-t-xl sm:rounded-xl p-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:pb-5"
+              className="w-full sm:w-96 max-h-[85vh] overflow-y-auto bg-paper-2 border border-hairline rounded-t-xl sm:rounded-xl p-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:pb-5"
               onClick={(e) => e.stopPropagation()}
             >
-              <p className="text-sm font-semibold text-ink mb-4">Date range</p>
-
-              <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">
-                From
-              </label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  const newFrom = e.target.value
-                  setDateFrom(newFrom)
-                  // Quietly pre-fill "To" to match "From" -- so whenever the
-                  // user actually taps "To" themselves, its picker already
-                  // starts on that same month/year instead of today's --
-                  // without popping it open on its own right after "From"
-                  // is picked. The user can still change just the day.
-                  if (newFrom) setDateTo(newFrom)
-                }}
-                className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
-              />
-
-              <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1 mt-4">
-                To
-              </label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
-              />
-
-              <div className="flex justify-between items-center pt-5">
-                <button
-                  type="button"
-                  onClick={() => { setDateFrom(""); setDateTo("") }}
-                  className="text-sm text-ink-soft"
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDateFilterOpen(false)}
-                  className="bg-gold text-ink px-5 py-2 rounded-md text-sm font-semibold"
-                >
-                  Done
+              <div className="flex items-center justify-between mb-5">
+                <p className="font-display text-lg font-medium text-ink">Filters</p>
+                <button type="button" onClick={clearFilters} className="text-sm font-semibold text-gold">
+                  Reset
                 </button>
               </div>
+
+              <div className="mb-6">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Who</p>
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMemberId("")}
+                    className={`flex items-center justify-between border rounded-md px-3.5 py-2.5 text-sm text-left ${
+                      !selectedMemberId ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
+                    }`}
+                  >
+                    Everyone
+                    {!selectedMemberId && <span className="text-gold">✓</span>}
+                  </button>
+                  {members.map((m) => {
+                    const active = selectedMemberId === m.member_id
+                    return (
+                      <button
+                        key={m.member_id}
+                        type="button"
+                        onClick={() => setSelectedMemberId(m.member_id)}
+                        className={`flex items-center justify-between border rounded-md px-3.5 py-2.5 text-sm text-left ${
+                          active ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
+                        }`}
+                      >
+                        {m.member_id === member?.member_id ? "You" : m.name}
+                        {active && <span className="text-gold">✓</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Type</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedType("")}
+                    className={`border rounded-full px-3.5 py-2 text-sm ${
+                      !selectedType ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
+                    }`}
+                  >
+                    All Types
+                  </button>
+                  {typeOptions.map((type) => {
+                    const active = selectedType === type
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setSelectedType(type)}
+                        className={`border rounded-full px-3.5 py-2 text-sm ${
+                          active ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
+                        }`}
+                      >
+                        {typeLabels[type] || type}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="mb-2">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Date Range</p>
+
+                <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">From</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    const newFrom = e.target.value
+                    setDateFrom(newFrom)
+                    // Quietly pre-fill "To" to match "From" -- so whenever the
+                    // user actually taps "To" themselves, its picker already
+                    // starts on that same month/year instead of today's --
+                    // without popping it open on its own right after "From"
+                    // is picked. The user can still change just the day.
+                    if (newFrom) setDateTo(newFrom)
+                  }}
+                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
+                />
+
+                <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1 mt-3">To</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setFilterSheetOpen(false)}
+                className="w-full mt-5 bg-gold text-ink rounded-md py-3.5 text-sm font-semibold"
+              >
+                Apply Filters
+              </button>
             </div>
           </div>
         )}
