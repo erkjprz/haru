@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
+import { dateOnly } from "@/lib/currentValue"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -77,6 +78,96 @@ function formatShort(isoDate: string): string {
     day: "numeric",
     month: "short"
   })
+}
+
+// Same as formatShort but with the year -- used in the filter sheet's date
+// fields themselves, where there's room and the year matters (unlike the
+// compact chip label above the list, which already has less space).
+function formatFull(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  })
+}
+
+type DatePreset = { key: string; label: string; from: string; to: string }
+
+// Computed fresh each render off the current date rather than memoized --
+// cheap enough (a handful of Date() constructions) that it's not worth
+// tracking "today" as its own piece of state just to memoize this.
+function buildDatePresets(): DatePreset[] {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+
+  return [
+    {
+      key: "this_month",
+      label: "This Month",
+      from: dateOnly(new Date(year, month, 1)),
+      to: dateOnly(new Date(year, month + 1, 0))
+    },
+    {
+      key: "last_month",
+      label: "Last Month",
+      from: dateOnly(new Date(year, month - 1, 1)),
+      to: dateOnly(new Date(year, month, 0))
+    },
+    {
+      key: "this_year",
+      label: "This Year",
+      from: dateOnly(new Date(year, 0, 1)),
+      to: dateOnly(new Date(year, 11, 31))
+    },
+    { key: "all_time", label: "All Time", from: "", to: "" }
+  ]
+}
+
+// Transparent native date input layered over a styled div -- the native
+// input still handles the actual tap-to-open-picker interaction (including
+// iOS's wheel picker) and stays reachable everywhere in the box, but the
+// visible text is entirely ours: a real calendar icon, a formatted date
+// once one's picked, and an actual visible placeholder when empty (an
+// empty native date input's own placeholder rendered invisible against
+// this dark theme).
+function DateField({
+  value,
+  onChange,
+  placeholder
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+}) {
+  return (
+    <div className="relative h-11">
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={placeholder}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [color-scheme:dark]"
+      />
+      <div
+        className={`pointer-events-none h-full flex items-center gap-2 border rounded-md px-3 text-sm font-mono ${
+          value ? "border-gold text-ink" : "border-hairline text-ink-soft"
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          className="w-[15px] h-[15px] shrink-0 text-ink-soft"
+        >
+          <rect x="3.5" y="5" width="17" height="16" rx="2" />
+          <path d="M8 3v4M16 3v4M3.5 10h17" strokeLinecap="round" />
+        </svg>
+        <span className="truncate">{value ? formatFull(value) : placeholder}</span>
+      </div>
+    </div>
+  )
 }
 
 // ~75% of rows have a description that's just the member's name typed back
@@ -862,30 +953,54 @@ function TransactionsPageInner() {
               <div className="mb-2">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Date Range</p>
 
-                <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">From</label>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => {
-                    const newFrom = e.target.value
-                    setDateFrom(newFrom)
-                    // Quietly pre-fill "To" to match "From" -- so whenever the
-                    // user actually taps "To" themselves, its picker already
-                    // starts on that same month/year instead of today's --
-                    // without popping it open on its own right after "From"
-                    // is picked. The user can still change just the day.
-                    if (newFrom) setDateTo(newFrom)
-                  }}
-                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
-                />
+                {/* Fills both dates in one tap for the common cases; picking
+                    a custom date below just naturally stops matching any
+                    preset's range, so nothing here needs its own "active
+                    preset" state to keep in sync. */}
+                <div className="flex gap-2 overflow-x-auto mb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {buildDatePresets().map((preset) => {
+                    const active = dateFrom === preset.from && dateTo === preset.to
+                    return (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        onClick={() => {
+                          setDateFrom(preset.from)
+                          setDateTo(preset.to)
+                        }}
+                        className={`shrink-0 border rounded-full px-3.5 py-2 text-sm whitespace-nowrap ${
+                          active ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    )
+                  })}
+                </div>
 
-                <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1 mt-3">To</label>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3 text-sm text-ink focus:outline-none focus:border-gold [color-scheme:dark]"
-                />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">From</label>
+                    <DateField
+                      value={dateFrom}
+                      onChange={(v) => {
+                        setDateFrom(v)
+                        // Quietly pre-fill "To" to match "From" -- so
+                        // whenever the user actually taps "To" themselves,
+                        // its picker already starts on that same month/year
+                        // instead of today's -- without popping it open on
+                        // its own right after "From" is picked. The user
+                        // can still change just the day.
+                        if (v) setDateTo(v)
+                      }}
+                      placeholder="Start date"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">To</label>
+                    <DateField value={dateTo} onChange={setDateTo} placeholder="End date" />
+                  </div>
+                </div>
               </div>
 
               <button
