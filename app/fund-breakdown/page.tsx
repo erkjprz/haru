@@ -114,7 +114,7 @@ function FundBreakdownHub() {
                   matching the Dashboard's You/Fund switcher, so it clearly
                   reads as a sub-choice under the Fund tab rather than a
                   second row of top-level tabs. */}
-              <div className="flex bg-paper-2 border border-hairline rounded-md p-[3px] mb-5 max-w-[240px]">
+              <div className="flex bg-paper-2 border border-hairline rounded-md p-[3px] mb-5">
                 {(["group", "you"] as FundView[]).map((v) => (
                   <button
                     key={v}
