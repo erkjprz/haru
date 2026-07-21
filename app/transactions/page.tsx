@@ -377,24 +377,33 @@ function TransactionsPageInner() {
     const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
     const toMatch = dateTo ? ts <= new Date(`${dateTo}T23:59:59`).getTime() : true
 
-    const searchMatch =
-      searchQuery.trim() === "" ||
-      [
-        t.members?.name,
-        t.description,
-        t.bank,
-        t.classification,
-        typeLabels[t.classification],
-        t.loans?.name,
-        t.loans?.borrowers?.name,
-        t._transferLabel,
-        t.txn_date,
-        effectiveDate(t).toLocaleDateString()
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase())
+    // Every word in the query has to appear somewhere in the haystack, but
+    // not necessarily adjacent to (or in the same field as) each other --
+    // e.g. "Vhan BDO" should match a row where the member name and bank
+    // badge are two separate fields, not a literal "vhan bdo" substring.
+    const searchHaystack = [
+      t.members?.name,
+      t.description,
+      t.bank,
+      bankAccountLabel(t.from_bank_account),
+      bankAccountLabel(t.to_bank_account),
+      t.classification,
+      typeLabels[t.classification],
+      t.loans?.name,
+      t.loans?.borrowers?.name,
+      t.investments?.name,
+      t._transferLabel,
+      t.txn_date,
+      effectiveDate(t).toLocaleDateString(),
+      cardDate(t),
+      monthLabel(t)
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+
+    const searchWords = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    const searchMatch = searchWords.length === 0 || searchWords.every((word) => searchHaystack.includes(word))
 
     return memberMatch && typeMatch && loanMatch && investmentMatch && fromMatch && toMatch && searchMatch
   })
@@ -458,8 +467,20 @@ function TransactionsPageInner() {
                 placeholder="Search transactions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border border-hairline bg-paper-2 text-ink rounded-md pl-4 pr-10 py-3 text-sm placeholder:text-ink-soft focus:outline-none"
+                className={`w-full border border-hairline bg-paper-2 text-ink rounded-md pl-4 py-3 text-sm placeholder:text-ink-soft focus:outline-none ${
+                  searchQuery ? "pr-16" : "pr-10"
+                }`}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear search"
+                  className="absolute right-9 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-hairline text-ink-soft text-[11px] font-semibold flex items-center justify-center shrink-0"
+                >
+                  ×
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowSearchHint((v) => !v)}
@@ -472,8 +493,9 @@ function TransactionsPageInner() {
             </div>
             {showSearchHint && (
               <p className="mt-2 text-xs text-ink-soft">
-                Matches member names, banks, descriptions, loan/investment names, and transaction types --
-                not just exact text.
+                Matches member names, banks, descriptions, loan/investment names, transaction types, and dates.
+                Multiple words narrow the results -- e.g. "Vhan BDO" finds Vhan's transactions on BDO, even
+                though the two words aren't next to each other on the card.
               </p>
             )}
           </div>
