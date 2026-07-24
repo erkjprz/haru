@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
+import { SkeletonCardList } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import { dateOnly } from "@/lib/currentValue"
 
@@ -332,6 +333,7 @@ function TransactionsPageInner() {
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
   const [transactions, setTransactions] = useState<any[]>([])
+  const [dataLoading, setDataLoading] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
   const [members, setMembers] = useState<any[]>([])
   const [selectedMemberId, setSelectedMemberId] = useState("")
@@ -449,8 +451,11 @@ function TransactionsPageInner() {
   }
 
   useEffect(() => {
-    loadTransactions()
-    loadMembers()
+    async function load() {
+      await Promise.all([loadTransactions(), loadMembers()])
+      setDataLoading(false)
+    }
+    load()
   }, [])
 
   // Ref-guarded run-once-on-load initializer, same as the effect above it --
@@ -697,13 +702,16 @@ function TransactionsPageInner() {
             </div>
           )}
 
-          <div className="mt-4 text-xs text-ink-soft font-mono [font-variant-numeric:tabular-nums]">
-            Showing {filteredTransactions.length} of {totalCount}
-            {debouncedSearchQuery && ` matching "${debouncedSearchQuery}"`}
-          </div>
+          {!dataLoading && (
+            <div className="mt-4 text-xs text-ink-soft font-mono [font-variant-numeric:tabular-nums]">
+              Showing {filteredTransactions.length} of {totalCount}
+              {debouncedSearchQuery && ` matching "${debouncedSearchQuery}"`}
+            </div>
+          )}
 
           <div className="mt-4">
-            {filteredTransactions.map((transaction, idx) => {
+            {dataLoading && <SkeletonCardList rows={5} />}
+            {!dataLoading && filteredTransactions.map((transaction, idx) => {
               const memberName = transaction.members?.name || null
               const isLoanTxn =
                 transaction.classification === "Loan Release" ||
@@ -873,7 +881,7 @@ function TransactionsPageInner() {
               )
             })}
 
-            {filteredTransactions.length === 0 && !loadError && (
+            {!dataLoading && filteredTransactions.length === 0 && !loadError && (
               <p className="py-8 text-sm text-ink-soft text-center">No transactions found.</p>
             )}
           </div>
