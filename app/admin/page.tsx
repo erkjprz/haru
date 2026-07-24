@@ -262,42 +262,64 @@ export default function AdminPage() {
     setExporting(true)
     setExportError("")
 
-    const { data, error } = await supabase
-      .from("transactions")
-      .select(
+    // Supabase/PostgREST caps how many rows a single request can return
+    // (1000 by default) regardless of the .range() asked for, and just
+    // silently returns fewer rows rather than erroring -- a single
+    // .range(0, 9999) request was quietly getting truncated to the
+    // oldest 1000 rows only, dropping everything more recent. Paginate
+    // in pages of 1000 instead, accumulating every page, and only stop
+    // once a page comes back short (including possibly-empty) -- that's
+    // the only reliable "no more rows" signal regardless of the actual
+    // server-side cap.
+    const PAGE_SIZE = 1000
+    const allRows: ExportRow[] = []
+    let from = 0
+
+    while (true) {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(
+          `
+          txn_date,
+          classification,
+          status,
+          amount,
+          bank,
+          description,
+          members!transactions_member_id_fkey ( name ),
+          submitted_by_member:members!transactions_submitted_by_fkey ( name ),
+          loans!transactions_loan_id_fkey ( name ),
+          investments!transactions_investment_id_fkey ( name ),
+          from_bank_account:bank_accounts!transactions_bank_account_id_fkey ( bank_name, account_name ),
+          to_bank_account:bank_accounts!transactions_to_bank_account_id_fkey ( bank_name, account_name ),
+          created_at
         `
-        txn_date,
-        classification,
-        status,
-        amount,
-        bank,
-        description,
-        members!transactions_member_id_fkey ( name ),
-        submitted_by_member:members!transactions_submitted_by_fkey ( name ),
-        loans!transactions_loan_id_fkey ( name ),
-        investments!transactions_investment_id_fkey ( name ),
-        from_bank_account:bank_accounts!transactions_bank_account_id_fkey ( bank_name, account_name ),
-        to_bank_account:bank_accounts!transactions_to_bank_account_id_fkey ( bank_name, account_name ),
-        created_at
-      `
-      )
-      .order("txn_date", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: true })
-      .range(0, 9999)
+        )
+        .order("txn_date", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1)
+
+      if (error) {
+        setExporting(false)
+        setExportError(error.message)
+        return
+      }
+
+      const batch = (data ?? []) as unknown as ExportRow[]
+      allRows.push(...batch)
+
+      if (batch.length < PAGE_SIZE) break
+      from += PAGE_SIZE
+    }
 
     setExporting(false)
-
-    if (error) {
-      setExportError(error.message)
-      return
-    }
 
     const headers = [
       "Date", "Type", "Status", "Member", "Amount", "Bank",
       "Transfer To", "Loan", "Investment", "Submitted By", "Description", "Recorded At"
     ]
 
-    const rows = ((data ?? []) as unknown as ExportRow[]).map((t) => [
+    const rows = allRows.map((t) => [
       t.txn_date ?? "",
       typeLabels[t.classification] || t.classification,
       t.status,
