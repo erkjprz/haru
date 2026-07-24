@@ -8,6 +8,7 @@ import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { getPendingBankInterestGroups, distributeBankInterestGroup, type PendingBankInterestGroup } from "@/lib/bankInterest"
+import { SupportPanel } from "@/app/components/admin/SupportPanel"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -20,7 +21,7 @@ const typeLabels: Record<string, string> = {
   "Internal Transfer": "Bank Transfer"
 }
 
-type Tab = "members" | "txns" | "borrowers" | "distrib"
+type Tab = "members" | "txns" | "borrowers" | "distrib" | "support"
 
 type ExportRow = {
   txn_date: string | null
@@ -394,7 +395,8 @@ export default function AdminPage() {
     { id: "txns", label: "Txns", count: pendingTransactions.length },
     { id: "distrib", label: "Distrib.", count: pendingGroups.length },
     { id: "members", label: "Members", count: pendingMembers.length },
-    { id: "borrowers", label: "Borrowers", count: pendingBorrowers.length }
+    { id: "borrowers", label: "Borrowers", count: pendingBorrowers.length },
+    { id: "support", label: "Support", count: 0 }
   ]
 
   return (
@@ -435,8 +437,11 @@ export default function AdminPage() {
             <p className="mt-4 text-sm text-rust">Couldn&apos;t load some data: {loadError}</p>
           )}
 
-          {/* Segmented control */}
-          <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
+          {/* Segmented control -- scrolls horizontally instead of
+              squeezing every tab to fit, now that Support makes it five
+              wide; the active tab stays a fixed-width pill either way, it
+              just isn't forced to stretch and crowd its neighbors. */}
+          <div className="mt-6 flex overflow-x-auto bg-paper-2 border border-hairline rounded-md p-[3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {tabs.map((t) => (
               <button
                 key={t.id}
@@ -444,7 +449,7 @@ export default function AdminPage() {
                   setActiveTab(t.id)
                   window.scrollTo(0, 0)
                 }}
-                className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
+                className={`shrink-0 px-4 py-2.5 rounded-[6px] text-sm font-semibold whitespace-nowrap transition-colors ${
                   activeTab === t.id ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
                 }`}
               >
@@ -809,6 +814,9 @@ export default function AdminPage() {
               </button>
             </section>
           )}
+
+          {/* ---- Support ---- */}
+          {activeTab === "support" && <SupportPanel />}
 
         </div>
       </main>
