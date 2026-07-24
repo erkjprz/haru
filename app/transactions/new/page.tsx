@@ -7,7 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
-import { AmountHero, TypePillRow, StepTrack, ReviewRow, Chip } from "@/app/components/TransactionFormUI"
+import { AmountHero, TypePillRow, StepTrack, ReviewRow, ReceiptField, Chip } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 import { dateOnly } from "@/lib/currentValue"
@@ -237,13 +237,6 @@ function NewTransactionForm() {
   function setReceiptFile(file: File | null) {
     setReceipt(file)
     setReceiptPreview(file ? URL.createObjectURL(file) : null)
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setDragActive(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) setReceiptFile(file)
   }
 
   async function handleTypeChange(newType: string) {
@@ -562,6 +555,11 @@ function NewTransactionForm() {
 
   // Readiness chips for the sticky summary bar -- one branch per entry
   // type's actual requirements, mirroring the validation in handleSubmit.
+  // Purely informational chips ("Posts as approved", "Doesn't affect cash
+  // total", "No receipt needed") were dropped here -- every one of them
+  // just restated something the amount hero's helper text already says,
+  // and on the types with the most other chips (Investment) that made the
+  // footer wrap to three crowded rows for no added information.
   const chips: { done: boolean; text: string }[] = []
 
   if (selectedType === "contribution" || isLoanPayment) {
@@ -570,8 +568,6 @@ function NewTransactionForm() {
     if (isLoanPayment) {
       chips.push(selectedLoanId ? { done: true, text: "✓ Loan matched" } : { done: false, text: "Select a loan" })
     }
-  } else if (selectedType === "withdrawal") {
-    chips.push({ done: false, text: "No receipt needed" })
   } else if (isLoanRequest) {
     chips.push(
       previewTotalRepayable > 0
@@ -585,16 +581,13 @@ function NewTransactionForm() {
         : { done: false, text: "Select both banks" }
     )
     chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
-    chips.push({ done: true, text: "Doesn't affect cash total" })
   } else if (isInvestmentEntry) {
     chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
     chips.push(investmentId ? { done: true, text: "✓ Investment selected" } : { done: false, text: "Investment required" })
     chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
-    chips.push({ done: true, text: "Posts as approved" })
   } else if (selectedType === "bank_interest" || selectedType === "expense") {
     chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
     chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
-    chips.push({ done: true, text: "Posts as approved" })
   }
 
   if (checkingAccess) {
@@ -776,60 +769,13 @@ function NewTransactionForm() {
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Receipt
                     </label>
-
-                    {!receiptPreview ? (
-                      <label
-                        onDragOver={(e) => {
-                          e.preventDefault()
-                          setDragActive(true)
-                        }}
-                        onDragLeave={() => setDragActive(false)}
-                        onDrop={handleDrop}
-                        className={`
-                          flex flex-col items-center justify-center gap-2
-                          border-2 border-dashed rounded-md
-                          py-10 px-4 cursor-pointer text-center transition-colors
-                          ${dragActive ? "border-gold bg-gold/5" : "border-hairline"}
-                        `}
-                      >
-                        <span className="text-2xl">📎</span>
-                        <span className="text-base text-ink">
-                          Tap to upload, or drag a photo here
-                        </span>
-                        <span className="text-sm text-ink-soft">
-                          Screenshot or photo of your deposit slip
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-                        />
-                      </label>
-                    ) : (
-                      <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
-                        <img
-                          src={receiptPreview}
-                          alt="Receipt preview"
-                          className="w-16 h-16 object-cover rounded-md border border-hairline"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-base text-ink truncate">
-                            {receipt?.name}
-                          </p>
-                          <p className="text-sm text-ink-soft">
-                            {receipt ? `${(receipt.size / 1024).toFixed(0)} KB` : ""}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setReceiptFile(null)}
-                          className="text-sm text-rust border border-rust rounded-full px-2.5 py-1 shrink-0"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
+                    <ReceiptField
+                      receipt={receipt}
+                      receiptPreview={receiptPreview}
+                      dragActive={dragActive}
+                      setDragActive={setDragActive}
+                      onFileChange={setReceiptFile}
+                    />
                   </div>
                 )}
               </div>
@@ -1005,60 +951,13 @@ function NewTransactionForm() {
                         <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                           Receipt
                         </label>
-
-                        {!receiptPreview ? (
-                          <label
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              setDragActive(true)
-                            }}
-                            onDragLeave={() => setDragActive(false)}
-                            onDrop={handleDrop}
-                            className={`
-                              flex flex-col items-center justify-center gap-2
-                              border-2 border-dashed rounded-md
-                              py-10 px-4 cursor-pointer text-center transition-colors
-                              ${dragActive ? "border-gold bg-gold/5" : "border-hairline"}
-                            `}
-                          >
-                            <span className="text-2xl">📎</span>
-                            <span className="text-base text-ink">
-                              Tap to upload, or drag a photo here
-                            </span>
-                            <span className="text-sm text-ink-soft">
-                              Screenshot or photo of your deposit slip
-                            </span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-                            />
-                          </label>
-                        ) : (
-                          <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
-                            <img
-                              src={receiptPreview}
-                              alt="Receipt preview"
-                              className="w-16 h-16 object-cover rounded-md border border-hairline"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-base text-ink truncate">
-                                {receipt?.name}
-                              </p>
-                              <p className="text-sm text-ink-soft">
-                                {receipt ? `${(receipt.size / 1024).toFixed(0)} KB` : ""}
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setReceiptFile(null)}
-                              className="text-sm text-rust border border-rust rounded-full px-2.5 py-1 shrink-0"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        )}
+                        <ReceiptField
+                          receipt={receipt}
+                          receiptPreview={receiptPreview}
+                          dragActive={dragActive}
+                          setDragActive={setDragActive}
+                          onFileChange={setReceiptFile}
+                        />
                       </div>
                     )}
                   </div>
@@ -1123,7 +1022,7 @@ function NewTransactionForm() {
         className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline"
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4 flex items-center gap-3">
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4 flex items-end gap-3">
           <div className="min-w-0 flex-1">
             {(!isStepped || formStep === 1) && (
               <div className="flex flex-wrap gap-1.5">
