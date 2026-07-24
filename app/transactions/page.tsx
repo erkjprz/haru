@@ -757,14 +757,18 @@ function TransactionsPageInner() {
               // once approved, transaction.status flips to "approved" too,
               // so this stays a reliable proxy without a separate query).
               // Admin entries (Bank Interest/Expense/Bank Transfer) are
-              // always inserted already-approved with no owning member,
-              // so they're editable by an admin any time instead.
+              // always inserted already-approved with no owning member, so
+              // editing is restricted to whichever admin actually recorded
+              // it (submitted_by) -- older entries from before this was
+              // tracked have no submitted_by on file, so any admin can
+              // still edit those rather than locking everyone out.
               const canEdit =
                 (transaction.status === "pending" &&
                   transaction.member_id === member?.member_id &&
                   transaction.classification !== "Loan Release") ||
                 (isAdmin &&
-                  (["Bank Interest", "Expense", "Internal Transfer"].includes(transaction.classification) ||
+                  ((["Bank Interest", "Expense", "Internal Transfer"].includes(transaction.classification) &&
+                    (transaction.submitted_by == null || transaction.submitted_by === member?.member_id)) ||
                     (transaction.classification === "Loan Release" && transaction.status === "pending")))
 
               const label = monthLabel(transaction)

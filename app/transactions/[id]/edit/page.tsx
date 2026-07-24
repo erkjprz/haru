@@ -178,11 +178,18 @@ export default function EditTransactionPage() {
         loanRecord = loan
       }
 
+      // Admin-recorded entries (Bank Interest/Expense/Internal Transfer) are
+      // restricted to whichever admin actually submitted them -- older
+      // entries with no submitted_by on file stay editable by any admin
+      // instead of locking everyone out. Mirrors canEdit on the
+      // Transactions list.
+      const isOwnAdminEntry = txn ? txn.submitted_by == null || txn.submitted_by === member.member_id : false
+
       const editable =
         txn &&
         !error &&
         ((isMemberType && txn.member_id === member.member_id && txn.status === "pending") ||
-          (isAdminSimpleType && isAdmin && txn.status !== "cancelled") ||
+          (isAdminSimpleType && isAdmin && txn.status !== "cancelled" && isOwnAdminEntry) ||
           (isLoanReleaseType && isAdmin && txn.status === "pending" && loanRecord?.status === "requested"))
 
       if (!editable) {
