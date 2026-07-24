@@ -508,6 +508,9 @@ function NewTransactionForm() {
     if (isBankTransfer) {
       // Cash-neutral: affects_cash 0 keeps it out of the cash ledger; the
       // per-bank balances use bank_account_id / to_bank_account_id instead.
+      // submitted_by records which admin recorded this -- editing this
+      // entry later is restricted to that same admin (see canEdit on the
+      // Transactions list).
       const { error } = await supabase
         .from("transactions")
         .insert({
@@ -519,7 +522,8 @@ function NewTransactionForm() {
           amount: Number(amount),
           description,
           receipt_url: null,
-          status: "approved"
+          status: "approved",
+          submitted_by: memberId
         })
 
       setSubmitting(false)
@@ -550,6 +554,9 @@ function NewTransactionForm() {
           ? "Investment"
           : "Investment Return"
 
+      // submitted_by records which admin recorded this -- editing this
+      // entry later is restricted to that same admin (see canEdit on the
+      // Transactions list).
       const { error } = await supabase
         .from("transactions")
         .insert({
@@ -560,7 +567,8 @@ function NewTransactionForm() {
           amount: selectedType === "expense" || selectedType === "investment" ? -Number(amount) : Number(amount),
           description,
           receipt_url: null,
-          status: "approved"
+          status: "approved",
+          submitted_by: memberId
         })
 
       if (error) {
