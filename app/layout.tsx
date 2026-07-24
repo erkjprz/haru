@@ -45,7 +45,21 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        {/* Runs synchronously during HTML parsing, before first paint --
+            applies the stored theme (defaulting to dark, same default
+            ThemeProvider's own state starts with) so a hard reload never
+            shows a flash of the light theme while React hydrates. Without
+            this, pull-to-refresh's window.location.reload() briefly
+            painted the default light background every time. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("haru-theme");var isDark=t?t==="dark":true;document.documentElement.classList.toggle("dark",isDark);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",isDark?"#0a0a0a":"#ffffff")}catch(e){}})()`
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <ScrollToTop />
         <AuthProvider>
