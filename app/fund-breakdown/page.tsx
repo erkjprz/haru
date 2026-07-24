@@ -800,6 +800,42 @@ function GroupPanel() {
         </div>
       )}
 
+      {fund != null && (
+        <div className="bg-paper-2 border border-hairline rounded-md p-5 mb-6">
+          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-3">Fund Breakdown</p>
+
+          <InfoBox label="Capital">
+            <InfoRow label="Total Contribution" value={`₱${fmt(fund.total_contribution)}`} />
+            {fund.total_withdrawal !== 0 && (
+              <InfoRow
+                label="Total Withdrawal"
+                value={`-₱${fmt(Math.abs(fund.total_withdrawal))}`}
+                valueClass="text-rust"
+              />
+            )}
+            <InfoRow label="Net Contribution" value={`₱${fmt(fund.net_contribution)}`} bold />
+          </InfoBox>
+
+          <InfoBox label="Performance">
+            <InfoRow
+              label="Total Fund Gain/Loss"
+              value={signed(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
+              valueClass={tone(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
+              bold
+            />
+            <div className="pt-1 space-y-1.5">
+              <InfoSubRow label="Bank Interest (all-time)" value={signed(fund.total_bank_interest)} valueClass="text-sage" />
+              <InfoSubRow
+                label="Investment Position"
+                value={signed(fund.net_investment_gain_loss)}
+                valueClass={tone(fund.net_investment_gain_loss)}
+              />
+              <InfoSubRow label="Loan Gains Distributed" value={`₱${fmt(fund.total_loan_gain_distributed)}`} />
+            </div>
+          </InfoBox>
+        </div>
+      )}
+
       <div
         className="overflow-hidden"
         style={{ touchAction: "pan-y" }}
@@ -904,42 +940,6 @@ function GroupPanel() {
               />
             </button>
           ))}
-        </div>
-      )}
-
-      {fund != null && (
-        <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-6">
-          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-3">Fund Breakdown</p>
-
-          <InfoBox label="Capital">
-            <InfoRow label="Total Contribution" value={`₱${fmt(fund.total_contribution)}`} />
-            {fund.total_withdrawal !== 0 && (
-              <InfoRow
-                label="Total Withdrawal"
-                value={`-₱${fmt(Math.abs(fund.total_withdrawal))}`}
-                valueClass="text-rust"
-              />
-            )}
-            <InfoRow label="Net Contribution" value={`₱${fmt(fund.net_contribution)}`} bold />
-          </InfoBox>
-
-          <InfoBox label="Performance">
-            <InfoRow
-              label="Total Fund Gain/Loss"
-              value={signed(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
-              valueClass={tone(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
-              bold
-            />
-            <div className="pt-1 space-y-1.5">
-              <InfoSubRow label="Bank Interest (all-time)" value={signed(fund.total_bank_interest)} valueClass="text-sage" />
-              <InfoSubRow
-                label="Investment Position"
-                value={signed(fund.net_investment_gain_loss)}
-                valueClass={tone(fund.net_investment_gain_loss)}
-              />
-              <InfoSubRow label="Loan Gains Distributed" value={`₱${fmt(fund.total_loan_gain_distributed)}`} />
-            </div>
-          </InfoBox>
         </div>
       )}
 
