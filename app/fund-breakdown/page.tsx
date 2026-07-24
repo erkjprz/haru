@@ -8,6 +8,10 @@ import { SkeletonCardList, SkeletonPanel } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import type { InterestType } from "@/lib/loanMath"
 import { formatInterestLabel } from "@/lib/loanFormat"
+import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
+import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
+import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
+import { InvestmentDetailPanel } from "@/app/components/breakdown/InvestmentDetailPanel"
 
 type Tab = "fund" | "loans" | "banks" | "investments"
 type FundView = "you" | "group"
@@ -735,6 +739,17 @@ function GroupPanel() {
     return <SkeletonCardList rows={4} />
   }
 
+  if (openMember) {
+    return (
+      <MemberBreakdownSheet
+        memberId={openMember.id}
+        memberName={openMember.name}
+        isSelf={authMember?.member_id === openMember.id}
+        onClose={() => setOpenMember(null)}
+      />
+    )
+  }
+
   const clampedIndex = Math.min(activeIndex, Math.max(0, members.length - 1))
 
   return (
@@ -928,14 +943,6 @@ function GroupPanel() {
         </div>
       )}
 
-      {openMember && (
-        <MemberBreakdownSheet
-          memberId={openMember.id}
-          memberName={openMember.name}
-          isSelf={authMember?.member_id === openMember.id}
-          onClose={() => setOpenMember(null)}
-        />
-      )}
     </div>
   )
 }
@@ -1099,15 +1106,11 @@ function MemberBreakdownSheet({
     }
   }, [memberId])
 
-  // Body scroll is locked while the sheet covers the screen, same as any
-  // full-screen overlay -- otherwise the Group carousel underneath can
-  // still be scrolled by touch even though it's hidden.
+  // Opening this while the Group carousel is scrolled down would otherwise
+  // leave the Breakdown header out of view -- jump back to top so it's
+  // visible the instant the sheet mounts.
   useEffect(() => {
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = prevOverflow
-    }
+    window.scrollTo(0, 0)
   }, [])
 
   const fmt = (n: number) =>
@@ -1116,19 +1119,18 @@ function MemberBreakdownSheet({
   const tone = (n: number) => (n > 0 ? "text-sage" : n < 0 ? "text-rust" : "text-ink-soft")
 
   return (
-    <div className="fixed inset-0 z-50 bg-paper overflow-y-auto overscroll-contain">
-      <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+env(safe-area-inset-bottom))]">
-        <button onClick={onClose} className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors">
-          ← Breakdown
-        </button>
+    <div>
+      <button onClick={onClose} className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors">
+        ← Group
+      </button>
 
-        <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">Personal Ledger</div>
-        <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
-          {isSelf ? "Your Breakdown" : `${memberName}'s Breakdown`}
-        </h1>
-        <p className="text-[13px] text-ink-soft mb-6">
-          {isSelf ? "Your" : `${memberName}'s`} capital and performance, all-time and by year.
-        </p>
+      <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">Personal Ledger</div>
+      <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
+        {isSelf ? "Your Breakdown" : `${memberName}'s Breakdown`}
+      </h1>
+      <p className="text-[13px] text-ink-soft mb-6">
+        {isSelf ? "Your" : `${memberName}'s`} capital and performance, all-time and by year.
+      </p>
 
         {dataLoading ? (
           <SkeletonPanel />
@@ -1265,7 +1267,6 @@ function MemberBreakdownSheet({
             </section>
           </>
         )}
-      </div>
     </div>
   )
 }
@@ -1296,10 +1297,10 @@ function termLabel(loan: Loan): string | null {
 }
 
 function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
-  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [loans, setLoans] = useState<Loan[]>([])
   const [loadError, setLoadError] = useState("")
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1340,6 +1341,10 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
     return <SkeletonCardList rows={4} />
   }
 
+  if (selectedLoanId) {
+    return <LoanDetailPanel loanId={selectedLoanId} onBack={() => setSelectedLoanId(null)} />
+  }
+
   const openLoans = loans.filter((l) => l.status !== "closed")
   const closedLoans = loans.filter((l) => l.status === "closed")
 
@@ -1364,7 +1369,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
                 meta={statusMeta[loan.status]}
                 fmt={fmt}
                 isMine={loan.borrower_member_id === myMemberId}
-                onClick={() => router.push(`/loans/${loan.loan_id}`)}
+                onClick={() => setSelectedLoanId(loan.loan_id)}
               />
             ))}
           </div>
@@ -1382,7 +1387,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
                 meta={statusMeta[loan.status]}
                 fmt={fmt}
                 isMine={loan.borrower_member_id === myMemberId}
-                onClick={() => router.push(`/loans/${loan.loan_id}`)}
+                onClick={() => setSelectedLoanId(loan.loan_id)}
               />
             ))}
           </div>
@@ -1499,11 +1504,12 @@ type BankAccount = {
 }
 
 function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
-  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [banks, setBanks] = useState<Bank[]>([])
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
   const [loadError, setLoadError] = useState("")
+  const [selectedBank, setSelectedBank] = useState<string | null>(null)
+  const [selectedYear, setSelectedYear] = useState<string | null>(null)
 
   const [manageMode, setManageMode] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -1652,6 +1658,22 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
     return <SkeletonCardList rows={3} />
   }
 
+  if (selectedBank && selectedYear) {
+    return (
+      <BankYearDetailPanel bank={selectedBank} year={selectedYear} onBack={() => setSelectedYear(null)} />
+    )
+  }
+
+  if (selectedBank) {
+    return (
+      <BankDetailPanel
+        bank={selectedBank}
+        onBack={() => setSelectedBank(null)}
+        onSelectYear={(y) => setSelectedYear(y)}
+      />
+    )
+  }
+
   const totalBalance = banks.reduce((sum, b) => sum + b.balance, 0)
 
   return (
@@ -1738,7 +1760,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
               <BankCard
                 bank={b}
                 fmt={fmt}
-                onClick={() => router.push(`/bank/${encodeURIComponent(b.bank)}`)}
+                onClick={() => setSelectedBank(b.bank)}
                 showEdit={isAdmin && manageMode}
                 fused={isEditingThis}
                 onEdit={acct ? () => startEdit(acct) : undefined}
@@ -1970,10 +1992,10 @@ type Investment = {
 }
 
 function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
-  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [investments, setInvestments] = useState<Investment[]>([])
   const [loadError, setLoadError] = useState("")
+  const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null)
 
   const [manageMode, setManageMode] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -2063,6 +2085,15 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
     return <SkeletonCardList rows={4} />
   }
 
+  if (selectedInvestmentId) {
+    return (
+      <InvestmentDetailPanel
+        investmentId={selectedInvestmentId}
+        onBack={() => setSelectedInvestmentId(null)}
+      />
+    )
+  }
+
   const gains = investments.filter((i) => i.gain_loss > 0).sort((a, b) => b.gain_loss - a.gain_loss)
   const losses = investments.filter((i) => i.gain_loss <= 0).sort((a, b) => a.gain_loss - b.gain_loss)
   const netTotal = investments.reduce((sum, i) => sum + i.gain_loss, 0)
@@ -2075,7 +2106,7 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
         <InvestmentCard
           inv={inv}
           fmt={fmt}
-          onClick={() => router.push(`/investment/${inv.investment_id}`)}
+          onClick={() => setSelectedInvestmentId(inv.investment_id)}
           showEdit={isAdmin && manageMode}
           fused={isEditingThis}
           onEdit={() => startEdit(inv)}

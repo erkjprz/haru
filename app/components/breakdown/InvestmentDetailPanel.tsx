@@ -1,11 +1,15 @@
 "use client"
 
+// Inline replacement for the old standalone /investment/[id] route --
+// rendered in place inside InvestmentsPanel so the Breakdown header and
+// tab row stay on screen instead of a full page navigation.
+
 import { useCallback, useEffect, useState } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
 import { distributeInvestmentGain, getUndistributedInvestmentGain } from "@/lib/distributeInvestment"
 import { dateOnly } from "@/lib/currentValue"
 
@@ -44,20 +48,17 @@ const TXN_TYPE_LABELS: Record<string, string> = {
   "Gain Allocation": "Investment Allocation"
 }
 
-export default function InvestmentDetailPage() {
+export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: string; onBack: () => void }) {
   const router = useRouter()
-  const params = useParams()
-  const investmentId = params?.id as string
-
-  const { loading: authLoading, member } = useAuth()
+  const { member } = useAuth()
   const isAdmin = member?.role === "admin"
+  const myMemberId = member?.member_id ?? null
+
   const [dataLoading, setDataLoading] = useState(true)
-  const checkingAccess = authLoading || dataLoading
   const [investment, setInvestment] = useState<Investment | null>(null)
   const [shares, setShares] = useState<Share[]>([])
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
   const [allMembers, setAllMembers] = useState<any[]>([])
-  const myMemberId = member?.member_id ?? null
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
 
@@ -85,8 +86,6 @@ export default function InvestmentDetailPage() {
     // split across all 10 members; Farmon's realized loss is spread
     // across 9 (Yabie isn't allocated a share, a pre-existing artifact
     // of this table's history, not something decided in this pass).
-    // allocation_type tells us whether the row is a gain or a loss so
-    // the sign can be applied for display.
     const { data, error } = await supabase
       .from("investment_allocations")
       .select("id, amount, allocation_type, member_id, notes, allocation_date, members(name)")
@@ -111,10 +110,6 @@ export default function InvestmentDetailPage() {
   }, [investmentId])
 
   const loadRecentTransactions = useCallback(async () => {
-    // Most recent 5 transactions tied to this investment (Investment,
-    // Investment Return, and any Gain Allocation distributed against it),
-    // newest first -- a quick "what's happened lately" glance, with a link
-    // to the full ledger (pre-filtered to this investment) for the rest.
     const { data } = await supabase
       .from("transactions")
       .select("transaction_id, txn_date, created_at, classification, amount, status")
@@ -135,23 +130,15 @@ export default function InvestmentDetailPage() {
     )
   }, [investmentId])
 
+  // Opening a drill-down while the list is scrolled down would otherwise
+  // leave the Breakdown header out of view -- jump back to top so it's
+  // visible the instant the detail mounts.
   useEffect(() => {
-    if (authLoading) return
+    window.scrollTo(0, 0)
+  }, [])
 
-    if (!member) {
-      router.push("/login")
-      return
-    }
-
-    if (member.status !== "approved") {
-      router.push("/waiting")
-      return
-    }
-
-    if (member.role === "borrower") {
-      router.push("/borrower")
-      return
-    }
+  useEffect(() => {
+    let cancelled = false
 
     async function load() {
       const investmentPromise = supabase
@@ -176,6 +163,8 @@ export default function InvestmentDetailPage() {
         membersPromise
       ])
 
+      if (cancelled) return
+
       if (investmentResult.error || !investmentResult.data) {
         setNotFound(true)
       } else {
@@ -186,7 +175,10 @@ export default function InvestmentDetailPage() {
     }
 
     if (investmentId) load()
-  }, [investmentId, authLoading, member, router, loadShares, loadRecentTransactions])
+    return () => {
+      cancelled = true
+    }
+  }, [investmentId, member, loadShares, loadRecentTransactions])
 
   function clearForm() {
     setShowAddForm(false)
@@ -323,35 +315,18 @@ export default function InvestmentDetailPage() {
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  if (checkingAccess) {
-    return (
-      <>
-        <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+var(--dock-h)+env(safe-area-inset-bottom))]">
-            <SkeletonPanel />
-          </div>
-        </main>
-      </>
-    )
+  if (dataLoading) {
+    return <SkeletonPanel />
   }
 
   if (notFound || !investment) {
     return (
-      <>
-        <Navbar />
-        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8">
-            <p className="text-sm text-ink-soft">This investment couldn't be found.</p>
-            <button
-              onClick={() => router.push("/fund-breakdown?tab=investments")}
-              className="mt-4 text-sm font-medium text-gold"
-            >
-              ← Back to Investment
-            </button>
-          </div>
-        </main>
-      </>
+      <div>
+        <p className="text-sm text-ink-soft">This investment couldn't be found.</p>
+        <button onClick={onBack} className="mt-4 text-sm font-medium text-gold">
+          ← Back to Investment
+        </button>
+      </div>
     )
   }
 
@@ -396,320 +371,312 @@ export default function InvestmentDetailPage() {
   })
 
   return (
-    <>
-      <Navbar />
-      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+var(--dock-h)+env(safe-area-inset-bottom))]">
+    <div>
+      <button onClick={onBack} className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors">
+        ← Investment
+      </button>
+
+      <div className="flex items-center gap-2 mb-1">
+        <span className={`w-1.5 h-1.5 rounded-full ${isGain ? "bg-sage" : isFlat ? "bg-ink-soft" : "bg-rust"}`} />
+        <span
+          className={`text-[11px] font-mono uppercase tracking-wide ${
+            isGain ? "text-sage" : isFlat ? "text-ink-soft" : "text-rust"
+          }`}
+        >
+          {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
+        </span>
+      </div>
+      <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
+        {investment.investment}
+      </h1>
+      <p className="text-[13px] text-ink-soft mb-6">
+        {investment.affects_cash ? "Funded through the tracked bank accounts" : "Funded outside the tracked bank trail"}
+      </p>
+
+      {/* Gain/loss overview */}
+      <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5">
+        <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
+          Net Gain / Loss
+        </p>
+        <p
+          className={`font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold ${
+            isGain ? "text-sage" : isFlat ? "text-ink" : "text-rust"
+          }`}
+        >
+          {investment.gain_loss < 0 ? "-" : "+"}₱{fmt(Math.abs(investment.gain_loss))}
+        </p>
+      </div>
+
+      {/* Invested / Returned */}
+      <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
+        <InfoBox label="Cash Flow">
+          <InfoRow label="Invested" value={`₱${fmt(investment.invested)}`} />
+          <InfoRow label="Returned" value={`₱${fmt(investment.returned)}`} />
+          <InfoRow
+            label="Net"
+            value={`${investment.gain_loss < 0 ? "-" : "+"}₱${fmt(Math.abs(investment.gain_loss))}`}
+            valueClass={isGain ? "text-sage" : isFlat ? "text-ink" : "text-rust"}
+            bold
+          />
+        </InfoBox>
+      </div>
+
+      {/* Recent transactions */}
+      <section className="mt-8">
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h2 className="font-display text-lg font-medium text-ink">Recent Transactions</h2>
           <button
-            onClick={() => router.push("/fund-breakdown?tab=investments")}
-            className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
+            onClick={() => router.push(`/transactions?investment=${investmentId}`)}
+            className="shrink-0 text-[13px] font-medium text-gold"
           >
-            ← Investment
+            View all →
           </button>
+        </div>
 
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${isGain ? "bg-sage" : isFlat ? "bg-ink-soft" : "bg-rust"}`} />
-            <span
-              className={`text-[11px] font-mono uppercase tracking-wide ${
-                isGain ? "text-sage" : isFlat ? "text-ink-soft" : "text-rust"
-              }`}
-            >
-              {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
-            </span>
-          </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
-            {investment.investment}
-          </h1>
-          <p className="text-[13px] text-ink-soft mb-6">
-            {investment.affects_cash ? "Funded through the tracked bank accounts" : "Funded outside the tracked bank trail"}
-          </p>
-
-          {/* Gain/loss overview */}
-          <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5">
-            <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
-              Net Gain / Loss
-            </p>
-            <p
-              className={`font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold ${
-                isGain ? "text-sage" : isFlat ? "text-ink" : "text-rust"
-              }`}
-            >
-              {investment.gain_loss < 0 ? "-" : "+"}₱{fmt(Math.abs(investment.gain_loss))}
-            </p>
-          </div>
-
-          {/* Invested / Returned */}
-          <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
-            <InfoBox label="Cash Flow">
-              <InfoRow label="Invested" value={`₱${fmt(investment.invested)}`} />
-              <InfoRow label="Returned" value={`₱${fmt(investment.returned)}`} />
-              <InfoRow
-                label="Net"
-                value={`${investment.gain_loss < 0 ? "-" : "+"}₱${fmt(Math.abs(investment.gain_loss))}`}
-                valueClass={isGain ? "text-sage" : isFlat ? "text-ink" : "text-rust"}
-                bold
-              />
-            </InfoBox>
-          </div>
-
-          {/* Recent transactions */}
-          <section className="mt-8">
-            <div className="flex items-baseline justify-between gap-3 mb-3">
-              <h2 className="font-display text-lg font-medium text-ink">Recent Transactions</h2>
-              <button
-                onClick={() => router.push(`/transactions?investment=${investmentId}`)}
-                className="shrink-0 text-[13px] font-medium text-gold"
+        {recentTransactions.length > 0 ? (
+          <div className="bg-paper-2 border border-hairline rounded-md px-5">
+            {recentTransactions.map((t, i) => (
+              <div
+                key={t.transaction_id}
+                className={`py-3 flex justify-between items-center gap-3 ${
+                  i !== recentTransactions.length - 1 ? "border-b border-dashed border-hairline" : ""
+                }`}
               >
-                View all →
-              </button>
-            </div>
-
-            {recentTransactions.length > 0 ? (
-              <div className="bg-paper-2 border border-hairline rounded-md px-5">
-                {recentTransactions.map((t, i) => (
-                  <div
-                    key={t.transaction_id}
-                    className={`py-3 flex justify-between items-center gap-3 ${
-                      i !== recentTransactions.length - 1 ? "border-b border-dashed border-hairline" : ""
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm text-ink truncate">
-                        {TXN_TYPE_LABELS[t.classification] ?? t.classification}
-                      </p>
-                      <p className="text-[11px] text-ink-soft font-mono">
-                        {new Date(t.date.length === 10 ? `${t.date}T00:00:00` : t.date).toLocaleDateString(
-                          undefined,
-                          { day: "numeric", month: "short", year: "numeric" }
-                        )}
-                        {t.status === "pending" ? " · pending" : ""}
-                      </p>
-                    </div>
-                    <p
-                      className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
-                        t.amount < 0 ? "text-rust" : "text-sage"
-                      }`}
-                    >
-                      {t.amount < 0 ? "-" : "+"}₱{fmt(Math.abs(t.amount))}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
-                No transactions recorded for this investment yet.
-              </p>
-            )}
-          </section>
-
-          {/* Gain/loss share per member */}
-          <section className="mt-8">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div>
-                <h2 className="font-display text-lg font-medium text-ink mb-1">
-                  {isGain ? "Gain" : "Loss"} Share per Member
-                </h2>
-                <p className="text-[13px] text-ink-soft mb-3">
-                  How this investment's {isGain ? "gain" : "loss"} is split across members.
-                </p>
-              </div>
-
-              {isAdmin && (
-                <div className="flex items-center gap-2 flex-wrap mb-3">
-                  {manageMode ? (
-                    <button
-                      className="bg-ink text-paper px-4 py-2 rounded-sm text-sm font-medium shrink-0"
-                      onClick={() => {
-                        setManageMode(false)
-                        clearForm()
-                      }}
-                    >
-                      Done
-                    </button>
-                  ) : (
-                    <button
-                      className="border border-hairline text-ink-soft px-4 py-2 rounded-sm text-sm font-medium shrink-0"
-                      onClick={() => {
-                        setManageMode(true)
-                        clearForm()
-                      }}
-                    >
-                      Manage
-                    </button>
-                  )}
-                  <button
-                    className="shrink-0 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-                    onClick={openDistribute}
-                  >
-                    <span className="text-lg leading-none">+</span>
-                    Distribute Gain/Loss
-                  </button>
-                  <button
-                    className="shrink-0 border border-hairline text-ink-soft px-4 py-2 rounded-sm text-sm font-medium"
-                    onClick={startAdd}
-                  >
-                    Add Share
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {isAdmin && unallocated !== 0 && (
-              <p className="text-[12px] text-gold mb-3">
-                ₱{fmt(Math.abs(unallocated))} {unallocated > 0 ? "gain" : "loss"} still unallocated.
-              </p>
-            )}
-
-            {showDistributeForm && (
-              <DistributeForm
-                date={distributeDate}
-                setDate={async (d) => {
-                  setDistributeDate(d)
-                  await refreshSuggestedAmount(d)
-                }}
-                amount={distributeAmount}
-                setAmount={setDistributeAmount}
-                notes={distributeNotes}
-                setNotes={setDistributeNotes}
-                suggestedAmount={suggestedAmount}
-                distributing={distributing}
-                message={distributeMessage}
-                onSave={runDistribute}
-                onCancel={closeDistribute}
-                className="mb-4"
-              />
-            )}
-
-            {showAddForm && (
-              <ShareForm
-                title="Add Share"
-                members={allMembers}
-                memberId={formMemberId}
-                setMemberId={setFormMemberId}
-                allocationType={formAllocationType}
-                setAllocationType={setFormAllocationType}
-                amount={formAmount}
-                setAmount={setFormAmount}
-                notes={formNotes}
-                setNotes={setFormNotes}
-                saving={saving}
-                message={formMessage}
-                onSave={saveShare}
-                onCancel={clearForm}
-                saveLabel="Add Share"
-                className="mb-4"
-              />
-            )}
-
-            {loadError && <p className="text-sm text-rust mb-3">{loadError}</p>}
-
-            {shareGroups.map((group) => (
-              <div key={group.key} className="bg-paper-2 border border-hairline rounded-md mb-3">
-                <div className="px-5 py-2.5 border-b border-hairline flex justify-between items-center">
-                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">{group.label}</p>
-                  <p
-                    className={`font-mono [font-variant-numeric:tabular-nums] text-[12px] font-semibold ${
-                      group.subtotal < 0 ? "text-rust" : "text-sage"
-                    }`}
-                  >
-                    {group.subtotal < 0 ? "-" : "+"}₱{fmt(Math.abs(group.subtotal))}
+                <div className="min-w-0">
+                  <p className="text-sm text-ink truncate">
+                    {TXN_TYPE_LABELS[t.classification] ?? t.classification}
+                  </p>
+                  <p className="text-[11px] text-ink-soft font-mono">
+                    {new Date(t.date.length === 10 ? `${t.date}T00:00:00` : t.date).toLocaleDateString(
+                      undefined,
+                      { day: "numeric", month: "short", year: "numeric" }
+                    )}
+                    {t.status === "pending" ? " · pending" : ""}
                   </p>
                 </div>
-                <div className="px-5">
-                  {group.shares.map((s, i) => (
-                    <div key={s.id}>
-                      <div
-                        className={`py-3 flex justify-between items-center gap-3 ${
-                          i !== group.shares.length - 1 || (isAdmin && manageMode) ? "border-b border-dashed border-hairline" : ""
+                <p
+                  className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                    t.amount < 0 ? "text-rust" : "text-sage"
+                  }`}
+                >
+                  {t.amount < 0 ? "-" : "+"}₱{fmt(Math.abs(t.amount))}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+            No transactions recorded for this investment yet.
+          </p>
+        )}
+      </section>
+
+      {/* Gain/loss share per member */}
+      <section className="mt-8">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="font-display text-lg font-medium text-ink mb-1">
+              {isGain ? "Gain" : "Loss"} Share per Member
+            </h2>
+            <p className="text-[13px] text-ink-soft mb-3">
+              How this investment's {isGain ? "gain" : "loss"} is split across members.
+            </p>
+          </div>
+
+          {isAdmin && (
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              {manageMode ? (
+                <button
+                  className="bg-ink text-paper px-4 py-2 rounded-sm text-sm font-medium shrink-0"
+                  onClick={() => {
+                    setManageMode(false)
+                    clearForm()
+                  }}
+                >
+                  Done
+                </button>
+              ) : (
+                <button
+                  className="border border-hairline text-ink-soft px-4 py-2 rounded-sm text-sm font-medium shrink-0"
+                  onClick={() => {
+                    setManageMode(true)
+                    clearForm()
+                  }}
+                >
+                  Manage
+                </button>
+              )}
+              <button
+                className="shrink-0 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+                onClick={openDistribute}
+              >
+                <span className="text-lg leading-none">+</span>
+                Distribute Gain/Loss
+              </button>
+              <button
+                className="shrink-0 border border-hairline text-ink-soft px-4 py-2 rounded-sm text-sm font-medium"
+                onClick={startAdd}
+              >
+                Add Share
+              </button>
+            </div>
+          )}
+        </div>
+
+        {isAdmin && unallocated !== 0 && (
+          <p className="text-[12px] text-gold mb-3">
+            ₱{fmt(Math.abs(unallocated))} {unallocated > 0 ? "gain" : "loss"} still unallocated.
+          </p>
+        )}
+
+        {showDistributeForm && (
+          <DistributeForm
+            date={distributeDate}
+            setDate={async (d) => {
+              setDistributeDate(d)
+              await refreshSuggestedAmount(d)
+            }}
+            amount={distributeAmount}
+            setAmount={setDistributeAmount}
+            notes={distributeNotes}
+            setNotes={setDistributeNotes}
+            suggestedAmount={suggestedAmount}
+            distributing={distributing}
+            message={distributeMessage}
+            onSave={runDistribute}
+            onCancel={closeDistribute}
+            className="mb-4"
+          />
+        )}
+
+        {showAddForm && (
+          <ShareForm
+            title="Add Share"
+            members={allMembers}
+            memberId={formMemberId}
+            setMemberId={setFormMemberId}
+            allocationType={formAllocationType}
+            setAllocationType={setFormAllocationType}
+            amount={formAmount}
+            setAmount={setFormAmount}
+            notes={formNotes}
+            setNotes={setFormNotes}
+            saving={saving}
+            message={formMessage}
+            onSave={saveShare}
+            onCancel={clearForm}
+            saveLabel="Add Share"
+            className="mb-4"
+          />
+        )}
+
+        {loadError && <p className="text-sm text-rust mb-3">{loadError}</p>}
+
+        {shareGroups.map((group) => (
+          <div key={group.key} className="bg-paper-2 border border-hairline rounded-md mb-3">
+            <div className="px-5 py-2.5 border-b border-hairline flex justify-between items-center">
+              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">{group.label}</p>
+              <p
+                className={`font-mono [font-variant-numeric:tabular-nums] text-[12px] font-semibold ${
+                  group.subtotal < 0 ? "text-rust" : "text-sage"
+                }`}
+              >
+                {group.subtotal < 0 ? "-" : "+"}₱{fmt(Math.abs(group.subtotal))}
+              </p>
+            </div>
+            <div className="px-5">
+              {group.shares.map((s, i) => (
+                <div key={s.id}>
+                  <div
+                    className={`py-3 flex justify-between items-center gap-3 ${
+                      i !== group.shares.length - 1 || (isAdmin && manageMode) ? "border-b border-dashed border-hairline" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="text-sm text-ink truncate">{s.member}</p>
+                      {s.member_id === myMemberId && (
+                        <span className="shrink-0 text-[9px] uppercase tracking-wide font-mono text-gold border border-gold/40 rounded px-1.5 py-0.5">
+                          You
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <p
+                        className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                          s.signed < 0 ? "text-rust" : "text-sage"
                         }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <p className="text-sm text-ink truncate">{s.member}</p>
-                          {s.member_id === myMemberId && (
-                            <span className="shrink-0 text-[9px] uppercase tracking-wide font-mono text-gold border border-gold/40 rounded px-1.5 py-0.5">
-                              You
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p
-                            className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
-                              s.signed < 0 ? "text-rust" : "text-sage"
-                            }`}
+                        {s.signed < 0 ? "-" : "+"}₱{fmt(Math.abs(s.signed))}
+                      </p>
+                      {isAdmin && manageMode && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => startEdit(s)}
+                            className="text-[11px] text-ink-soft border border-hairline rounded-sm px-2 py-1"
                           >
-                            {s.signed < 0 ? "-" : "+"}₱{fmt(Math.abs(s.signed))}
-                          </p>
-                          {isAdmin && manageMode && (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => startEdit(s)}
-                                className="text-[11px] text-ink-soft border border-hairline rounded-sm px-2 py-1"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => deleteShare(s.id)}
-                                disabled={deletingId === s.id}
-                                className="text-[11px] text-rust border border-rust/40 rounded-sm px-2 py-1 disabled:opacity-50"
-                              >
-                                {deletingId === s.id ? "…" : "Remove"}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {editingShareId === s.id && (
-                        <div className="pb-4">
-                          <ShareForm
-                            title="Edit Share"
-                            members={allMembers}
-                            memberId={formMemberId}
-                            setMemberId={setFormMemberId}
-                            allocationType={formAllocationType}
-                            setAllocationType={setFormAllocationType}
-                            amount={formAmount}
-                            setAmount={setFormAmount}
-                            notes={formNotes}
-                            setNotes={setFormNotes}
-                            saving={saving}
-                            message={formMessage}
-                            onSave={saveShare}
-                            onCancel={clearForm}
-                            saveLabel="Save Changes"
-                          />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteShare(s.id)}
+                            disabled={deletingId === s.id}
+                            className="text-[11px] text-rust border border-rust/40 rounded-sm px-2 py-1 disabled:opacity-50"
+                          >
+                            {deletingId === s.id ? "…" : "Remove"}
+                          </button>
                         </div>
                       )}
                     </div>
-                  ))}
+                  </div>
+
+                  {editingShareId === s.id && (
+                    <div className="pb-4">
+                      <ShareForm
+                        title="Edit Share"
+                        members={allMembers}
+                        memberId={formMemberId}
+                        setMemberId={setFormMemberId}
+                        allocationType={formAllocationType}
+                        setAllocationType={setFormAllocationType}
+                        amount={formAmount}
+                        setAmount={setFormAmount}
+                        notes={formNotes}
+                        setNotes={setFormNotes}
+                        saving={saving}
+                        message={formMessage}
+                        onSave={saveShare}
+                        onCancel={clearForm}
+                        saveLabel="Save Changes"
+                      />
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+        ))}
 
-            {signedShares.length > 0 && (
-              <div className="bg-paper-2 border border-hairline rounded-md px-5 py-3 flex justify-between items-center">
-                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
-                  Split among {signedShares.length} member{signedShares.length === 1 ? "" : "s"} total
-                </p>
-                <p
-                  className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold ${
-                    totalShared < 0 ? "text-rust" : "text-sage"
-                  }`}
-                >
-                  {totalShared < 0 ? "-" : "+"}₱{fmt(Math.abs(totalShared))}
-                </p>
-              </div>
-            )}
+        {signedShares.length > 0 && (
+          <div className="bg-paper-2 border border-hairline rounded-md px-5 py-3 flex justify-between items-center">
+            <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
+              Split among {signedShares.length} member{signedShares.length === 1 ? "" : "s"} total
+            </p>
+            <p
+              className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold ${
+                totalShared < 0 ? "text-rust" : "text-sage"
+              }`}
+            >
+              {totalShared < 0 ? "-" : "+"}₱{fmt(Math.abs(totalShared))}
+            </p>
+          </div>
+        )}
 
-            {signedShares.length === 0 && !loadError && !showAddForm && !showDistributeForm && (
-              <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
-                No allocation on record for this investment.
-              </p>
-            )}
-          </section>
-        </div>
-      </main>
-    </>
+        {signedShares.length === 0 && !loadError && !showAddForm && !showDistributeForm && (
+          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+            No allocation on record for this investment.
+          </p>
+        )}
+      </section>
+    </div>
   )
 }
 
@@ -936,40 +903,6 @@ function ShareForm({
 
         {message && <p className="text-sm text-rust">{message}</p>}
       </div>
-    </div>
-  )
-}
-
-function InfoBox({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-paper rounded-lg px-4 py-3.5 mb-3 last:mb-0">
-      <p className="text-[10px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-2">{label}</p>
-      <div className="space-y-1.5">{children}</div>
-    </div>
-  )
-}
-
-function InfoRow({
-  label,
-  value,
-  valueClass = "text-ink",
-  bold = false
-}: {
-  label: string
-  value: string
-  valueClass?: string
-  bold?: boolean
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className={`text-[13px] ${bold ? "text-ink font-semibold" : "text-ink-soft"}`}>{label}</span>
-      <span
-        className={`font-mono [font-variant-numeric:tabular-nums] whitespace-nowrap ${
-          bold ? "text-[15px] font-bold" : "text-[13px] font-semibold"
-        } ${valueClass}`}
-      >
-        {value}
-      </span>
     </div>
   )
 }
