@@ -22,6 +22,23 @@ import { ReceiptField } from "@/app/components/TransactionFormUI"
 
 const STATUS_OPTIONS = ["pending", "approved", "rejected", "cancelled"]
 
+// Legacy migrated rows carry the bank as plain text in `bank` rather than a
+// real link via `bank_account_id` -- and the list display prefers that
+// legacy text whenever it's present (see bankBadge on the Transactions
+// page), so editing bank_account_id alone here would silently do nothing
+// visible. Best-effort match the legacy text to a real bank account so the
+// dropdown starts pre-filled with the obvious fix instead of "No bank
+// linked".
+function matchLegacyBankText(banks: BankAccount[], legacyText: string | null): BankAccount | null {
+  if (!legacyText) return null
+  const needle = legacyText.trim().toLowerCase()
+  return (
+    banks.find(
+      (b) => b.bank_name.toLowerCase() === needle || (b.account_name ?? "").toLowerCase() === needle
+    ) ?? null
+  )
+}
+
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
   "Member Withdrawal": "Withdrawal",
@@ -251,7 +268,8 @@ function SupportEditForm({
 }) {
   const [amount, setAmount] = useState(String(t.amount))
   const [description, setDescription] = useState(t.description ?? "")
-  const [bankAccountId, setBankAccountId] = useState(t.bank_account_id ?? "")
+  const legacyBankMatch = useMemo(() => matchLegacyBankText(banks, t.bank), [banks, t.bank])
+  const [bankAccountId, setBankAccountId] = useState(t.bank_account_id ?? legacyBankMatch?.id ?? "")
   const [txnDate, setTxnDate] = useState(t.txn_date ?? "")
   const [status, setStatus] = useState(t.status)
   const [receipt, setReceipt] = useState<File | null>(null)
@@ -302,6 +320,10 @@ function SupportEditForm({
       amount: amountNum,
       description: description || null,
       bank_account_id: bankAccountId || null,
+      // Once a real bank account is linked, clear the legacy free-text
+      // bank -- the list display prefers that text over the link whenever
+      // it's present, so leaving it would make this fix invisible.
+      bank: bankAccountId ? null : t.bank,
       txn_date: txnDate || null,
       status,
       receipt_url: receiptUrl
@@ -371,6 +393,13 @@ function SupportEditForm({
             </option>
           ))}
         </select>
+        {t.bank_account_id == null && t.bank && (
+          <p className="text-[11px] text-ink-soft mt-1.5">
+            {legacyBankMatch
+              ? `Currently showing "${t.bank}" as legacy text on the list -- pre-filled with the matching account above; saving will switch it to a real link.`
+              : `Currently showing "${t.bank}" as legacy text on the list, with no matching bank account -- pick one above to link it properly, or leave as-is to keep the text.`}
+          </p>
+        )}
       </div>
 
       <div>
