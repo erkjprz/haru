@@ -536,22 +536,6 @@ export default function EditTransactionPage() {
           >
             {backLabel}
           </button>
-          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
-            Editing Entry
-          </div>
-          <div className="flex items-baseline gap-2.5 flex-wrap mb-1">
-            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink">
-              Edit Transaction
-            </h1>
-            <span
-              className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2.5 py-1 font-mono ${
-                STATUS_TONE[status] ?? "text-ink-soft border-hairline"
-              }`}
-            >
-              {status}
-            </span>
-          </div>
-          <p className="text-[13px] text-ink-soft mb-6">Update this entry before it's reviewed.</p>
 
           <div className="bg-paper-2 border border-hairline rounded-md p-5">
             <AmountHero
@@ -568,7 +552,18 @@ export default function EditTransactionPage() {
                   {TYPE_LABEL[classification]}
                 </span>
               </span>
-              <span className="shrink-0 text-xs text-ink-soft whitespace-nowrap">🔒 Can't be changed</span>
+              <span className="shrink-0 flex items-center gap-2">
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2 py-0.5 font-mono ${
+                    STATUS_TONE[status] ?? "text-ink-soft border-hairline"
+                  }`}
+                >
+                  {status}
+                </span>
+                <span className="text-xs text-ink-soft" title="Type can't be changed">
+                  🔒
+                </span>
+              </span>
             </div>
           </div>
 

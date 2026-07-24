@@ -9,7 +9,7 @@ import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
 import {
   AmountHero,
-  TypePillRow,
+  TypeDropdown,
   StepTrack,
   ReviewRow,
   ReceiptField,
@@ -61,7 +61,7 @@ function isValidPositiveNumber(value: string, allowZero = false): boolean {
   return allowZero ? n >= 0 : n > 0
 }
 
-// Merges each entry type with its flow arrow/tone so TypePillRow (a shared,
+// Merges each entry type with its flow arrow/tone so TypeDropdown (a shared,
 // presentation-only component) doesn't need to know this page's FLOW map.
 function withFlow(options: { key: string; label: string; adminOnly: boolean }[]) {
   return options.map((o) => ({ ...o, ...(FLOW[o.key] ?? { arrow: "•", tone: "neutral" as const }) }))
@@ -632,13 +632,6 @@ function NewTransactionForm() {
           >
             ← Transactions
           </button>
-          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
-            New Entry
-          </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
-            New Transaction
-          </h1>
-          <p className="text-[13px] text-ink-soft mb-6">Add a new ledger entry for the fund.</p>
 
           <div className="bg-paper-2 border border-hairline rounded-md p-5">
             <AmountHero
@@ -648,7 +641,7 @@ function NewTransactionForm() {
               helper={helperText[selectedType]}
             />
 
-            <TypePillRow
+            <TypeDropdown
               options={withFlow(isAdmin ? ENTRY_TYPES : MEMBER_TYPES)}
               value={selectedType}
               onChange={handleTypeChange}

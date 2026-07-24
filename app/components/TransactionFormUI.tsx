@@ -1,8 +1,12 @@
+"use client"
+
 // Small presentational pieces shared by /transactions/new and
 // /transactions/[id]/edit, which mirror each other's layout closely.
 // Each page keeps its own classification/type -> { arrow, tone } mapping,
 // since the two pages key off different vocabularies (type keys vs
 // classification strings) -- only the rendering is shared here.
+
+import { useState } from "react"
 
 export function FlowBadge({
   arrow,
@@ -63,15 +67,18 @@ export function AmountHero({
   )
 }
 
-// Replaces the old collapsed dropdown -- every entry type is one tap away
-// instead of open-select-close. Wraps onto additional rows rather than
-// scrolling horizontally: a horizontally-scrolling row of buttons is easy
-// to mistake for a plain swipe and have the tap on a partially-visible
-// pill fire instead of the scroll continuing, so every option is just
-// laid out and visible up front instead. Each page still owns its own
-// key/classification -> {arrow, tone} mapping (see file comment above);
-// callers merge that in before passing options here.
-export function TypePillRow({
+// Collapsed by default -- just the current selection, one field-height
+// row -- and expands in place into an overlay list on tap. A horizontal
+// scrolling row (tried first) was easy to mistake for a plain swipe and
+// have the tap on a partially-visible pill fire instead of continuing the
+// scroll; a row that wraps onto more lines instead of scrolling fixed
+// that but made the type picker the tallest thing on the form. A
+// collapsed dropdown is the compact option: one row when closed, and the
+// overlay list (not a wrapped block) doesn't push the rest of the form
+// down while it's open. Each page still owns its own key/classification
+// -> {arrow, tone} mapping (see file comment above); callers merge that
+// in before passing options here.
+export function TypeDropdown({
   options,
   value,
   onChange
@@ -80,29 +87,54 @@ export function TypePillRow({
   value: string
   onChange: (key: string) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const selected = options.find((o) => o.key === value)
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => {
-        const active = o.key === value
-        return (
-          <button
-            key={o.key}
-            type="button"
-            onClick={() => onChange(o.key)}
-            className={`shrink-0 flex items-center gap-2 rounded-full border pl-1.5 pr-3 py-1.5 text-sm font-semibold whitespace-nowrap transition-colors ${
-              active ? "border-gold bg-gold/10 text-ink" : "border-hairline bg-paper-2 text-ink-soft"
-            }`}
-          >
-            <FlowBadge arrow={o.arrow} tone={o.tone} small />
-            {o.label}
-            {o.adminOnly && (
-              <span className="text-[8px] font-bold uppercase tracking-wide text-gold border border-gold/40 rounded-full px-1.5 py-0.5">
-                Admin
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-3 border border-hairline bg-paper rounded-sm px-3.5 py-3"
+      >
+        <span className="flex items-center gap-2.5 min-w-0">
+          {selected && <FlowBadge arrow={selected.arrow} tone={selected.tone} small />}
+          <span className="text-sm font-semibold text-ink truncate">{selected?.label}</span>
+        </span>
+        <span
+          className={`text-ink-soft text-xs shrink-0 motion-safe:transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-1.5 w-full max-h-64 overflow-y-auto border border-hairline rounded-sm bg-paper shadow-lg">
+          {options.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => {
+                onChange(o.key)
+                setOpen(false)
+              }}
+              className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 text-sm text-left border-b border-hairline last:border-b-0 transition-colors ${
+                o.key === value ? "bg-gold/10 text-ink font-semibold" : "bg-paper text-ink-soft"
+              }`}
+            >
+              <span className="flex items-center gap-2.5 min-w-0">
+                <FlowBadge arrow={o.arrow} tone={o.tone} small />
+                <span className="truncate">{o.label}</span>
               </span>
-            )}
-          </button>
-        )
-      })}
+              {o.adminOnly && (
+                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-gold border border-gold/40 rounded-full px-2 py-0.5">
+                  Admin
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
