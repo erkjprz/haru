@@ -8,6 +8,7 @@ import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { getPendingBankInterestGroups, distributeBankInterestGroup, type PendingBankInterestGroup } from "@/lib/bankInterest"
+import { SupportPanel } from "@/app/components/admin/SupportPanel"
 
 const typeLabels: Record<string, string> = {
   "Member Contribution": "Contribution",
@@ -20,7 +21,7 @@ const typeLabels: Record<string, string> = {
   "Internal Transfer": "Bank Transfer"
 }
 
-type Tab = "members" | "txns" | "borrowers" | "distrib"
+type Tab = "members" | "txns" | "borrowers" | "distrib" | "support"
 
 type ExportRow = {
   txn_date: string | null
@@ -390,6 +391,11 @@ export default function AdminPage() {
     )
   }
 
+  // Support isn't an approval queue like the other four, so it's kept out
+  // of this list entirely -- it gets its own entry point in the header
+  // instead of a fifth peer tab, which crowded the segmented control and
+  // read as "another thing waiting on you" when it's actually the opposite
+  // (a tool you reach for, not a queue that reaches for you).
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: "txns", label: "Txns", count: pendingTransactions.length },
     { id: "distrib", label: "Distrib.", count: pendingGroups.length },
@@ -414,18 +420,33 @@ export default function AdminPage() {
               </p>
             </div>
 
-            {/* Page-level action, not scoped to any tab -- always exports the
-                full transaction history regardless of what's active below.
-                Kept up here in the header, away from the tab content, so it
-                doesn't read as "export this tab". */}
-            <button
-              onClick={exportTransactionsCsv}
-              disabled={exporting}
-              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft border border-hairline rounded-md px-3 py-2 hover:bg-paper-2 hover:text-ink transition-colors disabled:opacity-60"
-              title="Export full transaction history (every status, not just what's shown below) as a CSV backup"
-            >
-              {exporting ? "Exporting..." : "⬇ Export"}
-            </button>
+            {/* Page-level actions, not scoped to any tab -- Export always
+                covers the full transaction history regardless of what's
+                active below, and Support switches into a separate
+                search-and-fix mode rather than living as a fifth approval
+                tab. Both kept up here in the header, away from the tab
+                content, so neither reads as "do this within the current
+                tab". */}
+            <div className="shrink-0 flex flex-col items-end gap-2">
+              <button
+                onClick={exportTransactionsCsv}
+                disabled={exporting}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft border border-hairline rounded-md px-3 py-2 hover:bg-paper-2 hover:text-ink transition-colors disabled:opacity-60"
+                title="Export full transaction history (every status, not just what's shown below) as a CSV backup"
+              >
+                {exporting ? "Exporting..." : "⬇ Export"}
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab("support")
+                  window.scrollTo(0, 0)
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft border border-hairline rounded-md px-3 py-2 hover:bg-paper-2 hover:text-ink transition-colors"
+                title="Search any transaction and fix a mistake -- wrong amount, bank, date, receipt, or status"
+              >
+                🔧 Support
+              </button>
+            </div>
           </div>
           {exportError && (
             <p className="mt-1.5 text-xs text-rust text-right">Couldn&apos;t export: {exportError}</p>
@@ -435,7 +456,10 @@ export default function AdminPage() {
             <p className="mt-4 text-sm text-rust">Couldn&apos;t load some data: {loadError}</p>
           )}
 
-          {/* Segmented control */}
+          {/* Segmented control -- hidden while Support is active, since
+              that's a separate mode entered/exited via its own link below,
+              not a fifth peer tab here. */}
+          {activeTab !== "support" && (
           <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
             {tabs.map((t) => (
               <button
@@ -455,6 +479,7 @@ export default function AdminPage() {
               </button>
             ))}
           </div>
+          )}
 
           {/* ---- Members ---- */}
           {activeTab === "members" && (
@@ -808,6 +833,22 @@ export default function AdminPage() {
                 View bank interest history →
               </button>
             </section>
+          )}
+
+          {/* ---- Support ---- */}
+          {activeTab === "support" && (
+            <>
+              <button
+                onClick={() => {
+                  setActiveTab("txns")
+                  window.scrollTo(0, 0)
+                }}
+                className="mt-6 text-[13px] text-ink-soft hover:text-ink transition-colors"
+              >
+                ← Approvals
+              </button>
+              <SupportPanel />
+            </>
           )}
 
         </div>
