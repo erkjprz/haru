@@ -122,10 +122,24 @@ function NewTransactionForm() {
   const [formStep, setFormStep] = useState<1 | 2>(1)
 
   async function loadLoansFor(id: string) {
+    // Borrower-only loans (e.g. Joy, who isn't a fund member) link via
+    // borrowers.borrower_id rather than member_id -- mirrors the OR filter
+    // the edit page and borrower/repay use so a loan payment made on
+    // behalf of a borrower-role member still finds their loan.
+    const { data: borrowerRow } = await supabase
+      .from("borrowers")
+      .select("borrower_id")
+      .eq("member_id", id)
+      .maybeSingle()
+
+    const loanFilter = borrowerRow?.borrower_id
+      ? `member_id.eq.${id},borrower_id.eq.${borrowerRow.borrower_id}`
+      : `member_id.eq.${id}`
+
     const { data } = await supabase
       .from("loans")
       .select("loan_id, principal, interest_rate, term_months, status, start_date")
-      .eq("member_id", id)
+      .or(loanFilter)
       .in("status", ["active", "requested"])
       .order("start_date", { ascending: false })
 
