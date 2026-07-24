@@ -7,7 +7,15 @@ import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
-import { AmountHero, TypePillRow, StepTrack, ReviewRow, ReceiptField, RequiredMark } from "@/app/components/TransactionFormUI"
+import {
+  AmountHero,
+  TypePillRow,
+  StepTrack,
+  ReviewRow,
+  ReceiptField,
+  RequiredMark,
+  FieldGroup
+} from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 import { dateOnly } from "@/lib/currentValue"
@@ -585,6 +593,34 @@ function NewTransactionForm() {
     )
   }
 
+  // Shared between the flowing and stepped Details cards -- loan_request
+  // is member-linked too, so this can show up in either one depending on
+  // the selected type.
+  const onBehalfOfField = isAdmin && isMemberLinkedType && (
+    <div>
+      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">On behalf of</label>
+      <select
+        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+        value={onBehalfOfId}
+        onChange={(e) => handleOnBehalfChange(e.target.value)}
+      >
+        <option value="">Myself</option>
+        {allMembers
+          .filter((m) => m.member_id !== memberId)
+          .map((m) => (
+            <option key={m.member_id} value={m.member_id}>
+              {m.name}
+            </option>
+          ))}
+      </select>
+      {onBehalfOfId && (
+        <p className="text-sm text-gold mt-2">
+          This will be recorded as approved immediately for {allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.
+        </p>
+      )}
+    </div>
+  )
+
   return (
     <>
       <Navbar />
@@ -617,326 +653,317 @@ function NewTransactionForm() {
               value={selectedType}
               onChange={handleTypeChange}
             />
+          </div>
 
-            {isAdmin && isMemberLinkedType && (!isStepped || formStep === 1) && (
-              <div className="mt-5">
-                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                  On behalf of
-                </label>
-                <select
-                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                  value={onBehalfOfId}
-                  onChange={(e) => handleOnBehalfChange(e.target.value)}
-                >
-                  <option value="">Myself</option>
-                  {allMembers
-                    .filter((m) => m.member_id !== memberId)
-                    .map((m) => (
-                      <option key={m.member_id} value={m.member_id}>
-                        {m.name}
-                      </option>
-                    ))}
-                </select>
-                {onBehalfOfId && (
-                  <p className="text-sm text-gold mt-2">
-                    This will be recorded as approved immediately for {allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.
-                  </p>
-                )}
-              </div>
-            )}
-
+          <div className="space-y-4 mt-4">
             {!isStepped && (
-              <div className="space-y-4 mt-5">
-                {isLoanPayment && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Which loan
-                      <RequiredMark />
-                    </label>
-                    {myLoans.filter((l) => l.status === "active").length === 0 ? (
-                      <p className="text-sm text-rust">
-                        No active loans to pay against.
-                      </p>
-                    ) : (
+              <>
+                <FieldGroup label="Details">
+                  <div className="space-y-4">
+                  {onBehalfOfField}
+
+                  {isLoanPayment && (
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        Which loan
+                        <RequiredMark />
+                      </label>
+                      {myLoans.filter((l) => l.status === "active").length === 0 ? (
+                        <p className="text-sm text-rust">
+                          No active loans to pay against.
+                        </p>
+                      ) : (
+                        <select
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          value={selectedLoanId}
+                          onChange={(e) => setSelectedLoanId(e.target.value)}
+                        >
+                          <option value="">Select a loan</option>
+                          {myLoans
+                            .filter((l) => l.status === "active")
+                            .map((loan) => (
+                              <option key={loan.loan_id} value={loan.loan_id}>
+                                ₱{fmt(loan.principal)} from {loan.start_date}
+                              </option>
+                            ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+
+                  {needsBank && (
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        {isBankTransfer ? "From bank" : "Bank"}
+                        <RequiredMark />
+                      </label>
                       <select
                         className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                        value={selectedLoanId}
-                        onChange={(e) => setSelectedLoanId(e.target.value)}
+                        value={bankId}
+                        onChange={(e) => setBankId(e.target.value)}
                       >
-                        <option value="">Select a loan</option>
-                        {myLoans
-                          .filter((l) => l.status === "active")
-                          .map((loan) => (
-                            <option key={loan.loan_id} value={loan.loan_id}>
-                              ₱{fmt(loan.principal)} from {loan.start_date}
-                            </option>
-                          ))}
+                        <option value="">Select a bank</option>
+                        {banks.map((bank) => (
+                          <option key={bank.id} value={bank.id}>
+                            {bank.account_name || bank.bank_name}
+                          </option>
+                        ))}
                       </select>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
 
-                {needsBank && (
+                  {isBankTransfer && (
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        To bank
+                        <RequiredMark />
+                      </label>
+                      <select
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                        value={toBankId}
+                        onChange={(e) => setToBankId(e.target.value)}
+                      >
+                        <option value="">Select a bank</option>
+                        {banks.map((bank) => (
+                          <option key={bank.id} value={bank.id}>
+                            {bank.account_name || bank.bank_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      {isBankTransfer ? "From bank" : "Bank"}
-                      <RequiredMark />
+                      Description
                     </label>
-                    <select
+                    <input
                       className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={bankId}
-                      onChange={(e) => setBankId(e.target.value)}
-                    >
-                      <option value="">Select a bank</option>
-                      {banks.map((bank) => (
-                        <option key={bank.id} value={bank.id}>
-                          {bank.account_name || bank.bank_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {isBankTransfer && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      To bank
-                      <RequiredMark />
-                    </label>
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={toBankId}
-                      onChange={(e) => setToBankId(e.target.value)}
-                    >
-                      <option value="">Select a bank</option>
-                      {banks.map((bank) => (
-                        <option key={bank.id} value={bank.id}>
-                          {bank.account_name || bank.bank_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Description
-                  </label>
-                  <input
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    placeholder="Add a note"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </div>
-
-                {needsReceipt && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Receipt
-                      <RequiredMark />
-                    </label>
-                    <ReceiptField
-                      receipt={receipt}
-                      receiptPreview={receiptPreview}
-                      dragActive={dragActive}
-                      setDragActive={setDragActive}
-                      onFileChange={setReceiptFile}
+                      placeholder="Add a note"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
                     />
                   </div>
+                  </div>
+                </FieldGroup>
+
+                {needsReceipt && (
+                  <FieldGroup label="Proof">
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        Receipt
+                        <RequiredMark />
+                      </label>
+                      <ReceiptField
+                        receipt={receipt}
+                        receiptPreview={receiptPreview}
+                        dragActive={dragActive}
+                        setDragActive={setDragActive}
+                        onFileChange={setReceiptFile}
+                      />
+                    </div>
+                  </FieldGroup>
                 )}
-              </div>
+              </>
             )}
 
             {isStepped && (
-              <div className="mt-5">
+              <>
                 <StepTrack step={formStep} labels={["Details", "Review"]} />
 
                 {formStep === 1 && (
-                  <div className="space-y-4">
-                    {isInvestmentEntry && (
-                      <div>
-                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                          Investment
-                          <RequiredMark />
-                        </label>
-                        <select
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                          value={investmentId}
-                          onChange={(e) => setInvestmentId(e.target.value)}
-                        >
-                          <option value="">Select an investment</option>
-                          {investmentsList.map((inv) => (
-                            <option key={inv.investment_id} value={inv.investment_id}>
-                              {inv.name}
-                            </option>
-                          ))}
-                        </select>
-                        {investmentsList.length === 0 && (
-                          <p className="text-sm text-ink-soft mt-2">
-                            No investments yet -- add one from the Investments page first.
-                          </p>
-                        )}
-                      </div>
-                    )}
+                  <>
+                    <FieldGroup>
+                      <div className="space-y-4">
+                      {onBehalfOfField}
 
-                    {isLoanRequest && (
-                      <>
+                      {isInvestmentEntry && (
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                            Interest
+                            Investment
                             <RequiredMark />
-                          </label>
-                          <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
-                            <button
-                              type="button"
-                              onClick={() => setInterestType("rate")}
-                              className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                                interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                              }`}
-                            >
-                              Rate (%)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setInterestType("amount")}
-                              className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                                interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                              }`}
-                            >
-                              Fixed amount (₱)
-                            </button>
-                          </div>
-                          {interestType === "rate" ? (
-                            <input
-                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="e.g. 5"
-                              value={interestRate}
-                              onChange={(e) => setInterestRate(e.target.value)}
-                            />
-                          ) : (
-                            <input
-                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="e.g. 5000"
-                              value={interestAmount}
-                              onChange={(e) => setInterestAmount(e.target.value)}
-                            />
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                            Term (months)
-                            <RequiredMark />
-                          </label>
-                          <input
-                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                            type="number"
-                            min="1"
-                            step="1"
-                            placeholder="e.g. 6"
-                            value={termMonths}
-                            onChange={(e) => setTermMonths(e.target.value)}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                            Repayment mode
                           </label>
                           <select
                             className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                            value={repaymentFrequency}
-                            onChange={(e) => setRepaymentFrequency(e.target.value)}
+                            value={investmentId}
+                            onChange={(e) => setInvestmentId(e.target.value)}
                           >
-                            <option value="monthly">Monthly installments</option>
-                            <option value="lump_sum">One lump sum at end of term</option>
+                            <option value="">Select an investment</option>
+                            {investmentsList.map((inv) => (
+                              <option key={inv.investment_id} value={inv.investment_id}>
+                                {inv.name}
+                              </option>
+                            ))}
+                          </select>
+                          {investmentsList.length === 0 && (
+                            <p className="text-sm text-ink-soft mt-2">
+                              No investments yet -- add one from the Investments page first.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {isLoanRequest && (
+                        <>
+                          <div>
+                            <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Interest
+                              <RequiredMark />
+                            </label>
+                            <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
+                              <button
+                                type="button"
+                                onClick={() => setInterestType("rate")}
+                                className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                                  interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                                }`}
+                              >
+                                Rate (%)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setInterestType("amount")}
+                                className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                                  interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                                }`}
+                              >
+                                Fixed amount (₱)
+                              </button>
+                            </div>
+                            {interestType === "rate" ? (
+                              <input
+                                className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="e.g. 5"
+                                value={interestRate}
+                                onChange={(e) => setInterestRate(e.target.value)}
+                              />
+                            ) : (
+                              <input
+                                className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="e.g. 5000"
+                                value={interestAmount}
+                                onChange={(e) => setInterestAmount(e.target.value)}
+                              />
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Term (months)
+                              <RequiredMark />
+                            </label>
+                            <input
+                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                              type="number"
+                              min="1"
+                              step="1"
+                              placeholder="e.g. 6"
+                              value={termMonths}
+                              onChange={(e) => setTermMonths(e.target.value)}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                              Repayment mode
+                            </label>
+                            <select
+                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                              value={repaymentFrequency}
+                              onChange={(e) => setRepaymentFrequency(e.target.value)}
+                            >
+                              <option value="monthly">Monthly installments</option>
+                              <option value="lump_sum">One lump sum at end of term</option>
+                            </select>
+                          </div>
+
+                          {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
+                            <div className="border border-hairline rounded-md p-4 bg-paper">
+                              <p className="text-sm text-ink-soft font-mono mb-2">
+                                Estimated repayment
+                              </p>
+                              <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
+                                <span className="text-ink-soft">Total repayable</span>
+                                <span>₱{fmt(previewTotalRepayable)}</span>
+                              </div>
+                              <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
+                                <span className="text-ink-soft">
+                                  {repaymentFrequency === "monthly"
+                                    ? `Per month × ${termMonths}`
+                                    : `Due at ${termMonths} months`}
+                                </span>
+                                <span className="font-semibold">
+                                  ₱{fmt(previewPerInstallment)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {needsBank && (
+                        <div>
+                          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                            Bank
+                            <RequiredMark />
+                          </label>
+                          <select
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                            value={bankId}
+                            onChange={(e) => setBankId(e.target.value)}
+                          >
+                            <option value="">Select a bank</option>
+                            {banks.map((bank) => (
+                              <option key={bank.id} value={bank.id}>
+                                {bank.account_name || bank.bank_name}
+                              </option>
+                            ))}
                           </select>
                         </div>
+                      )}
 
-                        {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                          <div className="border border-hairline rounded-md p-4 bg-paper">
-                            <p className="text-sm text-ink-soft font-mono mb-2">
-                              Estimated repayment
-                            </p>
-                            <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
-                              <span className="text-ink-soft">Total repayable</span>
-                              <span>₱{fmt(previewTotalRepayable)}</span>
-                            </div>
-                            <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
-                              <span className="text-ink-soft">
-                                {repaymentFrequency === "monthly"
-                                  ? `Per month × ${termMonths}`
-                                  : `Due at ${termMonths} months`}
-                              </span>
-                              <span className="font-semibold">
-                                ₱{fmt(previewPerInstallment)}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {needsBank && (
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                          Bank
-                          <RequiredMark />
+                          Description
                         </label>
-                        <select
+                        <input
                           className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                          value={bankId}
-                          onChange={(e) => setBankId(e.target.value)}
-                        >
-                          <option value="">Select a bank</option>
-                          {banks.map((bank) => (
-                            <option key={bank.id} value={bank.id}>
-                              {bank.account_name || bank.bank_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                        Description
-                      </label>
-                      <input
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                        placeholder="Add a note"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                      />
-                    </div>
-
-                    {needsReceipt && (
-                      <div>
-                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                          Receipt
-                          <RequiredMark />
-                        </label>
-                        <ReceiptField
-                          receipt={receipt}
-                          receiptPreview={receiptPreview}
-                          dragActive={dragActive}
-                          setDragActive={setDragActive}
-                          onFileChange={setReceiptFile}
+                          placeholder="Add a note"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
                         />
                       </div>
+                      </div>
+                    </FieldGroup>
+
+                    {needsReceipt && (
+                      <FieldGroup label="Proof">
+                        <div>
+                          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                            Receipt
+                            <RequiredMark />
+                          </label>
+                          <ReceiptField
+                            receipt={receipt}
+                            receiptPreview={receiptPreview}
+                            dragActive={dragActive}
+                            setDragActive={setDragActive}
+                            onFileChange={setReceiptFile}
+                          />
+                        </div>
+                      </FieldGroup>
                     )}
-                  </div>
+                  </>
                 )}
 
                 {formStep === 2 && (
-                  <div>
+                  <FieldGroup>
                     <ReviewRow
                       label="Type"
                       value={(isAdmin ? ENTRY_TYPES : MEMBER_TYPES).find((t) => t.key === selectedType)?.label ?? ""}
@@ -982,9 +1009,9 @@ function NewTransactionForm() {
                     )}
                     {description && <ReviewRow label="Description" value={description} />}
                     {needsReceipt && <ReviewRow label="Receipt" value={receipt ? receipt.name : "—"} />}
-                  </div>
+                  </FieldGroup>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>

@@ -7,7 +7,15 @@ import Navbar from "@/app/components/Navbar"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
-import { AmountHero, FlowBadge, StepTrack, ReviewRow, ReceiptField, RequiredMark } from "@/app/components/TransactionFormUI"
+import {
+  AmountHero,
+  FlowBadge,
+  StepTrack,
+  ReviewRow,
+  ReceiptField,
+  RequiredMark,
+  FieldGroup
+} from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 
@@ -553,7 +561,7 @@ export default function EditTransactionPage() {
               helper={HELPER_TEXT[classification]}
             />
 
-            <div className="flex items-center justify-between gap-3 border border-hairline bg-paper rounded-full pl-1.5 pr-3 py-1.5 mb-5">
+            <div className="flex items-center justify-between gap-3 border border-hairline bg-paper rounded-full pl-1.5 pr-3 py-1.5">
               <span className="flex items-center gap-2.5 min-w-0">
                 <FlowBadge {...(FLOW[classification] ?? { arrow: "•", tone: "in" })} small />
                 <span className="text-sm font-semibold text-ink truncate">
@@ -562,209 +570,79 @@ export default function EditTransactionPage() {
               </span>
               <span className="shrink-0 text-xs text-ink-soft whitespace-nowrap">🔒 Can't be changed</span>
             </div>
+          </div>
 
+          <div className="space-y-4 mt-4">
             {!isLoanRelease && (
-              <div className="space-y-4">
-                {isLoanPayment && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Which loan
-                      <RequiredMark />
-                    </label>
-                    {myLoans.filter((l) => l.status === "active").length === 0 ? (
-                      <p className="text-sm text-rust">No active loans to pay against.</p>
-                    ) : (
-                      <select
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                        value={loanId}
-                        onChange={(e) => setLoanId(e.target.value)}
-                      >
-                        <option value="">Select a loan</option>
-                        {myLoans
-                          .filter((l) => l.status === "active" || l.loan_id === loanId)
-                          .map((loan) => (
-                            <option key={loan.loan_id} value={loan.loan_id}>
-                              ₱{fmt(loan.principal)} from {loan.start_date}
+              <>
+                <FieldGroup label="Details">
+                  <div className="space-y-4">
+                    {isLoanPayment && (
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Which loan
+                          <RequiredMark />
+                        </label>
+                        {myLoans.filter((l) => l.status === "active").length === 0 ? (
+                          <p className="text-sm text-rust">No active loans to pay against.</p>
+                        ) : (
+                          <select
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                            value={loanId}
+                            onChange={(e) => setLoanId(e.target.value)}
+                          >
+                            <option value="">Select a loan</option>
+                            {myLoans
+                              .filter((l) => l.status === "active" || l.loan_id === loanId)
+                              .map((loan) => (
+                                <option key={loan.loan_id} value={loan.loan_id}>
+                                  ₱{fmt(loan.principal)} from {loan.start_date}
+                                </option>
+                              ))}
+                          </select>
+                        )}
+                      </div>
+                    )}
+
+                    {needsBank && (
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          {isBankTransfer ? "From bank" : "Bank"}
+                          <RequiredMark />
+                        </label>
+                        <select
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          value={bankId}
+                          onChange={(e) => setBankId(e.target.value)}
+                        >
+                          <option value="">Select a bank</option>
+                          {banks.map((bank) => (
+                            <option key={bank.id} value={bank.id}>
+                              {bank.account_name || bank.bank_name}
                             </option>
                           ))}
-                      </select>
-                    )}
-                  </div>
-                )}
-
-                {needsBank && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      {isBankTransfer ? "From bank" : "Bank"}
-                      <RequiredMark />
-                    </label>
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={bankId}
-                      onChange={(e) => setBankId(e.target.value)}
-                    >
-                      <option value="">Select a bank</option>
-                      {banks.map((bank) => (
-                        <option key={bank.id} value={bank.id}>
-                          {bank.account_name || bank.bank_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {isBankTransfer && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      To bank
-                      <RequiredMark />
-                    </label>
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={toBankId}
-                      onChange={(e) => setToBankId(e.target.value)}
-                    >
-                      <option value="">Select a bank</option>
-                      {banks.map((bank) => (
-                        <option key={bank.id} value={bank.id}>
-                          {bank.account_name || bank.bank_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Description
-                  </label>
-                  <input
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    placeholder="Add a note"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </div>
-
-                {needsReceipt && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Receipt
-                      <RequiredMark />
-                    </label>
-                    <ReceiptField
-                      receipt={receipt}
-                      receiptPreview={receiptPreview}
-                      existingReceiptUrl={existingReceiptUrl}
-                      existingReceiptSignedUrl={existingReceiptSignedUrl}
-                      dragActive={dragActive}
-                      setDragActive={setDragActive}
-                      onFileChange={setReceiptFile}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isLoanRelease && (
-              <div>
-                <StepTrack step={formStep} labels={["Details", "Review"]} />
-
-                {formStep === 1 && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                        Interest
-                        <RequiredMark />
-                      </label>
-                      <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
-                        <button
-                          type="button"
-                          onClick={() => setInterestType("rate")}
-                          className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                            interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                          }`}
-                        >
-                          Rate (%)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setInterestType("amount")}
-                          className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                            interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                          }`}
-                        >
-                          Fixed amount (₱)
-                        </button>
+                        </select>
                       </div>
-                      {interestType === "rate" ? (
-                        <input
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="e.g. 5"
-                          value={interestRate}
-                          onChange={(e) => setInterestRate(e.target.value)}
-                        />
-                      ) : (
-                        <input
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="e.g. 5000"
-                          value={interestAmount}
-                          onChange={(e) => setInterestAmount(e.target.value)}
-                        />
-                      )}
-                    </div>
+                    )}
 
-                    <div>
-                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                        Term (months)
-                        <RequiredMark />
-                      </label>
-                      <input
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                        type="number"
-                        min="1"
-                        step="1"
-                        placeholder="e.g. 6"
-                        value={termMonths}
-                        onChange={(e) => setTermMonths(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                        Repayment mode
-                      </label>
-                      <select
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                        value={repaymentFrequency}
-                        onChange={(e) => setRepaymentFrequency(e.target.value)}
-                      >
-                        <option value="monthly">Monthly installments</option>
-                        <option value="lump_sum">One lump sum at end of term</option>
-                      </select>
-                    </div>
-
-                    {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                      <div className="border border-hairline rounded-md p-4 bg-paper">
-                        <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
-                        <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
-                          <span className="text-ink-soft">Total repayable</span>
-                          <span>₱{fmt(previewTotalRepayable)}</span>
-                        </div>
-                        <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
-                          <span className="text-ink-soft">
-                            {repaymentFrequency === "monthly"
-                              ? `Per month × ${termMonths}`
-                              : `Due at ${termMonths} months`}
-                          </span>
-                          <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
-                        </div>
+                    {isBankTransfer && (
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          To bank
+                          <RequiredMark />
+                        </label>
+                        <select
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          value={toBankId}
+                          onChange={(e) => setToBankId(e.target.value)}
+                        >
+                          <option value="">Select a bank</option>
+                          {banks.map((bank) => (
+                            <option key={bank.id} value={bank.id}>
+                              {bank.account_name || bank.bank_name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     )}
 
@@ -780,10 +658,150 @@ export default function EditTransactionPage() {
                       />
                     </div>
                   </div>
+                </FieldGroup>
+
+                {needsReceipt && (
+                  <FieldGroup label="Proof">
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        Receipt
+                        <RequiredMark />
+                      </label>
+                      <ReceiptField
+                        receipt={receipt}
+                        receiptPreview={receiptPreview}
+                        existingReceiptUrl={existingReceiptUrl}
+                        existingReceiptSignedUrl={existingReceiptSignedUrl}
+                        dragActive={dragActive}
+                        setDragActive={setDragActive}
+                        onFileChange={setReceiptFile}
+                      />
+                    </div>
+                  </FieldGroup>
+                )}
+              </>
+            )}
+
+            {isLoanRelease && (
+              <>
+                <StepTrack step={formStep} labels={["Details", "Review"]} />
+
+                {formStep === 1 && (
+                  <FieldGroup>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Interest
+                          <RequiredMark />
+                        </label>
+                        <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
+                          <button
+                            type="button"
+                            onClick={() => setInterestType("rate")}
+                            className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                              interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                            }`}
+                          >
+                            Rate (%)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInterestType("amount")}
+                            className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                              interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                            }`}
+                          >
+                            Fixed amount (₱)
+                          </button>
+                        </div>
+                        {interestType === "rate" ? (
+                          <input
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 5"
+                            value={interestRate}
+                            onChange={(e) => setInterestRate(e.target.value)}
+                          />
+                        ) : (
+                          <input
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 5000"
+                            value={interestAmount}
+                            onChange={(e) => setInterestAmount(e.target.value)}
+                          />
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Term (months)
+                          <RequiredMark />
+                        </label>
+                        <input
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                          type="number"
+                          min="1"
+                          step="1"
+                          placeholder="e.g. 6"
+                          value={termMonths}
+                          onChange={(e) => setTermMonths(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Repayment mode
+                        </label>
+                        <select
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          value={repaymentFrequency}
+                          onChange={(e) => setRepaymentFrequency(e.target.value)}
+                        >
+                          <option value="monthly">Monthly installments</option>
+                          <option value="lump_sum">One lump sum at end of term</option>
+                        </select>
+                      </div>
+
+                      {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
+                        <div className="border border-hairline rounded-md p-4 bg-paper">
+                          <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
+                          <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
+                            <span className="text-ink-soft">Total repayable</span>
+                            <span>₱{fmt(previewTotalRepayable)}</span>
+                          </div>
+                          <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
+                            <span className="text-ink-soft">
+                              {repaymentFrequency === "monthly"
+                                ? `Per month × ${termMonths}`
+                                : `Due at ${termMonths} months`}
+                            </span>
+                            <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Description
+                        </label>
+                        <input
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          placeholder="Add a note"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </FieldGroup>
                 )}
 
                 {formStep === 2 && (
-                  <div>
+                  <FieldGroup>
                     <ReviewRow label="Type" value={TYPE_LABEL[classification] ?? ""} />
                     <ReviewRow
                       label="Amount to borrow"
@@ -806,12 +824,12 @@ export default function EditTransactionPage() {
                       <ReviewRow label="Est. total repayable" value={`₱${fmt(previewTotalRepayable)}`} />
                     )}
                     {description && <ReviewRow label="Description" value={description} />}
-                  </div>
+                  </FieldGroup>
                 )}
-              </div>
+              </>
             )}
 
-            <div className="mt-6 pt-4 border-t border-hairline">
+            <FieldGroup>
               <p className="text-xs text-ink-soft mb-3">
                 {isLoanRelease
                   ? "Changed your mind? This cancels the loan request and removes its pending disbursement entirely -- it can't be undone from the app."
@@ -825,7 +843,7 @@ export default function EditTransactionPage() {
               >
                 {cancelling ? "Cancelling…" : "Cancel this entry"}
               </button>
-            </div>
+            </FieldGroup>
           </div>
         </div>
       </main>

@@ -64,9 +64,13 @@ export function AmountHero({
 }
 
 // Replaces the old collapsed dropdown -- every entry type is one tap away
-// in a horizontally scrollable row instead of open-select-close. Each
-// page still owns its own key/classification -> {arrow, tone} mapping (see
-// file comment above); callers merge that in before passing options here.
+// instead of open-select-close. Wraps onto additional rows rather than
+// scrolling horizontally: a horizontally-scrolling row of buttons is easy
+// to mistake for a plain swipe and have the tap on a partially-visible
+// pill fire instead of the scroll continuing, so every option is just
+// laid out and visible up front instead. Each page still owns its own
+// key/classification -> {arrow, tone} mapping (see file comment above);
+// callers merge that in before passing options here.
 export function TypePillRow({
   options,
   value,
@@ -77,7 +81,7 @@ export function TypePillRow({
   onChange: (key: string) => void
 }) {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:-mx-5 sm:px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex flex-wrap gap-2">
       {options.map((o) => {
         const active = o.key === value
         return (
@@ -235,16 +239,12 @@ export function ReceiptField({
       }}
       onDragLeave={() => setDragActive(false)}
       onDrop={handleDrop}
-      className={`
-        flex flex-col items-center justify-center gap-2
-        border-2 border-dashed rounded-md
-        py-10 px-4 cursor-pointer text-center transition-colors
-        ${dragActive ? "border-gold bg-gold/5" : "border-hairline"}
-      `}
+      className={`flex items-center justify-center gap-2 border border-dashed rounded-sm px-3 py-3 cursor-pointer text-center transition-colors ${
+        dragActive ? "border-gold bg-gold/5" : "border-hairline"
+      }`}
     >
-      <span className="text-2xl">📎</span>
-      <span className="text-base text-ink">Tap to upload a photo</span>
-      <span className="text-sm text-ink-soft">Take a photo, or choose one from your library</span>
+      <span className="text-base shrink-0">📎</span>
+      <span className="text-sm text-ink-soft">Tap to upload a photo</span>
       <input
         type="file"
         accept="image/*"
@@ -252,6 +252,20 @@ export function ReceiptField({
         onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
       />
     </label>
+  )
+}
+
+// Groups a set of related fields into their own bordered card with a
+// small uppercase title -- e.g. "Details", "Proof" -- instead of every
+// field on the form living in one continuous card. Matches the card-per-
+// concern convention already used elsewhere (Admin's pending lists,
+// Breakdown's panels) rather than a single long enclosing box.
+export function FieldGroup({ label, children }: { label?: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-paper-2 border border-hairline rounded-md p-5">
+      {label && <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-4">{label}</p>}
+      {children}
+    </div>
   )
 }
 
