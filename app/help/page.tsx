@@ -677,6 +677,15 @@ export default function HelpPage() {
       {isBorrower ? <BorrowerHeader /> : <Navbar />}
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
+          {!isBorrower && (
+            <button
+              onClick={() => router.push("/menu")}
+              className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
+            >
+              ← Menu
+            </button>
+          )}
+
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
             Reference
           </div>
