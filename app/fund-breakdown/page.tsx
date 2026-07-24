@@ -338,8 +338,13 @@ function YouPanel({ memberId }: { memberId: string }) {
   const tone = (n: number) => (n > 0 ? "text-sage" : n < 0 ? "text-rust" : "text-ink-soft")
 
   // Same touchend-only swipe detection as the Group carousel -- no
-  // touchmove listener, so the page's own vertical scroll is never fought
-  // over mid-gesture.
+  // touchmove listener needed. The container's touch-action: pan-y (set
+  // where this is rendered below) is what actually stops a mostly-
+  // horizontal swipe from also dragging the page up/down: the browser
+  // decides pan vs. no-op per gesture at the OS/compositor level based on
+  // that hint, so a genuinely vertical touch still scrolls the page
+  // natively, but a horizontal one never does, even if the finger drifts
+  // slightly off-axis mid-swipe.
   function handleYearTouchStart(e: React.TouchEvent) {
     yearTouchStartX.current = e.touches[0].clientX
   }
@@ -445,7 +450,12 @@ function YouPanel({ memberId }: { memberId: string }) {
 
         {years.length > 0 && (
           <>
-            <div className="overflow-hidden" onTouchStart={handleYearTouchStart} onTouchEnd={handleYearTouchEnd}>
+            <div
+              className="overflow-hidden"
+              style={{ touchAction: "pan-y" }}
+              onTouchStart={handleYearTouchStart}
+              onTouchEnd={handleYearTouchEnd}
+            >
               <div
                 className="flex transition-transform duration-300 ease-out will-change-transform motion-reduce:transition-none"
                 style={{ transform: `translateX(-${clampedYearIndex * 100}%)` }}
@@ -775,7 +785,12 @@ function GroupPanel() {
         </div>
       )}
 
-      <div className="overflow-hidden" onTouchStart={handleCarouselTouchStart} onTouchEnd={handleCarouselTouchEnd}>
+      <div
+        className="overflow-hidden"
+        style={{ touchAction: "pan-y" }}
+        onTouchStart={handleCarouselTouchStart}
+        onTouchEnd={handleCarouselTouchEnd}
+      >
         <div
           className="flex transition-transform duration-300 ease-out will-change-transform motion-reduce:transition-none"
           style={{ transform: `translateX(-${clampedIndex * 100}%)` }}
