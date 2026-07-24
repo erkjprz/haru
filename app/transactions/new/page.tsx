@@ -7,7 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
-import { AmountHero, TypePillRow, StepTrack, ReviewRow, ReceiptField, Chip } from "@/app/components/TransactionFormUI"
+import { AmountHero, TypePillRow, StepTrack, ReviewRow, ReceiptField, RequiredMark } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 import { dateOnly } from "@/lib/currentValue"
@@ -553,43 +553,6 @@ function NewTransactionForm() {
     return bank ? bank.account_name || bank.bank_name : "Bank"
   }
 
-  // Readiness chips for the sticky summary bar -- one branch per entry
-  // type's actual requirements, mirroring the validation in handleSubmit.
-  // Purely informational chips ("Posts as approved", "Doesn't affect cash
-  // total", "No receipt needed") were dropped here -- every one of them
-  // just restated something the amount hero's helper text already says,
-  // and on the types with the most other chips (Investment) that made the
-  // footer wrap to three crowded rows for no added information.
-  const chips: { done: boolean; text: string }[] = []
-
-  if (selectedType === "contribution" || isLoanPayment) {
-    chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
-    chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
-    if (isLoanPayment) {
-      chips.push(selectedLoanId ? { done: true, text: "✓ Loan matched" } : { done: false, text: "Select a loan" })
-    }
-  } else if (isLoanRequest) {
-    chips.push(
-      previewTotalRepayable > 0
-        ? { done: true, text: `Total ₱${fmt(previewTotalRepayable)}` }
-        : { done: false, text: "Enter interest & term" }
-    )
-  } else if (isBankTransfer) {
-    chips.push(
-      bankId && toBankId
-        ? { done: true, text: `✓ ${bankLabel(bankId)} → ${bankLabel(toBankId)}` }
-        : { done: false, text: "Select both banks" }
-    )
-    chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
-  } else if (isInvestmentEntry) {
-    chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
-    chips.push(investmentId ? { done: true, text: "✓ Investment selected" } : { done: false, text: "Investment required" })
-    chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
-  } else if (selectedType === "bank_interest" || selectedType === "expense") {
-    chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
-    chips.push(receipt ? { done: true, text: "✓ Receipt attached" } : { done: false, text: "Receipt required" })
-  }
-
   if (checkingAccess) {
     return (
       <>
@@ -688,6 +651,7 @@ function NewTransactionForm() {
                   <div>
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Which loan
+                      <RequiredMark />
                     </label>
                     {myLoans.filter((l) => l.status === "active").length === 0 ? (
                       <p className="text-sm text-rust">
@@ -716,6 +680,7 @@ function NewTransactionForm() {
                   <div>
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       {isBankTransfer ? "From bank" : "Bank"}
+                      <RequiredMark />
                     </label>
                     <select
                       className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
@@ -736,6 +701,7 @@ function NewTransactionForm() {
                   <div>
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       To bank
+                      <RequiredMark />
                     </label>
                     <select
                       className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
@@ -768,6 +734,7 @@ function NewTransactionForm() {
                   <div>
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Receipt
+                      <RequiredMark />
                     </label>
                     <ReceiptField
                       receipt={receipt}
@@ -791,6 +758,7 @@ function NewTransactionForm() {
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                           Investment
+                          <RequiredMark />
                         </label>
                         <select
                           className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
@@ -817,6 +785,7 @@ function NewTransactionForm() {
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                             Interest
+                            <RequiredMark />
                           </label>
                           <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
                             <button
@@ -864,6 +833,7 @@ function NewTransactionForm() {
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                             Term (months)
+                            <RequiredMark />
                           </label>
                           <input
                             className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
@@ -918,6 +888,7 @@ function NewTransactionForm() {
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                           Bank
+                          <RequiredMark />
                         </label>
                         <select
                           className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
@@ -950,6 +921,7 @@ function NewTransactionForm() {
                       <div>
                         <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                           Receipt
+                          <RequiredMark />
                         </label>
                         <ReceiptField
                           receipt={receipt}
@@ -1022,16 +994,12 @@ function NewTransactionForm() {
         className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline"
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4 flex items-end gap-3">
-          <div className="min-w-0 flex-1">
-            {(!isStepped || formStep === 1) && (
-              <div className="flex flex-wrap gap-1.5">
-                {chips.map((chip, i) => (
-                  <Chip key={i} done={chip.done}>{chip.text}</Chip>
-                ))}
-              </div>
-            )}
+        {message && (
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-3">
+            <p className="text-sm text-rust">{message}</p>
           </div>
+        )}
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-3 flex items-center gap-3">
           {isStepped && formStep === 2 && (
             <button
               className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold"
@@ -1041,18 +1009,13 @@ function NewTransactionForm() {
             </button>
           )}
           <button
-            className="shrink-0 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+            className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
             onClick={isStepped && formStep === 1 ? handleContinueToReview : handleSubmit}
             disabled={submitting}
           >
             {submitting ? "Submitting…" : isStepped && formStep === 1 ? "Continue" : "Submit"}
           </button>
         </div>
-        {message && (
-          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-2">
-            <p className="text-sm text-rust">{message}</p>
-          </div>
-        )}
       </div>
     </>
   )

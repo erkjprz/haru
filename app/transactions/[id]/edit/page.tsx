@@ -7,7 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
-import { AmountHero, FlowBadge, StepTrack, ReviewRow, ReceiptField, Chip } from "@/app/components/TransactionFormUI"
+import { AmountHero, FlowBadge, StepTrack, ReviewRow, ReceiptField, RequiredMark } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 
@@ -272,11 +272,6 @@ export default function EditTransactionPage() {
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  function bankLabel(id: string) {
-    const bank = banks.find((b) => b.id === id)
-    return bank ? bank.account_name || bank.bank_name : "Bank"
-  }
-
   // Gate for Loan Release's Details step "Continue" -- the same checks
   // handleSave itself makes for this type, just run earlier so the Review
   // step never shows something that can't actually be saved.
@@ -306,32 +301,6 @@ export default function EditTransactionPage() {
     setFormStep(2)
   }
 
-  const chips: { done: boolean; text: string }[] = []
-  if (isLoanRelease) {
-    chips.push(
-      previewTotalRepayable > 0
-        ? { done: true, text: `Total ₱${fmt(previewTotalRepayable)}` }
-        : { done: false, text: "Enter interest & term" }
-    )
-  } else if (isBankTransfer) {
-    chips.push(
-      bankId && toBankId
-        ? { done: true, text: `✓ ${bankLabel(bankId)} → ${bankLabel(toBankId)}` }
-        : { done: false, text: "Select both banks" }
-    )
-  } else if (needsBank) {
-    chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
-  }
-  if (needsReceipt) {
-    chips.push(
-      receipt || existingReceiptUrl
-        ? { done: true, text: "✓ Receipt attached" }
-        : { done: false, text: "Receipt required" }
-    )
-  }
-  if (isLoanPayment) {
-    chips.push(loanId ? { done: true, text: "✓ Loan matched" } : { done: false, text: "Select a loan" })
-  }
 
   async function handleSave() {
     setMessage("")
@@ -600,6 +569,7 @@ export default function EditTransactionPage() {
                   <div>
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Which loan
+                      <RequiredMark />
                     </label>
                     {myLoans.filter((l) => l.status === "active").length === 0 ? (
                       <p className="text-sm text-rust">No active loans to pay against.</p>
@@ -626,6 +596,7 @@ export default function EditTransactionPage() {
                   <div>
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       {isBankTransfer ? "From bank" : "Bank"}
+                      <RequiredMark />
                     </label>
                     <select
                       className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
@@ -646,6 +617,7 @@ export default function EditTransactionPage() {
                   <div>
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       To bank
+                      <RequiredMark />
                     </label>
                     <select
                       className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
@@ -678,6 +650,7 @@ export default function EditTransactionPage() {
                   <div>
                     <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                       Receipt
+                      <RequiredMark />
                     </label>
                     <ReceiptField
                       receipt={receipt}
@@ -702,6 +675,7 @@ export default function EditTransactionPage() {
                     <div>
                       <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                         Interest
+                        <RequiredMark />
                       </label>
                       <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
                         <button
@@ -749,6 +723,7 @@ export default function EditTransactionPage() {
                     <div>
                       <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                         Term (months)
+                        <RequiredMark />
                       </label>
                       <input
                         className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
@@ -859,16 +834,12 @@ export default function EditTransactionPage() {
         className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline"
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4 flex items-end gap-3">
-          <div className="min-w-0 flex-1">
-            {(!isLoanRelease || formStep === 1) && (
-              <div className="flex flex-wrap gap-1.5">
-                {chips.map((chip, i) => (
-                  <Chip key={i} done={chip.done}>{chip.text}</Chip>
-                ))}
-              </div>
-            )}
+        {message && (
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-3">
+            <p className="text-sm text-rust">{message}</p>
           </div>
+        )}
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-3 flex items-center gap-3">
           {isLoanRelease && formStep === 2 && (
             <button
               className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold"
@@ -878,18 +849,13 @@ export default function EditTransactionPage() {
             </button>
           )}
           <button
-            className="shrink-0 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+            className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
             onClick={isLoanRelease && formStep === 1 ? handleContinueToReview : handleSave}
             disabled={saving}
           >
             {saving ? "Saving…" : isLoanRelease && formStep === 1 ? "Continue" : "Save Changes"}
           </button>
         </div>
-        {message && (
-          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-2">
-            <p className="text-sm text-rust">{message}</p>
-          </div>
-        )}
       </div>
     </>
   )
