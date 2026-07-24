@@ -115,6 +115,14 @@ function NewTransactionForm() {
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
   const [selectedLoanId, setSelectedLoanId] = useState("")
 
+  // The effective member's saved defaults, if any -- null means "not set
+  // yet", which is also the signal to offer the "save as default" checkbox
+  // below. Reloaded whenever the effective member changes (type switch
+  // reverts to self, or an admin picks someone via "on behalf of").
+  const [contributionDefault, setContributionDefault] = useState<number | null>(null)
+  const [loanPaymentDefault, setLoanPaymentDefault] = useState<number | null>(null)
+  const [saveAsDefault, setSaveAsDefault] = useState(false)
+
   // Loan Request and Investment/Investment Return are the types with the
   // most conditional fields, so only those get a Details -> Review
   // sub-flow; every other type stays a single flowing view below the
@@ -144,6 +152,20 @@ function NewTransactionForm() {
       .order("start_date", { ascending: false })
 
     setMyLoans(data ?? [])
+  }
+
+  async function loadPreferencesFor(id: string) {
+    const { data } = await supabase
+      .from("members")
+      .select("default_contribution_amount, default_loan_payment_amount")
+      .eq("member_id", id)
+      .maybeSingle()
+
+    const contrib = data?.default_contribution_amount != null ? Number(data.default_contribution_amount) : null
+    const loanPay = data?.default_loan_payment_amount != null ? Number(data.default_loan_payment_amount) : null
+    setContributionDefault(contrib)
+    setLoanPaymentDefault(loanPay)
+    return { contrib, loanPay }
   }
 
   useEffect(() => {
@@ -191,10 +213,18 @@ function NewTransactionForm() {
       }
 
       await loadLoansFor(member.member_id)
+
+      const { contrib, loanPay } = await loadPreferencesFor(member.member_id)
+      if (!amount) {
+        if (selectedType === "contribution" && contrib != null) setAmount(String(contrib))
+        if (selectedType === "loan_payment" && loanPay != null) setAmount(String(loanPay))
+      }
+
       setDataLoading(false)
     }
 
     checkAccess()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, member, router])
 
   const isMemberLinkedType = MEMBER_LINKED_TYPES.includes(selectedType)
@@ -229,7 +259,10 @@ function NewTransactionForm() {
     isInvestmentEntry
   const isLoanRequest = selectedType === "loan_request"
   const isLoanPayment = selectedType === "loan_payment"
+  const isContribution = selectedType === "contribution"
   const isStepped = isLoanRequest || isInvestmentEntry
+  const showSaveAsDefault =
+    (isContribution && contributionDefault == null) || (isLoanPayment && loanPaymentDefault == null)
 
   const helperText: Record<string, string> = {
     contribution: "You've already sent this money. Attach proof of deposit.",
@@ -276,9 +309,21 @@ function NewTransactionForm() {
     setSelectedLoanId("")
     setOnBehalfOfId("")
     setInvestmentId("")
+    setSaveAsDefault(false)
 
     if (newType === "loan_payment" && memberId) {
       await loadLoansFor(memberId)
+    }
+
+    // Switching type reverts "on behalf of" to self (cleared above) -- reload
+    // self's saved defaults and prefill the amount from them, but never
+    // clobber something the member already typed in.
+    if ((newType === "contribution" || newType === "loan_payment") && memberId) {
+      const { contrib, loanPay } = await loadPreferencesFor(memberId)
+      if (!amount) {
+        if (newType === "contribution" && contrib != null) setAmount(String(contrib))
+        if (newType === "loan_payment" && loanPay != null) setAmount(String(loanPay))
+      }
     }
   }
 
@@ -320,9 +365,18 @@ function NewTransactionForm() {
   async function handleOnBehalfChange(id: string) {
     setOnBehalfOfId(id)
     setSelectedLoanId("")
+    setSaveAsDefault(false)
 
     if (selectedType === "loan_payment") {
       await loadLoansFor(id || memberId || "")
+    }
+
+    if (selectedType === "contribution" || selectedType === "loan_payment") {
+      const { contrib, loanPay } = await loadPreferencesFor(id || memberId || "")
+      if (!amount) {
+        if (selectedType === "contribution" && contrib != null) setAmount(String(contrib))
+        if (selectedType === "loan_payment" && loanPay != null) setAmount(String(loanPay))
+      }
     }
   }
 
@@ -551,12 +605,36 @@ function NewTransactionForm() {
         submitted_by: submittedByForOnBehalf
       })
 
-    setSubmitting(false)
-
     if (error) {
+      setSubmitting(false)
       setMessage(error.message)
       return
     }
+
+    // Only offered when the effective member had no default for this type
+    // yet (see showSaveAsDefault) -- self-submissions use the scoped RPC
+    // since regular members can't otherwise update their own row; an admin
+    // saving it on someone else's behalf already has full admin write
+    // access to members.
+    if (saveAsDefault && (isContribution || isLoanPayment)) {
+      if (effectiveMemberId === memberId) {
+        await supabase.rpc(
+          isContribution ? "set_default_contribution_amount" : "set_default_loan_payment_amount",
+          { p_amount: Number(amount) }
+        )
+      } else {
+        await supabase
+          .from("members")
+          .update(
+            isContribution
+              ? { default_contribution_amount: Number(amount) }
+              : { default_loan_payment_amount: Number(amount) }
+          )
+          .eq("member_id", effectiveMemberId)
+      }
+    }
+
+    setSubmitting(false)
 
     const typeLabel =
       selectedType === "loan_payment" ? "Loan repayment" : selectedType === "withdrawal" ? "Withdrawal" : "Contribution"
@@ -751,6 +829,21 @@ function NewTransactionForm() {
                       onChange={(e) => setDescription(e.target.value)}
                     />
                   </div>
+
+                  {showSaveAsDefault && isValidPositiveNumber(amount) && (
+                    <label className="flex items-start gap-2.5 text-sm text-ink-soft">
+                      <input
+                        type="checkbox"
+                        checked={saveAsDefault}
+                        onChange={(e) => setSaveAsDefault(e.target.checked)}
+                        className="w-4 h-4 mt-0.5 shrink-0"
+                      />
+                      Save ₱{fmt(Number(amount))} as {onBehalfOfId
+                        ? `${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}'s`
+                        : "my"}{" "}
+                      default {isContribution ? "contribution" : "loan payment"} amount
+                    </label>
+                  )}
                   </div>
                 </FieldGroup>
 
