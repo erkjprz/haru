@@ -718,6 +718,16 @@ function TransactionsPageInner() {
                 transaction.classification === "Loan Repayment"
               const isTransferTxn = transaction.classification === "Internal Transfer"
 
+              // "Gain Allocation" covers a member's share of a loan gain, an
+              // investment gain/loss, or bank interest -- one classification
+              // for both directions, unlike every other type here which gets
+              // its own fixed color. The sign of the amount is the only
+              // signal for which one this row actually is, so the badge
+              // color has to key off that instead of the static typeColor
+              // map, or a loss reads identically to a gain.
+              const isGainAllocationLoss =
+                transaction.classification === "Gain Allocation" && Number(transaction.amount) < 0
+
               const loanName = transaction.loans?.name || null
               const borrowerName = transaction.loans?.borrowers?.name || null
               const transferLabel = isTransferTxn ? transaction._transferLabel ?? null : null
@@ -801,7 +811,9 @@ function TransactionsPageInner() {
                     <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                       <span
                         className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
-                          typeColor[transaction.classification] ?? "text-ink-soft border-hairline"
+                          isGainAllocationLoss
+                            ? "text-rust border-rust"
+                            : typeColor[transaction.classification] ?? "text-ink-soft border-hairline"
                         }`}
                       >
                         {typeLabels[transaction.classification] || transaction.classification}
