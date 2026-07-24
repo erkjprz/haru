@@ -380,14 +380,34 @@ export default function AdminPage() {
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
-          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
-            Administration
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
+                Administration
+              </div>
+              <h1 className="font-display text-4xl font-semibold">Admin Panel</h1>
+              <p className="text-sm text-ink-soft mt-2 max-w-md">
+                Everything waiting on you: new signups, transactions to approve, borrower accounts to link, and
+                bank interest ready to split across members.
+              </p>
+            </div>
+
+            {/* Page-level action, not scoped to any tab -- always exports the
+                full transaction history regardless of what's active below.
+                Kept up here in the header, away from the tab content, so it
+                doesn't read as "export this tab". */}
+            <button
+              onClick={exportTransactionsCsv}
+              disabled={exporting}
+              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft border border-hairline rounded-md px-3 py-2 hover:bg-paper-2 hover:text-ink transition-colors disabled:opacity-60"
+              title="Export full transaction history (every status, not just what's shown below) as a CSV backup"
+            >
+              {exporting ? "Exporting..." : "⬇ Export"}
+            </button>
           </div>
-          <h1 className="font-display text-4xl font-semibold">Admin Panel</h1>
-          <p className="text-sm text-ink-soft mt-2 max-w-md">
-            Everything waiting on you: new signups, transactions to approve, borrower accounts to link, and
-            bank interest ready to split across members.
-          </p>
+          {exportError && (
+            <p className="mt-1.5 text-xs text-rust text-right">Couldn&apos;t export: {exportError}</p>
+          )}
 
           {loadError && (
             <p className="mt-4 text-sm text-rust">Couldn&apos;t load some data: {loadError}</p>
@@ -768,24 +788,6 @@ export default function AdminPage() {
             </section>
           )}
 
-          {/* Export sits at the very end, below every tab -- it's an
-              occasional backup/reporting action, not something reached for
-              as often as approving what's pending above. */}
-          <div className="mt-10 pt-6 border-t border-hairline">
-            <button
-              onClick={exportTransactionsCsv}
-              disabled={exporting}
-              className="inline-flex items-center gap-2 text-sm font-medium text-ink border border-hairline rounded-md px-4 py-2 hover:bg-paper-2 transition-colors disabled:opacity-60"
-            >
-              {exporting ? "Exporting..." : "⬇ Export transactions (CSV)"}
-            </button>
-            <p className="mt-1.5 text-xs text-ink-soft">
-              Full transaction history, every status, as a spreadsheet you can keep as a backup.
-            </p>
-            {exportError && (
-              <p className="mt-1.5 text-xs text-rust">Couldn&apos;t export: {exportError}</p>
-            )}
-          </div>
         </div>
       </main>
 

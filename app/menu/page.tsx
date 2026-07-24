@@ -33,7 +33,6 @@ export default function MenuPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const isAdmin = member?.role === "admin"
 
   useEffect(() => {
     if (authLoading) return
@@ -89,12 +88,6 @@ export default function MenuPage() {
             <ChevronRow label="Account" onClick={() => router.push("/account")} />
             <ChevronRow label="Help" onClick={() => router.push("/help")} />
           </MenuSection>
-
-          {isAdmin && (
-            <MenuSection title="Admin">
-              <ChevronRow label="Admin Panel" onClick={() => router.push("/admin")} />
-            </MenuSection>
-          )}
 
           <div className="mt-6">
             <button
