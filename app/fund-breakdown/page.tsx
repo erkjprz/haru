@@ -560,13 +560,14 @@ type FundTotals = {
 }
 
 function GroupPanel() {
-  const router = useRouter()
+  const { member: authMember } = useAuth()
   const [members, setMembers] = useState<MemberRow[]>([])
   const [fund, setFund] = useState<FundTotals | null>(null)
   const [fundTrend, setFundTrend] = useState<TrendPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [activeIndex, setActiveIndex] = useState(0)
+  const [openMember, setOpenMember] = useState<{ id: string; name: string } | null>(null)
   const touchStartX = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
 
@@ -711,13 +712,13 @@ function GroupPanel() {
     }
   }
 
-  function handleCardClick(memberId: string, e: React.MouseEvent) {
+  function handleCardClick(memberId: string, memberName: string, e: React.MouseEvent) {
     if (suppressClickRef.current) {
       suppressClickRef.current = false
       e.preventDefault()
       return
     }
-    router.push(`/member-breakdown/${memberId}`)
+    setOpenMember({ id: memberId, name: memberName })
   }
 
   if (loading) {
@@ -782,7 +783,7 @@ function GroupPanel() {
           {members.map((member) => (
             <button
               key={member.member_id}
-              onClick={(e) => handleCardClick(member.member_id, e)}
+              onClick={(e) => handleCardClick(member.member_id, member.name, e)}
               className="w-full shrink-0 text-left bg-paper-2 border border-hairline rounded-md p-5 hover:bg-paper transition-colors"
             >
               <div className="flex justify-between items-baseline flex-wrap gap-1.5 mb-4">
@@ -911,6 +912,345 @@ function GroupPanel() {
           </InfoBox>
         </div>
       )}
+
+      {openMember && (
+        <MemberBreakdownSheet
+          memberId={openMember.id}
+          memberName={openMember.name}
+          isSelf={authMember?.member_id === openMember.id}
+          onClose={() => setOpenMember(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+/* A member's full capital/performance breakdown, opened in place over the
+   Group tab instead of navigating to its own route -- same data and layout
+   the old /member-breakdown/[id] page rendered, just as an overlay so
+   closing it returns to exactly where the carousel was left. */
+function MemberBreakdownSheet({
+  memberId,
+  memberName,
+  isSelf,
+  onClose
+}: {
+  memberId: string
+  memberName: string
+  isSelf: boolean
+  onClose: () => void
+}) {
+  const [dataLoading, setDataLoading] = useState(true)
+  const [performance, setPerformance] = useState<MemberPerformance | null>(null)
+  const [years, setYears] = useState<YearRow[]>([])
+  const [loadError, setLoadError] = useState("")
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      const performancePromise = supabase
+        .from("v_member_performance")
+        .select(
+          "total_contribution, total_withdrawal, net_contribution, bank_interest, investment_gain_loss, loan_gain, bank_writeoff, total_value, money_on_hold, withdrawable_now"
+        )
+        .eq("member_id", memberId)
+        .single()
+
+      const txPromise = supabase
+        .from("transactions")
+        .select("txn_date, classification, amount")
+        .eq("member_id", memberId)
+        .eq("status", "approved")
+        .in("classification", ["Member Contribution", "Member Withdrawal", "Bank Write-off"])
+
+      const bankInterestPromise = supabase
+        .from("bank_interest_allocations")
+        .select("allocation_date, amount")
+        .eq("member_id", memberId)
+
+      const loanGainPromise = supabase
+        .from("loan_gain_allocations")
+        .select("allocation_date, amount")
+        .eq("member_id", memberId)
+
+      const investmentAllocPromise = supabase
+        .from("investment_allocations")
+        .select("investment_id, allocation_type, amount, allocation_date")
+        .eq("member_id", memberId)
+
+      const investmentDatesPromise = supabase.from("v_investment_dates").select("investment_id, last_txn_date")
+
+      const [performanceResult, txResult, bankInterestResult, loanGainResult, investmentAllocResult, investmentDatesResult] =
+        await Promise.all([
+          performancePromise,
+          txPromise,
+          bankInterestPromise,
+          loanGainPromise,
+          investmentAllocPromise,
+          investmentDatesPromise
+        ])
+
+      if (cancelled) return
+
+      const firstError =
+        performanceResult.error ||
+        txResult.error ||
+        bankInterestResult.error ||
+        loanGainResult.error ||
+        investmentAllocResult.error ||
+        investmentDatesResult.error
+      if (firstError) setLoadError(firstError.message)
+
+      if (!performanceResult.error && performanceResult.data) {
+        setPerformance({
+          total_contribution: Number(performanceResult.data.total_contribution),
+          total_withdrawal: Number(performanceResult.data.total_withdrawal),
+          net_contribution: Number(performanceResult.data.net_contribution),
+          bank_interest: Number(performanceResult.data.bank_interest),
+          investment_gain_loss: Number(performanceResult.data.investment_gain_loss),
+          loan_gain: Number(performanceResult.data.loan_gain),
+          bank_writeoff: Number(performanceResult.data.bank_writeoff),
+          total_value: Number(performanceResult.data.total_value),
+          money_on_hold: Number(performanceResult.data.money_on_hold),
+          withdrawable_now: Number(performanceResult.data.withdrawable_now)
+        })
+      }
+
+      const byYear: Record<string, YearRow> = {}
+      const ensure = (year: string) => {
+        if (!byYear[year]) {
+          byYear[year] = {
+            year,
+            contribution: 0,
+            withdrawal: 0,
+            netContribution: 0,
+            bankInterest: 0,
+            loanGain: 0,
+            bankWriteoff: 0,
+            investmentGainLoss: 0
+          }
+        }
+        return byYear[year]
+      }
+
+      ;(txResult.data ?? []).forEach((t: any) => {
+        const year = (t.txn_date || "").slice(0, 4)
+        if (!year) return
+        const amount = Number(t.amount)
+        const row = ensure(year)
+        if (t.classification === "Member Contribution") {
+          row.contribution += amount
+          row.netContribution += amount
+        } else if (t.classification === "Member Withdrawal") {
+          row.withdrawal += amount
+          row.netContribution += amount
+        } else if (t.classification === "Bank Write-off") {
+          row.bankWriteoff += amount
+        }
+      })
+
+      ;(bankInterestResult.data ?? []).forEach((r: any) => {
+        const year = (r.allocation_date || "").slice(0, 4)
+        if (!year) return
+        ensure(year).bankInterest += Number(r.amount)
+      })
+
+      ;(loanGainResult.data ?? []).forEach((r: any) => {
+        const year = (r.allocation_date || "").slice(0, 4)
+        if (!year) return
+        ensure(year).loanGain += Number(r.amount)
+      })
+
+      const investmentDateByInvestmentId: Record<string, string> = {}
+      ;(investmentDatesResult.data ?? []).forEach((r: any) => {
+        investmentDateByInvestmentId[r.investment_id] = r.last_txn_date
+      })
+
+      ;(investmentAllocResult.data ?? []).forEach((r: any) => {
+        const year = (r.allocation_date || investmentDateByInvestmentId[r.investment_id] || "").slice(0, 4)
+        if (!year) return
+        const amount = r.allocation_type === "Investment Loss" ? -Number(r.amount) : Number(r.amount)
+        ensure(year).investmentGainLoss += amount
+      })
+
+      setYears(Object.values(byYear).sort((a, b) => b.year.localeCompare(a.year)))
+      setDataLoading(false)
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [memberId])
+
+  // Body scroll is locked while the sheet covers the screen, same as any
+  // full-screen overlay -- otherwise the Group carousel underneath can
+  // still be scrolled by touch even though it's hidden.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [])
+
+  const fmt = (n: number) =>
+    Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const signed = (n: number) => `${n < 0 ? "-" : "+"}₱${fmt(Math.abs(n))}`
+  const tone = (n: number) => (n > 0 ? "text-sage" : n < 0 ? "text-rust" : "text-ink-soft")
+
+  return (
+    <div className="fixed inset-0 z-50 bg-paper overflow-y-auto overscroll-contain">
+      <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+env(safe-area-inset-bottom))]">
+        <button onClick={onClose} className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors">
+          ← Breakdown
+        </button>
+
+        <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">Personal Ledger</div>
+        <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
+          {isSelf ? "Your Breakdown" : `${memberName}'s Breakdown`}
+        </h1>
+        <p className="text-[13px] text-ink-soft mb-6">
+          {isSelf ? "Your" : `${memberName}'s`} capital and performance, all-time and by year.
+        </p>
+
+        {dataLoading ? (
+          <SkeletonPanel />
+        ) : (
+          <>
+            {loadError && <p className="mb-4 text-sm text-rust">Couldn&apos;t load some of this breakdown: {loadError}</p>}
+
+            {performance != null && (
+              <div className="bg-paper-2 border border-hairline rounded-md p-5">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">Available Balance</p>
+                <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink mb-4">
+                  ₱{fmt(performance.withdrawable_now)}
+                </p>
+                {performance.money_on_hold > 0 && (
+                  <p className="text-xs text-ink-soft -mt-3 mb-4">
+                    of ₱{fmt(performance.total_value)} total — ₱{fmt(performance.money_on_hold)} currently tied up in
+                    loans/investments
+                  </p>
+                )}
+
+                <InfoBox label="Capital (All-Time)">
+                  <InfoRow label="Total Contribution" value={`₱${fmt(performance.total_contribution)}`} />
+                  {performance.total_withdrawal !== 0 && (
+                    <InfoRow
+                      label="Total Withdrawal"
+                      value={`-₱${fmt(Math.abs(performance.total_withdrawal))}`}
+                      valueClass="text-rust"
+                    />
+                  )}
+                  <InfoRow label="Net Contribution" value={`₱${fmt(performance.net_contribution)}`} bold />
+                </InfoBox>
+
+                <InfoBox label="Performance (All-Time)">
+                  <InfoRow
+                    label="Total Gain/Loss"
+                    value={signed(
+                      performance.bank_interest + performance.investment_gain_loss + performance.loan_gain + performance.bank_writeoff
+                    )}
+                    valueClass={tone(
+                      performance.bank_interest + performance.investment_gain_loss + performance.loan_gain + performance.bank_writeoff
+                    )}
+                    bold
+                  />
+                  <div className="pt-1 space-y-1.5">
+                    <InfoSubRow
+                      label="Bank Interest"
+                      value={signed(performance.bank_interest)}
+                      valueClass={tone(performance.bank_interest)}
+                    />
+                    <InfoSubRow
+                      label="Investment Gain/Loss"
+                      value={signed(performance.investment_gain_loss)}
+                      valueClass={tone(performance.investment_gain_loss)}
+                    />
+                    <InfoSubRow
+                      label="Loan Gain Share"
+                      value={signed(performance.loan_gain)}
+                      valueClass={tone(performance.loan_gain)}
+                    />
+                    {performance.bank_writeoff !== 0 && (
+                      <InfoSubRow
+                        label="Bank Write-off Share"
+                        value={signed(performance.bank_writeoff)}
+                        valueClass={tone(performance.bank_writeoff)}
+                      />
+                    )}
+                  </div>
+                </InfoBox>
+              </div>
+            )}
+
+            <section className="mt-8">
+              <h2 className="font-display text-lg font-medium text-ink mb-1">By Year</h2>
+              <p className="text-[13px] text-ink-soft mb-3">
+                Contributions, withdrawals, bank interest, loan gain share, and investment gain/loss, by calendar
+                year. Investment allocations aren&apos;t dated individually, so each is counted in the year of that
+                investment&apos;s most recent transaction.
+              </p>
+
+              {years.length === 0 && !loadError && (
+                <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+                  No dated activity yet.
+                </p>
+              )}
+
+              <div className="space-y-4">
+                {years.map((y) => {
+                  const yearTotal = y.netContribution + y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
+                  return (
+                    <div key={y.year} className="bg-paper-2 border border-hairline rounded-md p-5">
+                      <div className="flex justify-between items-baseline mb-3">
+                        <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
+                        <span className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearTotal)}`}>
+                          {signed(yearTotal)}
+                        </span>
+                      </div>
+
+                      <InfoBox label="Capital">
+                        <InfoRow label="Contribution" value={`₱${fmt(y.contribution)}`} />
+                        {y.withdrawal !== 0 && (
+                          <InfoRow label="Withdrawal" value={`-₱${fmt(Math.abs(y.withdrawal))}`} valueClass="text-rust" />
+                        )}
+                        <InfoRow label="Net Contribution" value={`₱${fmt(y.netContribution)}`} bold />
+                      </InfoBox>
+
+                      {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
+                        <InfoBox label="Performance">
+                          {y.bankInterest !== 0 && (
+                            <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
+                          )}
+                          {y.investmentGainLoss !== 0 && (
+                            <InfoRow
+                              label="Investment Gain/Loss"
+                              value={signed(y.investmentGainLoss)}
+                              valueClass={tone(y.investmentGainLoss)}
+                            />
+                          )}
+                          {y.loanGain !== 0 && (
+                            <InfoRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
+                          )}
+                          {y.bankWriteoff !== 0 && (
+                            <InfoRow
+                              label="Bank Write-off Share"
+                              value={signed(y.bankWriteoff)}
+                              valueClass={tone(y.bankWriteoff)}
+                            />
+                          )}
+                        </InfoBox>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          </>
+        )}
+      </div>
     </div>
   )
 }
