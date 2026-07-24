@@ -1,40 +1,314 @@
+"use client"
+
 // Small presentational pieces shared by /transactions/new and
 // /transactions/[id]/edit, which mirror each other's layout closely.
 // Each page keeps its own classification/type -> { arrow, tone } mapping,
 // since the two pages key off different vocabularies (type keys vs
 // classification strings) -- only the rendering is shared here.
 
-export function SectionLabel({ children, first }: { children: React.ReactNode; first?: boolean }) {
-  return (
-    <p
-      className={`text-xs font-bold uppercase tracking-wide text-ink font-mono mb-3 ${
-        first ? "" : "mt-6 pt-[18px] border-t border-hairline"
-      }`}
-    >
-      {children}
-    </p>
-  )
-}
+import { useState } from "react"
 
-export function FlowBadge({ arrow, tone }: { arrow: string; tone: "in" | "out" | "neutral" }) {
+export function FlowBadge({
+  arrow,
+  tone,
+  small
+}: {
+  arrow: string
+  tone: "in" | "out" | "neutral"
+  small?: boolean
+}) {
   const toneClass =
     tone === "in" ? "text-sage bg-sage/10" : tone === "out" ? "text-rust bg-rust/10" : "text-gold bg-gold/10"
 
   return (
-    <span className={`w-7 h-7 rounded flex items-center justify-center text-sm font-bold shrink-0 ${toneClass}`}>
+    <span
+      className={`rounded-full flex items-center justify-center font-bold shrink-0 ${toneClass} ${
+        small ? "w-5 h-5 text-[11px]" : "w-7 h-7 rounded text-sm"
+      }`}
+    >
       {arrow}
     </span>
   )
 }
 
-export function Chip({ done, children }: { done?: boolean; children: React.ReactNode }) {
+// Amount-first entry point -- the hero of the redesigned form. A real
+// number input (not a display-only readout) so typing, pasting, and the
+// mobile numeric keypad all work exactly like the old plain field did;
+// only the styling makes it the first, biggest thing on the screen.
+export function AmountHero({
+  value,
+  onChange,
+  label = "Amount",
+  helper
+}: {
+  value: string
+  onChange: (v: string) => void
+  label?: string
+  helper?: string
+}) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border whitespace-nowrap ${
-        done ? "text-sage border-sage/40" : "text-ink-soft border-hairline"
+    <div className="text-center pt-2 pb-5">
+      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">{label}</p>
+      <div className="flex items-center justify-center gap-1.5">
+        <span className="font-mono text-3xl font-bold text-ink-soft">₱</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0.01"
+          step="0.01"
+          placeholder="0.00"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="text-size-intentional font-mono [font-variant-numeric:tabular-nums] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-4xl font-bold text-ink bg-transparent text-center w-full max-w-[220px] focus:outline-none placeholder:text-ink-soft/30"
+        />
+      </div>
+      {helper && <p className="text-sm text-ink-soft mt-2.5 max-w-xs mx-auto">{helper}</p>}
+    </div>
+  )
+}
+
+// Collapsed by default -- just the current selection, one field-height
+// row -- and expands in place into an overlay list on tap. A horizontal
+// scrolling row (tried first) was easy to mistake for a plain swipe and
+// have the tap on a partially-visible pill fire instead of continuing the
+// scroll; a row that wraps onto more lines instead of scrolling fixed
+// that but made the type picker the tallest thing on the form. A
+// collapsed dropdown is the compact option: one row when closed, and the
+// overlay list (not a wrapped block) doesn't push the rest of the form
+// down while it's open. Each page still owns its own key/classification
+// -> {arrow, tone} mapping (see file comment above); callers merge that
+// in before passing options here.
+export function TypeDropdown({
+  options,
+  value,
+  onChange
+}: {
+  options: { key: string; label: string; adminOnly: boolean; arrow: string; tone: "in" | "out" | "neutral" }[]
+  value: string
+  onChange: (key: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = options.find((o) => o.key === value)
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-3 border border-hairline bg-paper rounded-sm px-3.5 py-3"
+      >
+        <span className="flex items-center gap-2.5 min-w-0">
+          {selected && <FlowBadge arrow={selected.arrow} tone={selected.tone} small />}
+          <span className="text-sm font-semibold text-ink truncate">{selected?.label}</span>
+        </span>
+        <span
+          className={`text-ink-soft text-xs shrink-0 motion-safe:transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-1.5 w-full max-h-64 overflow-y-auto border border-hairline rounded-sm bg-paper shadow-lg">
+          {options.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => {
+                onChange(o.key)
+                setOpen(false)
+              }}
+              className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 text-sm text-left border-b border-hairline last:border-b-0 transition-colors ${
+                o.key === value ? "bg-gold/10 text-ink font-semibold" : "bg-paper text-ink-soft"
+              }`}
+            >
+              <span className="flex items-center gap-2.5 min-w-0">
+                <FlowBadge arrow={o.arrow} tone={o.tone} small />
+                <span className="truncate">{o.label}</span>
+              </span>
+              {o.adminOnly && (
+                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-gold border border-gold/40 rounded-full px-2 py-0.5">
+                  Admin
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Slim progress track for the Details -> Review sub-flow used by the
+// entry types with the most conditional fields (Loan Request, Investment,
+// and Edit's Loan Release). Everything else stays a single flowing view.
+export function StepTrack({ step, labels }: { step: 1 | 2; labels: [string, string] }) {
+  return (
+    <div className="mb-5">
+      <div className="flex gap-1.5">
+        {[0, 1].map((i) => (
+          <div key={i} className="flex-1 h-[3px] rounded-full bg-hairline overflow-hidden">
+            <div
+              className="h-full bg-gold transition-all duration-300 ease-out"
+              style={{ width: i < step ? "100%" : "0%" }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between mt-1.5">
+        {labels.map((l, i) => (
+          <span
+            key={l}
+            className={`text-[10px] uppercase tracking-wide font-mono ${
+              i === step - 1 ? "text-gold" : "text-ink-soft"
+            }`}
+          >
+            {l}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// A single read-only line in the Review step's summary -- what the member
+// or admin is about to submit, restated plainly before they commit to it.
+export function ReviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-2.5 border-b border-hairline last:border-b-0">
+      <span className="text-sm text-ink-soft">{label}</span>
+      <span className="text-sm font-semibold font-mono [font-variant-numeric:tabular-nums] text-ink text-right">
+        {value}
+      </span>
+    </div>
+  )
+}
+
+// Receipt/proof-of-payment uploader shared by New and Edit -- three
+// mutually exclusive states: a newly-picked file's preview, Edit's
+// existing receipt (with a Replace affordance), or the empty dropzone.
+// The copy is written mobile-first ("Tap to upload a photo") since this
+// is used almost entirely from a phone, where "drag a photo here" is
+// meaningless -- drag-and-drop still works for anyone on a desktop
+// browser, it's just no longer the wording that's advertised.
+export function ReceiptField({
+  receipt,
+  receiptPreview,
+  existingReceiptUrl,
+  existingReceiptSignedUrl,
+  dragActive,
+  setDragActive,
+  onFileChange
+}: {
+  receipt: File | null
+  receiptPreview: string | null
+  existingReceiptUrl?: string | null
+  existingReceiptSignedUrl?: string | null
+  dragActive: boolean
+  setDragActive: (v: boolean) => void
+  onFileChange: (file: File | null) => void
+}) {
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragActive(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) onFileChange(file)
+  }
+
+  if (receiptPreview) {
+    return (
+      <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
+        <img
+          src={receiptPreview}
+          alt="Receipt preview"
+          className="w-16 h-16 object-cover rounded-md border border-hairline"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-base text-ink truncate">{receipt?.name}</p>
+          <p className="text-sm text-ink-soft">{receipt ? `${(receipt.size / 1024).toFixed(0)} KB` : ""}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onFileChange(null)}
+          className="text-sm text-rust border border-rust rounded-full px-2.5 py-1 shrink-0"
+        >
+          Remove
+        </button>
+      </div>
+    )
+  }
+
+  if (existingReceiptUrl && existingReceiptSignedUrl) {
+    return (
+      <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
+        <img
+          src={existingReceiptSignedUrl}
+          alt="Current receipt"
+          className="w-16 h-16 object-cover rounded-md border border-hairline"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-base text-ink">Current receipt</p>
+          <p className="text-sm text-ink-soft">Tap Replace to upload a different photo</p>
+        </div>
+        <label className="shrink-0 text-sm font-semibold text-gold border border-gold/40 rounded-full px-3 py-1.5 cursor-pointer">
+          Replace
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
+          />
+        </label>
+      </div>
+    )
+  }
+
+  return (
+    <label
+      onDragOver={(e) => {
+        e.preventDefault()
+        setDragActive(true)
+      }}
+      onDragLeave={() => setDragActive(false)}
+      onDrop={handleDrop}
+      className={`flex items-center justify-center gap-2 border border-dashed rounded-sm px-3 py-3 cursor-pointer text-center transition-colors ${
+        dragActive ? "border-gold bg-gold/5" : "border-hairline"
       }`}
     >
+      <span className="text-base shrink-0">📎</span>
+      <span className="text-sm text-ink-soft">Tap to upload a photo</span>
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
+      />
+    </label>
+  )
+}
+
+// Groups a set of related fields into their own bordered card with a
+// small uppercase title -- e.g. "Details", "Proof" -- instead of every
+// field on the form living in one continuous card. Matches the card-per-
+// concern convention already used elsewhere (Admin's pending lists,
+// Breakdown's panels) rather than a single long enclosing box.
+export function FieldGroup({ label, children }: { label?: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-paper-2 border border-hairline rounded-md p-5">
+      {label && <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-4">{label}</p>}
       {children}
+    </div>
+  )
+}
+
+// Marks a field label as required -- e.g. `Bank <RequiredMark />` -- in
+// place of the old sticky-footer "Bank required" chips. Sits right next
+// to the field it applies to instead of needing a legend read separately.
+export function RequiredMark() {
+  return (
+    <span className="text-rust" aria-hidden="true">
+      {" "}
+      *
     </span>
   )
 }

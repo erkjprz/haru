@@ -7,7 +7,15 @@ import Navbar from "@/app/components/Navbar"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
-import { SectionLabel, FlowBadge, Chip } from "@/app/components/TransactionFormUI"
+import {
+  AmountHero,
+  FlowBadge,
+  StepTrack,
+  ReviewRow,
+  ReceiptField,
+  RequiredMark,
+  FieldGroup
+} from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 
@@ -108,6 +116,10 @@ export default function EditTransactionPage() {
   const [cancelling, setCancelling] = useState(false)
   const [message, setMessage] = useState("")
 
+  // Loan Release is the one editable type with enough conditional fields
+  // to earn its own Details -> Review sub-flow, matching /transactions/new.
+  const [formStep, setFormStep] = useState<1 | 2>(1)
+
   useEffect(() => {
     if (!existingReceiptUrl) return
 
@@ -185,6 +197,7 @@ export default function EditTransactionPage() {
       setToBankId(txn.to_bank_account_id ?? "")
       setDescription(txn.description ?? "")
       setExistingReceiptUrl(txn.receipt_url ?? null)
+      setFormStep(1)
 
       if (isLoanReleaseType && loanRecord) {
         setLoanId(loanRecord.loan_id)
@@ -264,49 +277,38 @@ export default function EditTransactionPage() {
     setReceiptPreview(file ? URL.createObjectURL(file) : null)
   }
 
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setDragActive(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) setReceiptFile(file)
-  }
-
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  function bankLabel(id: string) {
-    const bank = banks.find((b) => b.id === id)
-    return bank ? bank.account_name || bank.bank_name : "Bank"
+  // Gate for Loan Release's Details step "Continue" -- the same checks
+  // handleSave itself makes for this type, just run earlier so the Review
+  // step never shows something that can't actually be saved.
+  function detailsStepError(): string {
+    if (!isValidPositiveNumber(amount)) return "Enter a valid amount greater than zero."
+
+    if (isLoanRelease) {
+      if (interestType === "rate" && !isValidPositiveNumber(interestRate, true)) {
+        return "Enter a valid interest rate (0 or higher)."
+      }
+      if (interestType === "amount" && !isValidPositiveNumber(interestAmount, true)) {
+        return "Enter a valid interest amount (0 or higher)."
+      }
+      if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
+    }
+
+    return ""
   }
 
-  const chips: { done: boolean; text: string }[] = []
-  if (isLoanRelease) {
-    chips.push(
-      previewTotalRepayable > 0
-        ? { done: true, text: `Total ₱${fmt(previewTotalRepayable)}` }
-        : { done: false, text: "Enter interest & term" }
-    )
-  } else if (isBankTransfer) {
-    chips.push(
-      bankId && toBankId
-        ? { done: true, text: `✓ ${bankLabel(bankId)} → ${bankLabel(toBankId)}` }
-        : { done: false, text: "Select both banks" }
-    )
-  } else if (needsBank) {
-    chips.push(bankId ? { done: true, text: "✓ Bank selected" } : { done: false, text: "Bank required" })
-  } else if (!needsReceipt) {
-    chips.push({ done: false, text: "No receipt needed" })
+  function handleContinueToReview() {
+    const error = detailsStepError()
+    if (error) {
+      setMessage(error)
+      return
+    }
+    setMessage("")
+    setFormStep(2)
   }
-  if (needsReceipt) {
-    chips.push(
-      receipt || existingReceiptUrl
-        ? { done: true, text: "✓ Receipt attached" }
-        : { done: false, text: "Receipt required" }
-    )
-  }
-  if (isLoanPayment) {
-    chips.push(loanId ? { done: true, text: "✓ Loan matched" } : { done: false, text: "Select a loan" })
-  }
+
 
   async function handleSave() {
     setMessage("")
@@ -534,313 +536,295 @@ export default function EditTransactionPage() {
           >
             {backLabel}
           </button>
-          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
-            Editing Entry
-          </div>
-          <div className="flex items-baseline gap-2.5 flex-wrap mb-1">
-            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink">
-              Edit Transaction
-            </h1>
-            <span
-              className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2.5 py-1 font-mono ${
-                STATUS_TONE[status] ?? "text-ink-soft border-hairline"
-              }`}
-            >
-              {status}
-            </span>
-          </div>
-          <p className="text-[13px] text-ink-soft mb-6">Update this entry before it's reviewed.</p>
 
           <div className="bg-paper-2 border border-hairline rounded-md p-5">
-            <SectionLabel first>① Entry type</SectionLabel>
-            <div className="flex items-center justify-between gap-3 border border-hairline bg-paper rounded-sm px-3.5 py-3">
+            <AmountHero
+              value={amount}
+              onChange={setAmount}
+              label={isLoanRelease ? "Amount to borrow" : "Amount"}
+              helper={HELPER_TEXT[classification]}
+            />
+
+            <div className="flex items-center justify-between gap-3 border border-hairline bg-paper rounded-full pl-1.5 pr-3 py-1.5">
               <span className="flex items-center gap-2.5 min-w-0">
-                <FlowBadge {...(FLOW[classification] ?? { arrow: "•", tone: "in" })} />
+                <FlowBadge {...(FLOW[classification] ?? { arrow: "•", tone: "in" })} small />
                 <span className="text-sm font-semibold text-ink truncate">
                   {TYPE_LABEL[classification]}
                 </span>
               </span>
-              <span className="shrink-0 text-xs text-ink-soft whitespace-nowrap">🔒 Can't be changed</span>
+              <span className="shrink-0 flex items-center gap-2">
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2 py-0.5 font-mono ${
+                    STATUS_TONE[status] ?? "text-ink-soft border-hairline"
+                  }`}
+                >
+                  {status}
+                </span>
+                <span className="text-xs text-ink-soft" title="Type can't be changed">
+                  🔒
+                </span>
+              </span>
             </div>
-            <p className="text-sm text-ink-soft mt-3">{HELPER_TEXT[classification]}</p>
+          </div>
 
-            <SectionLabel>② Amount &amp; details</SectionLabel>
-
-            <div className="space-y-4">
-              {isLoanPayment && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Which loan
-                  </label>
-                  {myLoans.filter((l) => l.status === "active").length === 0 ? (
-                    <p className="text-sm text-rust">No active loans to pay against.</p>
-                  ) : (
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={loanId}
-                      onChange={(e) => setLoanId(e.target.value)}
-                    >
-                      <option value="">Select a loan</option>
-                      {myLoans
-                        .filter((l) => l.status === "active" || l.loan_id === loanId)
-                        .map((loan) => (
-                          <option key={loan.loan_id} value={loan.loan_id}>
-                            ₱{fmt(loan.principal)} from {loan.start_date}
-                          </option>
-                        ))}
-                    </select>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                  {isLoanRelease ? "Amount to borrow" : "Amount"}
-                </label>
-                <input
-                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </div>
-
-              {isLoanRelease && (
-                <>
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Interest
-                    </label>
-                    <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
-                      <button
-                        type="button"
-                        onClick={() => setInterestType("rate")}
-                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                          interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                        }`}
-                      >
-                        Rate (%)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setInterestType("amount")}
-                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                          interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                        }`}
-                      >
-                        Fixed amount (₱)
-                      </button>
-                    </div>
-                    {interestType === "rate" ? (
-                      <input
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="e.g. 5"
-                        value={interestRate}
-                        onChange={(e) => setInterestRate(e.target.value)}
-                      />
-                    ) : (
-                      <input
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="e.g. 5000"
-                        value={interestAmount}
-                        onChange={(e) => setInterestAmount(e.target.value)}
-                      />
+          <div className="space-y-4 mt-4">
+            {!isLoanRelease && (
+              <>
+                <FieldGroup label="Details">
+                  <div className="space-y-4">
+                    {isLoanPayment && (
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Which loan
+                          <RequiredMark />
+                        </label>
+                        {myLoans.filter((l) => l.status === "active").length === 0 ? (
+                          <p className="text-sm text-rust">No active loans to pay against.</p>
+                        ) : (
+                          <select
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                            value={loanId}
+                            onChange={(e) => setLoanId(e.target.value)}
+                          >
+                            <option value="">Select a loan</option>
+                            {myLoans
+                              .filter((l) => l.status === "active" || l.loan_id === loanId)
+                              .map((loan) => (
+                                <option key={loan.loan_id} value={loan.loan_id}>
+                                  ₱{fmt(loan.principal)} from {loan.start_date}
+                                </option>
+                              ))}
+                          </select>
+                        )}
+                      </div>
                     )}
-                  </div>
 
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Term (months)
-                    </label>
-                    <input
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                      type="number"
-                      min="1"
-                      step="1"
-                      placeholder="e.g. 6"
-                      value={termMonths}
-                      onChange={(e) => setTermMonths(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Repayment mode
-                    </label>
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={repaymentFrequency}
-                      onChange={(e) => setRepaymentFrequency(e.target.value)}
-                    >
-                      <option value="monthly">Monthly installments</option>
-                      <option value="lump_sum">One lump sum at end of term</option>
-                    </select>
-                  </div>
-
-                  {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                    <div className="border border-hairline rounded-md p-4 bg-paper">
-                      <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
-                      <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
-                        <span className="text-ink-soft">Total repayable</span>
-                        <span>₱{fmt(previewTotalRepayable)}</span>
+                    {needsBank && (
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          {isBankTransfer ? "From bank" : "Bank"}
+                          <RequiredMark />
+                        </label>
+                        <select
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          value={bankId}
+                          onChange={(e) => setBankId(e.target.value)}
+                        >
+                          <option value="">Select a bank</option>
+                          {banks.map((bank) => (
+                            <option key={bank.id} value={bank.id}>
+                              {bank.account_name || bank.bank_name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
-                        <span className="text-ink-soft">
-                          {repaymentFrequency === "monthly"
-                            ? `Per month × ${termMonths}`
-                            : `Due at ${termMonths} months`}
-                        </span>
-                        <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
+                    )}
+
+                    {isBankTransfer && (
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          To bank
+                          <RequiredMark />
+                        </label>
+                        <select
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          value={toBankId}
+                          onChange={(e) => setToBankId(e.target.value)}
+                        >
+                          <option value="">Select a bank</option>
+                          {banks.map((bank) => (
+                            <option key={bank.id} value={bank.id}>
+                              {bank.account_name || bank.bank_name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    </div>
-                  )}
-                </>
-              )}
+                    )}
 
-              {needsBank && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    {isBankTransfer ? "From bank" : "Bank"}
-                  </label>
-                  <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    value={bankId}
-                    onChange={(e) => setBankId(e.target.value)}
-                  >
-                    <option value="">Select a bank</option>
-                    {banks.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.account_name || bank.bank_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {isBankTransfer && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    To bank
-                  </label>
-                  <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    value={toBankId}
-                    onChange={(e) => setToBankId(e.target.value)}
-                  >
-                    <option value="">Select a bank</option>
-                    {banks.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.account_name || bank.bank_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                  Description
-                </label>
-                <input
-                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                  placeholder="Add a note"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </div>
-
-              {needsReceipt && (
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Receipt
-                  </label>
-
-                  {!receiptPreview && existingReceiptUrl && existingReceiptSignedUrl && (
-                    <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
-                      <img
-                        src={existingReceiptSignedUrl}
-                        alt="Current receipt"
-                        className="w-16 h-16 object-cover rounded-md border border-hairline"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base text-ink">Current receipt</p>
-                        <p className="text-sm text-ink-soft">Tap Replace to upload a different photo</p>
-                      </div>
-                      <label className="shrink-0 text-sm font-semibold text-gold border border-gold/40 rounded-full px-3 py-1.5 cursor-pointer">
-                        Replace
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-                        />
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        Description
                       </label>
-                    </div>
-                  )}
-
-                  {!receiptPreview && !existingReceiptUrl && (
-                    <label
-                      onDragOver={(e) => {
-                        e.preventDefault()
-                        setDragActive(true)
-                      }}
-                      onDragLeave={() => setDragActive(false)}
-                      onDrop={handleDrop}
-                      className={`
-                        flex flex-col items-center justify-center gap-2
-                        border-2 border-dashed rounded-md
-                        py-10 px-4 cursor-pointer text-center transition-colors
-                        ${dragActive ? "border-gold bg-gold/5" : "border-hairline"}
-                      `}
-                    >
-                      <span className="text-2xl">📎</span>
-                      <span className="text-base text-ink">Tap to upload, or drag a photo here</span>
-                      <span className="text-sm text-ink-soft">Screenshot or photo of your deposit slip</span>
                       <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                        placeholder="Add a note"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
                       />
-                    </label>
-                  )}
-
-                  {receiptPreview && (
-                    <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
-                      <img
-                        src={receiptPreview}
-                        alt="New receipt preview"
-                        className="w-16 h-16 object-cover rounded-md border border-hairline"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base text-ink truncate">{receipt?.name}</p>
-                        <p className="text-sm text-ink-soft">
-                          {receipt ? `${(receipt.size / 1024).toFixed(0)} KB` : ""}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setReceiptFile(null)}
-                        className="text-sm text-rust border border-rust rounded-full px-2.5 py-1 shrink-0"
-                      >
-                        Remove
-                      </button>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                  </div>
+                </FieldGroup>
 
-            <div className="mt-6 pt-4 border-t border-hairline">
+                {needsReceipt && (
+                  <FieldGroup label="Proof">
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        Receipt
+                        <RequiredMark />
+                      </label>
+                      <ReceiptField
+                        receipt={receipt}
+                        receiptPreview={receiptPreview}
+                        existingReceiptUrl={existingReceiptUrl}
+                        existingReceiptSignedUrl={existingReceiptSignedUrl}
+                        dragActive={dragActive}
+                        setDragActive={setDragActive}
+                        onFileChange={setReceiptFile}
+                      />
+                    </div>
+                  </FieldGroup>
+                )}
+              </>
+            )}
+
+            {isLoanRelease && (
+              <>
+                <StepTrack step={formStep} labels={["Details", "Review"]} />
+
+                {formStep === 1 && (
+                  <FieldGroup>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Interest
+                          <RequiredMark />
+                        </label>
+                        <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
+                          <button
+                            type="button"
+                            onClick={() => setInterestType("rate")}
+                            className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                              interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                            }`}
+                          >
+                            Rate (%)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInterestType("amount")}
+                            className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                              interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                            }`}
+                          >
+                            Fixed amount (₱)
+                          </button>
+                        </div>
+                        {interestType === "rate" ? (
+                          <input
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 5"
+                            value={interestRate}
+                            onChange={(e) => setInterestRate(e.target.value)}
+                          />
+                        ) : (
+                          <input
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 5000"
+                            value={interestAmount}
+                            onChange={(e) => setInterestAmount(e.target.value)}
+                          />
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Term (months)
+                          <RequiredMark />
+                        </label>
+                        <input
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                          type="number"
+                          min="1"
+                          step="1"
+                          placeholder="e.g. 6"
+                          value={termMonths}
+                          onChange={(e) => setTermMonths(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Repayment mode
+                        </label>
+                        <select
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          value={repaymentFrequency}
+                          onChange={(e) => setRepaymentFrequency(e.target.value)}
+                        >
+                          <option value="monthly">Monthly installments</option>
+                          <option value="lump_sum">One lump sum at end of term</option>
+                        </select>
+                      </div>
+
+                      {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
+                        <div className="border border-hairline rounded-md p-4 bg-paper">
+                          <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
+                          <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
+                            <span className="text-ink-soft">Total repayable</span>
+                            <span>₱{fmt(previewTotalRepayable)}</span>
+                          </div>
+                          <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
+                            <span className="text-ink-soft">
+                              {repaymentFrequency === "monthly"
+                                ? `Per month × ${termMonths}`
+                                : `Due at ${termMonths} months`}
+                            </span>
+                            <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Description
+                        </label>
+                        <input
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          placeholder="Add a note"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </FieldGroup>
+                )}
+
+                {formStep === 2 && (
+                  <FieldGroup>
+                    <ReviewRow label="Type" value={TYPE_LABEL[classification] ?? ""} />
+                    <ReviewRow
+                      label="Amount to borrow"
+                      value={`₱${fmt(isValidPositiveNumber(amount) ? Number(amount) : 0)}`}
+                    />
+                    <ReviewRow
+                      label="Interest"
+                      value={
+                        interestType === "rate"
+                          ? `${interestRate || 0}%`
+                          : `₱${fmt(Number(interestAmount) || 0)} fixed`
+                      }
+                    />
+                    <ReviewRow label="Term" value={`${termMonths || 0} months`} />
+                    <ReviewRow
+                      label="Repayment"
+                      value={repaymentFrequency === "monthly" ? "Monthly installments" : "Lump sum at end of term"}
+                    />
+                    {previewTotalRepayable > 0 && (
+                      <ReviewRow label="Est. total repayable" value={`₱${fmt(previewTotalRepayable)}`} />
+                    )}
+                    {description && <ReviewRow label="Description" value={description} />}
+                  </FieldGroup>
+                )}
+              </>
+            )}
+
+            <FieldGroup>
               <p className="text-xs text-ink-soft mb-3">
                 {isLoanRelease
                   ? "Changed your mind? This cancels the loan request and removes its pending disbursement entirely -- it can't be undone from the app."
@@ -854,7 +838,7 @@ export default function EditTransactionPage() {
               >
                 {cancelling ? "Cancelling…" : "Cancel this entry"}
               </button>
-            </div>
+            </FieldGroup>
           </div>
         </div>
       </main>
@@ -863,31 +847,28 @@ export default function EditTransactionPage() {
         className="fixed bottom-0 left-0 right-0 z-30 bg-paper border-t border-hairline"
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
-        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-4 flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-xs uppercase tracking-wide text-ink-soft font-mono">Amount</div>
-            <div className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink truncate">
-              ₱{isValidPositiveNumber(amount) ? fmt(Number(amount)) : "0.00"}
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {chips.map((chip, i) => (
-                <Chip key={i} done={chip.done}>{chip.text}</Chip>
-              ))}
-            </div>
-          </div>
-          <button
-            className="shrink-0 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? "Saving…" : "Save Changes"}
-          </button>
-        </div>
         {message && (
-          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-2">
+          <div className="max-w-lg mx-auto px-4 sm:px-5 pt-3">
             <p className="text-sm text-rust">{message}</p>
           </div>
         )}
+        <div className="max-w-lg mx-auto px-4 sm:px-5 pt-3 flex items-center gap-3">
+          {isLoanRelease && formStep === 2 && (
+            <button
+              className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold"
+              onClick={() => setFormStep(1)}
+            >
+              Back
+            </button>
+          )}
+          <button
+            className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+            onClick={isLoanRelease && formStep === 1 ? handleContinueToReview : handleSave}
+            disabled={saving}
+          >
+            {saving ? "Saving…" : isLoanRelease && formStep === 1 ? "Continue" : "Save Changes"}
+          </button>
+        </div>
       </div>
     </>
   )

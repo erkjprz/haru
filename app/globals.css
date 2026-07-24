@@ -67,9 +67,12 @@ body {
    text sizes (text-xs/text-sm) for visual density, so force the
    effective size back up to 16px on focus, on touch devices only --
    desktop never zooms on focus, so this shouldn't change how the app
-   looks/behaves there. */
+   looks/behaves there. Excludes .text-size-intentional -- e.g. the
+   transaction forms' big amount hero is already well over 16px and
+   this rule would otherwise shrink it back down on focus instead of
+   only ever sizing *up*. */
 @media (hover: none) and (pointer: coarse) {
-  input:focus,
+  input:focus:not(.text-size-intentional),
   select:focus,
   textarea:focus {
     font-size: 16px !important;
