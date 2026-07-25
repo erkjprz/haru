@@ -151,7 +151,7 @@ export function SupportPanel() {
       <p className="text-[13px] text-ink-soft mb-4">
         Find any transaction, regardless of who it belongs to or its status, to fix a mistake -- wrong amount,
         bank, date, receipt, or status. This only corrects what&apos;s on record; it doesn&apos;t run approval
-        side effects like activating a loan, so use the Txns tab for routine approvals.
+        side effects like activating a loan, so use the Approvals tab for routine approvals.
       </p>
 
       {loading && <p className="text-sm text-ink-soft">Loading…</p>}
