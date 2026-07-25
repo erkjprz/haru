@@ -49,7 +49,8 @@ const memberSections: FaqSection[] = [
         a: (
           <p>
             Tap <strong>Sign Up</strong>, choose <strong>Member</strong>, and fill in your name, email, and
-            password. Your account starts as <strong>Pending</strong> — an admin needs to approve it before
+            password. Your account starts as <strong>Pending</strong>{" "}
+            — an admin needs to approve it before
             you can sign in properly, so you&apos;ll land on a waiting screen until then.
           </p>
         )
@@ -88,8 +89,8 @@ const memberSections: FaqSection[] = [
         a: (
           <p>
             <strong>You</strong> shows your own contributions, withdrawals, and gains (bank interest,
-            investment performance, and your share of loan interest). <strong>Fund</strong> shows the whole
-            group&apos;s totals — total cash, the split between banks, and open loans.
+            investment performance, and your share of loan interest). <strong>Fund</strong>{" "}
+            shows the whole group&apos;s totals — total cash, the split between banks, and open loans.
           </p>
         )
       },
@@ -100,8 +101,8 @@ const memberSections: FaqSection[] = [
             A personal ledger of your capital and performance — an all-time total plus a year-by-year table
             of your contributions, withdrawals, bank interest, and loan and investment gain share. Open it
             from the <strong>Capital/Performance</strong> card on the You tab, or{" "}
-            <strong>My Breakdown</strong> in the menu (☰). Tapping a member&apos;s card on Fund Breakdown
-            opens the same page for them.
+            <strong>My Breakdown</strong>{" "}
+            in the menu (☰). Tapping a member&apos;s card on Fund Breakdown opens the same page for them.
           </p>
         )
       },
@@ -206,6 +207,17 @@ const memberSections: FaqSection[] = [
         )
       },
       {
+        q: "Can I save a default amount so I don't have to type it every time?",
+        a: (
+          <p>
+            Yes — if you contribute or repay the same amount each time, check{" "}
+            <strong>Save as my default amount</strong> the first time you enter it. After that,
+            Contribution and Loan Payment both open with that amount already filled in. Change or clear
+            it anytime from the menu (☰) → <strong>Preferences</strong>.
+          </p>
+        )
+      },
+      {
         q: "How do I request a new loan?",
         a: (
           <p>
@@ -230,8 +242,9 @@ const memberSections: FaqSection[] = [
           <p>
             Yes, as long as it&apos;s still <strong>Pending</strong>. On the Transactions page, your own
             pending contributions, withdrawals, and loan payments show a small{" "}
-            <strong>✎ Edit</strong> button — tap it to change the amount, bank, receipt, or description.
-            Once an admin approves an entry, it can&apos;t be edited anymore.
+            <strong>✎ Edit</strong>{" "}
+            button — tap it to change the amount, bank, receipt, or description. Once an admin approves
+            an entry, it can&apos;t be edited anymore.
           </p>
         )
       },
@@ -239,9 +252,9 @@ const memberSections: FaqSection[] = [
         q: "Can I take back something I submitted?",
         a: (
           <p>
-            Yes — open it with <strong>✎ Edit</strong> and tap <strong>Cancel this entry</strong> near the
-            bottom. It&apos;s removed from your list right away. This can&apos;t be undone from the app, so
-            make sure before you tap it.
+            Yes — open it with <strong>✎ Edit</strong> and tap <strong>Cancel this entry</strong>{" "}
+            near the bottom. It&apos;s removed from your list right away. This can&apos;t be undone from
+            the app, so make sure before you tap it.
           </p>
         )
       }
@@ -254,10 +267,11 @@ const memberSections: FaqSection[] = [
         q: "What do these statuses mean?",
         a: (
           <p>
-            <strong>Pending</strong> — waiting on an admin to review it; it doesn&apos;t count toward your
-            balance yet. <strong>Approved</strong> — reviewed and counted. <strong>Rejected</strong> — an
-            admin declined it, usually because something didn&apos;t match (wrong amount, no receipt, etc.).
-            You can search and filter your own entries by status on the Transactions page.
+            <strong>Pending</strong>{" "}
+            — waiting on an admin to review it; it doesn&apos;t count toward your balance yet.{" "}
+            <strong>Approved</strong> — reviewed and counted. <strong>Rejected</strong>{" "}
+            — an admin declined it, usually because something didn&apos;t match (wrong amount, no
+            receipt, etc.). You can search and filter your own entries by status on the Transactions page.
           </p>
         )
       }
@@ -439,10 +453,12 @@ const adminSections: FaqSection[] = [
         q: "Where do I approve things?",
         a: (
           <p>
-            Open the menu (☰) → <strong>Admin</strong>. It&apos;s organized into four tabs —{" "}
-            <strong>Members</strong>, <strong>Txns</strong>, <strong>Borrowers</strong>, and{" "}
-            <strong>Distrib.</strong> — each one only showing what actually needs a decision. Tap a row to
-            open it and see the Approve/Reject buttons.
+            Open the menu (☰) → <strong>Admin</strong>. The <strong>Approvals</strong> tab is organized
+            into four sub-tabs — <strong>Members</strong>, <strong>Txns</strong>,{" "}
+            <strong>Borrowers</strong>, and <strong>Distrib.</strong> — each one only showing what
+            actually needs a decision. Tap a row to open it and see the Approve/Reject buttons.{" "}
+            <strong>Support</strong>, next to Approvals, is a separate tool for fixing a mistake on
+            something already recorded, not for approving anything new.
           </p>
         )
       },
@@ -482,8 +498,9 @@ const adminSections: FaqSection[] = [
         a: (
           <p>
             Bank interest that&apos;s been approved but not yet split across members. Tap{" "}
-            <strong>Distribute</strong> on a bank/year to divide it proportionally by each member&apos;s
-            contribution balance at that time.
+            <strong>Distribute</strong>{" "}
+            on a bank/year to divide it proportionally by each member&apos;s contribution balance at
+            that time.
           </p>
         )
       },
@@ -491,9 +508,23 @@ const adminSections: FaqSection[] = [
         q: "How do I back up the full transaction ledger?",
         a: (
           <p>
-            Tap <strong>Export transactions (CSV)</strong> near the top of the Admin panel. It downloads
-            every transaction, of every status, as a spreadsheet with member, bank, loan, investment, and
-            submitter names already resolved.
+            Tap <strong>Export</strong> near the top of the Admin panel. It downloads every transaction,
+            of every status, as a spreadsheet with member, bank, loan, investment, and submitter names
+            already resolved.
+          </p>
+        )
+      },
+      {
+        q: "What's the Support tab for?",
+        a: (
+          <p>
+            Finding and fixing a mistake on a transaction that&apos;s already on record — wrong amount,
+            bank, date, receipt, or status — no matter who it belongs to or whether it&apos;s already
+            approved. Search for it, tap <strong>Fix →</strong>, and correct it. It doesn&apos;t run
+            approval side effects like activating a loan, so it&apos;s for corrections, not routine
+            approvals — those still go through <strong>Approvals</strong>. Entries generated
+            automatically from a loan, investment, or bank interest distribution (&quot;Investment
+            Allocation&quot;) can&apos;t be edited here — fix the distribution itself instead.
           </p>
         )
       }
@@ -506,9 +537,10 @@ const adminSections: FaqSection[] = [
         q: "How do I add a member manually, edit one, or deactivate one?",
         a: (
           <p>
-            Admin → <strong>Members</strong> quick link (or the &quot;Manage all members →&quot; link at the
-            bottom of the Members tab) takes you to the full roster, where you can add a member directly,
-            edit their name/email/role, and deactivate or reactivate an account.
+            Admin → <strong>Members</strong>{" "}
+            quick link (or the &quot;Manage all members →&quot; link at the bottom of the Members tab)
+            takes you to the full roster, where you can add a member directly, edit their
+            name/email/role, and deactivate or reactivate an account.
           </p>
         )
       },
@@ -537,15 +569,28 @@ const adminSections: FaqSection[] = [
         )
       },
       {
+        q: "Can I set a default contribution or repayment amount for a member?",
+        a: (
+          <p>
+            Yes — the first time you record a Contribution or Loan Payment{" "}
+            <strong>on behalf of</strong> a member, the same <strong>Save as default amount</strong>{" "}
+            checkbox members see saves it to their account instead of yours, so it&apos;s pre-filled the
+            next time either of you enters one.
+          </p>
+        )
+      },
+      {
         q: "What are the admin-only entry types for?",
         a: (
           <p>
             <strong>Expense</strong>, <strong>Bank Interest</strong>, <strong>Bank Transfer</strong>,{" "}
-            <strong>Investment</strong>, and <strong>Investment Return</strong> — fund-level entries that
-            aren&apos;t tied to a single member&apos;s contribution. These post as approved right away.{" "}
+            <strong>Investment</strong>, and <strong>Investment Return</strong>{" "}
+            — fund-level entries that aren&apos;t tied to a single member&apos;s contribution. These post
+            as approved right away.{" "}
             <strong>Investment</strong> and <strong>Investment Return</strong> only record cash moving in or
             out; once a gain or loss is actually realized, split it to members with{" "}
-            <strong>Distribute Gain/Loss</strong> on that investment&apos;s own page.
+            <strong>Distribute Gain/Loss</strong>{" "}
+            on that investment&apos;s own page.
           </p>
         )
       },
@@ -553,11 +598,15 @@ const adminSections: FaqSection[] = [
         q: "Can I edit something after I've recorded it?",
         a: (
           <p>
-            Expense, Bank Interest, and Bank Transfer entries you record yourself can be edited any time —
-            they show a <strong>✎ Edit</strong> button on Transactions, since they&apos;re never in a
-            member&apos;s pending queue to begin with. A pending Loan Release can also be edited or
-            cancelled (cancelling deletes the loan request entirely) right up until you activate it — once a
-            loan is active, changes move to that loan&apos;s own <strong>Manage loan</strong> panel instead.
+            Expense, Bank Interest, and Bank Transfer entries show a <strong>✎ Edit</strong>{" "}
+            button on Transactions any time — but only for whichever admin actually recorded them, not
+            any admin, since they&apos;re never in a member&apos;s pending queue to begin with. Need to
+            fix one someone else recorded (or an older entry from before this was tracked)? Use{" "}
+            <strong>Support</strong>{" "}
+            instead. A pending Loan Release can also be edited or cancelled
+            (cancelling deletes the loan request entirely) right up until you activate it — once a loan is
+            active, changes move to that loan&apos;s own <strong>Manage loan</strong>{" "}
+            panel instead.
           </p>
         )
       }
@@ -571,8 +620,8 @@ const adminSections: FaqSection[] = [
         a: (
           <p>
             Open the loan itself (Loans → tap it) — as an admin you&apos;ll see a{" "}
-            <strong>Manage loan</strong> panel there with Edit, Close &amp; Distribute, and (for closed
-            loans) Reopen.
+            <strong>Manage loan</strong>{" "}
+            panel there with Edit, Close &amp; Distribute, and (for closed loans) Reopen.
           </p>
         )
       },
@@ -603,8 +652,8 @@ const adminSections: FaqSection[] = [
         q: "How do I edit investment shares or bank accounts?",
         a: (
           <p>
-            On the Investments or Banks page, tap <strong>Manage</strong> — admins get an edit mode there
-            that members don&apos;t see.
+            On the Investments or Banks page, tap <strong>Manage</strong>{" "}
+            — admins get an edit mode there that members don&apos;t see.
           </p>
         )
       }
