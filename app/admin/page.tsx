@@ -57,6 +57,10 @@ export default function AdminPage() {
   const checkingAccess = authLoading || dataLoading
 
   const [activeTab, setActiveTab] = useState<Tab>("txns")
+  // Remembers which approvals sub-tab was open before switching to Support,
+  // so coming back to "Approvals" restores it instead of always resetting
+  // to Txns.
+  const [lastApprovalsTab, setLastApprovalsTab] = useState<Exclude<Tab, "support">>("txns")
 
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>([])
@@ -391,17 +395,17 @@ export default function AdminPage() {
     )
   }
 
-  // Support isn't an approval queue like the other four, so it's kept out
-  // of this list entirely -- it gets its own entry point in the header
-  // instead of a fifth peer tab, which crowded the segmented control and
-  // read as "another thing waiting on you" when it's actually the opposite
-  // (a tool you reach for, not a queue that reaches for you).
-  const tabs: { id: Tab; label: string; count: number }[] = [
+  // Support isn't an approval queue like the other four -- it's a tool you
+  // reach for, not a queue that reaches for you -- so it never carries a
+  // count. It still gets equal billing as a top-level tab (see topTabs
+  // below) rather than a header button, so it isn't easy to miss.
+  const tabs: { id: Exclude<Tab, "support">; label: string; count: number }[] = [
     { id: "txns", label: "Txns", count: pendingTransactions.length },
     { id: "distrib", label: "Distrib.", count: pendingGroups.length },
     { id: "members", label: "Members", count: pendingMembers.length },
     { id: "borrowers", label: "Borrowers", count: pendingBorrowers.length }
   ]
+  const totalApprovalsCount = tabs.reduce((sum, t) => sum + t.count, 0)
 
   return (
     <>
@@ -420,33 +424,21 @@ export default function AdminPage() {
               </p>
             </div>
 
-            {/* Page-level actions, not scoped to any tab -- Export always
-                covers the full transaction history regardless of what's
-                active below, and Support switches into a separate
-                search-and-fix mode rather than living as a fifth approval
-                tab. Both kept up here in the header, away from the tab
-                content, so neither reads as "do this within the current
-                tab". */}
-            <div className="shrink-0 flex flex-col items-end gap-2">
-              <button
-                onClick={exportTransactionsCsv}
-                disabled={exporting}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft border border-hairline rounded-md px-3 py-2 hover:bg-paper-2 hover:text-ink transition-colors disabled:opacity-60"
-                title="Export full transaction history (every status, not just what's shown below) as a CSV backup"
-              >
-                {exporting ? "Exporting..." : "⬇ Export"}
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab("support")
-                  window.scrollTo(0, 0)
-                }}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft border border-hairline rounded-md px-3 py-2 hover:bg-paper-2 hover:text-ink transition-colors"
-                title="Search any transaction and fix a mistake -- wrong amount, bank, date, receipt, or status"
-              >
-                🔧 Support
-              </button>
-            </div>
+            {/* Page-level action, not scoped to any tab -- always exports
+                the full transaction history regardless of what's active
+                below. Kept up here in the header, away from the tab
+                content, so it doesn't read as "export this tab". */}
+            <button
+              onClick={exportTransactionsCsv}
+              disabled={exporting}
+              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft border border-hairline rounded-md px-3 py-2 hover:bg-paper-2 hover:text-ink transition-colors disabled:opacity-60"
+              title="Export full transaction history (every status, not just what's shown below) as a CSV backup"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                <path d="M12 3v13M7 11l5 5 5-5M5 20h14" />
+              </svg>
+              {exporting ? "Exporting..." : "Export"}
+            </button>
           </div>
           {exportError && (
             <p className="mt-1.5 text-xs text-rust text-right">Couldn&apos;t export: {exportError}</p>
@@ -456,16 +448,54 @@ export default function AdminPage() {
             <p className="mt-4 text-sm text-rust">Couldn&apos;t load some data: {loadError}</p>
           )}
 
-          {/* Segmented control -- hidden while Support is active, since
-              that's a separate mode entered/exited via its own link below,
-              not a fifth peer tab here. */}
+          {/* Top-level section nav -- plain underline tabs, matching
+              Breakdown's page-level pattern, distinct from the pill toggle
+              nested inside Approvals below. Support sits here as an equal
+              peer tab instead of a header button. */}
+          <div className="mt-6 flex border-b border-hairline">
+            <button
+              onClick={() => {
+                setActiveTab(lastApprovalsTab)
+                window.scrollTo(0, 0)
+              }}
+              className={`flex-1 text-[14px] font-semibold pt-1 pb-2.5 border-b-2 -mb-px transition-colors ${
+                activeTab !== "support" ? "text-ink border-gold" : "text-ink-soft border-transparent"
+              }`}
+            >
+              Approvals
+              {totalApprovalsCount > 0 && (
+                <span
+                  className={`ml-1.5 text-[10px] font-mono font-bold rounded-full px-1.5 py-0.5 ${
+                    activeTab !== "support" ? "text-gold bg-gold/15" : "text-ink-soft bg-ink-soft/10"
+                  }`}
+                >
+                  {totalApprovalsCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("support")
+                window.scrollTo(0, 0)
+              }}
+              className={`flex-1 text-[14px] font-semibold pt-1 pb-2.5 border-b-2 -mb-px transition-colors ${
+                activeTab === "support" ? "text-ink border-gold" : "text-ink-soft border-transparent"
+              }`}
+            >
+              🔧 Support
+            </button>
+          </div>
+
+          {/* Segmented control -- hidden while Support is active, nested
+              one level inside the "Approvals" top tab. */}
           {activeTab !== "support" && (
-          <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
+          <div className="mt-4 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => {
                   setActiveTab(t.id)
+                  setLastApprovalsTab(t.id)
                   window.scrollTo(0, 0)
                 }}
                 className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
@@ -836,20 +866,7 @@ export default function AdminPage() {
           )}
 
           {/* ---- Support ---- */}
-          {activeTab === "support" && (
-            <>
-              <button
-                onClick={() => {
-                  setActiveTab("txns")
-                  window.scrollTo(0, 0)
-                }}
-                className="mt-6 text-[13px] text-ink-soft hover:text-ink transition-colors"
-              >
-                ← Approvals
-              </button>
-              <SupportPanel />
-            </>
-          )}
+          {activeTab === "support" && <SupportPanel />}
 
         </div>
       </main>
