@@ -51,7 +51,7 @@
   --color-hairline: var(--hairline);
 
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-plex-mono);
+  --font-mono: var(--font-geist-mono);
   --font-display: var(--font-fraunces);
 }
 
