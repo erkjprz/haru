@@ -41,11 +41,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === "TOKEN_REFRESHED" && user.email === lastEmail) return
       lastEmail = user.email ?? null
 
-      const { data: member } = await supabase
+      const { data: member, error } = await supabase
         .from("members")
         .select("member_id, name, status, role")
         .eq("email", user.email)
-        .single()
+        .maybeSingle()
+
+      if (error) {
+        // A real query failure (network, RLS, etc.), not "no matching row"
+        // -- maybeSingle() represents that as data: null with no error.
+        // /login, /waiting, and the root redirect all treat member: null as
+        // "this account is genuinely orphaned" and show a terminal message,
+        // so a transient failure here shouldn't collapse into that -- keep
+        // whatever member state was already known good instead.
+        setState((prev) => ({ loading: false, user, member: prev.member }))
+        return
+      }
 
       setState({ loading: false, user, member: member ?? null })
     })
