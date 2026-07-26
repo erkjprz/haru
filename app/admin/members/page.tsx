@@ -147,19 +147,33 @@ export default function AdminMembersPage() {
   }
 
   async function deactivateMember(id: string) {
-    await supabase
+    setMessage("")
+
+    const { error } = await supabase
       .from("members")
       .update({ status: "inactive" })
       .eq("member_id", id)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
 
     loadMembers()
   }
 
   async function reactivateMember(id: string) {
-    await supabase
+    setMessage("")
+
+    const { error } = await supabase
       .from("members")
       .update({ status: "approved" })
       .eq("member_id", id)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
 
     loadMembers()
   }
