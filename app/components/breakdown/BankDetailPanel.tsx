@@ -17,6 +17,12 @@ import {
 } from "@/lib/bankInterest"
 
 type YearRow = { year: string; amount: number; memberCount: number }
+type InterestRow = {
+  classification: string
+  amount: number
+  bank: string | null
+  bank_accounts: { bank_name: string }[] | null
+}
 
 export function BankDetailPanel({
   bank,
@@ -63,11 +69,16 @@ export function BankDetailPanel({
   async function load() {
     const balancePromise = supabase.from("v_bank_balances").select("*").eq("bank", bank).maybeSingle()
 
+    // bank falls back to the linked bank_accounts.bank_name -- transactions
+    // recorded through the current form only set bank_account_id, leaving
+    // the legacy bank text column null, so this can't filter with a plain
+    // .eq("bank", bank) or it would silently exclude those rows entirely.
+    // Mirrors the same fallback BanksPanel and getPendingBankInterestGroups
+    // already use.
     const interestPromise = supabase
       .from("transactions")
-      .select("classification, amount")
+      .select("classification, amount, bank, bank_accounts!transactions_bank_account_id_fkey ( bank_name )")
       .eq("status", "approved")
-      .eq("bank", bank)
       .in("classification", ["Bank Interest", "Tax"])
 
     // Every allocation row for this bank, across all years -- grouped
@@ -94,7 +105,9 @@ export function BankDetailPanel({
     if (!interestResult.error) {
       let earned = 0
       let taxTotal = 0
-      for (const row of interestResult.data ?? []) {
+      for (const row of (interestResult.data ?? []) as InterestRow[]) {
+        const bankName = row.bank || row.bank_accounts?.[0]?.bank_name
+        if (bankName !== bank) continue
         if (row.classification === "Bank Interest") earned += Number(row.amount)
         if (row.classification === "Tax") taxTotal += Number(row.amount)
       }

@@ -286,8 +286,13 @@ function SupportEditForm({
     // Withdrawal and Loan Release move real money out, and their receipt is
     // proof of the actual transfer amount -- changing the amount without
     // attaching a new receipt would leave one on file that no longer
-    // matches what's recorded.
-    const isMoneyOut = t.classification === "Member Withdrawal" || t.classification === "Loan Release"
+    // matches what's recorded. Only applies once the row is actually
+    // approved -- a still-pending Withdrawal or still-requested Loan
+    // Release never had a receipt in the first place (nothing's moved yet),
+    // so demanding one to fix a typo before that point would be asking for
+    // proof of a transfer that hasn't happened.
+    const isMoneyOut =
+      t.status === "approved" && (t.classification === "Member Withdrawal" || t.classification === "Loan Release")
     if (isMoneyOut && amountNum !== Number(t.amount) && !receipt) {
       setMessage("Amount changed for a withdrawal/loan disbursement -- attach an updated receipt before saving.")
       return

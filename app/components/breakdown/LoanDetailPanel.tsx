@@ -296,6 +296,19 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
 
   async function saveLoanEdit() {
     if (!adminLoan) return
+
+    // Unlike a still-"requested" loan, an active one already has real
+    // repayments tracked against its current terms -- changing interest or
+    // term here silently changes what "outstanding"/"fully repaid" means
+    // going forward, including what the borrower sees as still owed on
+    // their next payment. Confirm rather than let that happen silently,
+    // matching the same treatment Close Early/Reopen already get.
+    if (adminLoan.status === "active") {
+      const confirmMsg =
+        "This loan is already active -- changing its interest or term now changes what counts as outstanding/fully repaid going forward, including what the borrower is shown as still owing on their next payment. Continue?"
+      if (!confirm(confirmMsg)) return
+    }
+
     setSavingEdit(true)
     setManageError("")
 

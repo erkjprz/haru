@@ -385,7 +385,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         {investment.investment}
       </h1>
       <p className="text-[13px] text-ink-soft mb-6">
-        {investment.affects_cash ? "Funded through the tracked bank accounts" : "Funded outside the tracked bank trail"}
+        {investment.affects_cash ? "Funded through the tracked bank accounts" : "Funded outside the tracked cash trail"}
       </p>
 
       {/* Gain/loss overview */}
