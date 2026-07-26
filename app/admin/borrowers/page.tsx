@@ -6,7 +6,7 @@ import Navbar from "@/app/components/Navbar"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
-import { approveBorrowerMember } from "@/lib/approveBorrower"
+import { approveBorrowerMember, linkBorrowerRecord } from "@/lib/approveBorrower"
 
 type BorrowerMember = {
   member_id: string
@@ -91,13 +91,12 @@ export default function AdminBorrowersPage() {
     setBusyId(memberId)
     setMessage("")
 
-    const { error } = await supabase
-      .from("borrowers")
-      .update({ member_id: memberId })
-      .eq("borrower_id", chosenBorrowerId)
-
-    if (error) {
-      setMessage(error.message)
+    try {
+      await linkBorrowerRecord(memberId, chosenBorrowerId)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Something went wrong.")
+      setBusyId(null)
+      return
     }
 
     setBusyId(null)
