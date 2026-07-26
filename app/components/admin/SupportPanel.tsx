@@ -372,17 +372,22 @@ function SupportEditForm({
       )
       .single()
 
-    if (!error && isUnapprovedLoanRelease) {
-      await supabase.from("loans").delete().eq("loan_id", t.loan_id)
-    }
-
-    setSaving(false)
-
     if (error) {
+      setSaving(false)
       setMessage(error.message)
       return
     }
 
+    if (isUnapprovedLoanRelease) {
+      const { error: loanError } = await supabase.from("loans").delete().eq("loan_id", t.loan_id)
+      if (loanError) {
+        setSaving(false)
+        setMessage(loanError.message)
+        return
+      }
+    }
+
+    setSaving(false)
     onSaved(data)
   }
 
