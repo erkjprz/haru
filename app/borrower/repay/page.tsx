@@ -7,6 +7,7 @@ import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
+import { totalRepayable } from "@/lib/loanMath"
 
 function isValidPositiveNumber(value: string): boolean {
   if (!value.trim()) return false
@@ -22,6 +23,7 @@ export default function BorrowerRepayPage() {
 
   const [banks, setBanks] = useState<any[]>([])
   const [myLoans, setMyLoans] = useState<any[]>([])
+  const [loanRepaidTotals, setLoanRepaidTotals] = useState<Record<string, number>>({})
   const [selectedLoanId, setSelectedLoanId] = useState("")
   const [bankId, setBankId] = useState("")
   const [amount, setAmount] = useState("")
@@ -65,12 +67,29 @@ export default function BorrowerRepayPage() {
 
       const { data: loans } = await supabase
         .from("loans")
-        .select("loan_id, name, principal, status, start_date")
+        .select("loan_id, name, principal, interest_type, interest_rate, interest_amount, status, start_date")
         .or(filter)
         .eq("status", "active")
         .order("start_date", { ascending: false })
 
       setMyLoans(loans ?? [])
+
+      const loanIds = (loans ?? []).map((l) => l.loan_id)
+      if (loanIds.length > 0) {
+        const { data: repayments } = await supabase
+          .from("transactions")
+          .select("loan_id, amount")
+          .in("loan_id", loanIds)
+          .eq("classification", "Loan Repayment")
+          .in("status", ["pending", "approved"])
+
+        const totals: Record<string, number> = {}
+        ;(repayments ?? []).forEach((r) => {
+          totals[r.loan_id] = (totals[r.loan_id] || 0) + Number(r.amount)
+        })
+        setLoanRepaidTotals(totals)
+      }
+
       setDataLoading(false)
     }
 
@@ -221,6 +240,23 @@ export default function BorrowerRepayPage() {
                     </option>
                   ))}
                 </select>
+                {selectedLoanId &&
+                  (() => {
+                    const loan = myLoans.find((l) => l.loan_id === selectedLoanId)
+                    if (!loan) return null
+                    const remaining =
+                      totalRepayable(
+                        Number(loan.principal),
+                        loan.interest_type,
+                        Number(loan.interest_rate || 0),
+                        Number(loan.interest_amount || 0)
+                      ) - (loanRepaidTotals[loan.loan_id] || 0)
+                    return (
+                      <p className="mt-2 text-sm text-ink-soft">
+                        ₱{fmt(Math.max(0, remaining))} left to pay
+                      </p>
+                    )
+                  })()}
               </div>
 
               <div>

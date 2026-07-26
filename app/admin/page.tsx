@@ -10,6 +10,8 @@ import { SkeletonCardList } from "@/app/components/Skeleton"
 import { getPendingBankInterestGroups, distributeBankInterestGroup, type PendingBankInterestGroup } from "@/lib/bankInterest"
 import { SupportPanel } from "@/app/components/admin/SupportPanel"
 import { FlowBadge } from "@/app/components/TransactionFormUI"
+import { snapshotLoanHold } from "@/lib/snapshotHold"
+import { dateOnly } from "@/lib/currentValue"
 
 // Same in/out vocabulary as the transaction edit page's FLOW map -- money
 // coming in (Contribution, Loan Repayment) has nothing left for an admin
@@ -234,11 +236,13 @@ export default function AdminPage() {
         .update({ status: "approved", bank_account_id: bankAccountId })
         .eq("transaction_id", transactionId)
     } else if (txn.classification === "Loan Release") {
-      // Approving a Loan Release now does the same two updates
-      // loans/[id]'s "Approve & Activate" does -- activates the loan AND
-      // records the disbursing bank on the release transaction -- instead
-      // of only marking the transaction approved and leaving the loan
-      // stuck at "requested" (the previous behavior here).
+      // Approving a Loan Release now does the same three things
+      // loans/[id]'s "Approve & Activate" does -- activates the loan,
+      // records the disbursing bank on the release transaction, and
+      // freezes each eligible member's pool share for this loan's hold.
+      // The hold snapshot was missing here for a while, which is why a
+      // loan approved from this screen wouldn't show up under any
+      // member's "money on hold" until someone noticed.
       const bankAccountId = loanReleaseBankSelections[transactionId]
       if (!bankAccountId || !txn.loan_id) return
       await supabase.from("loans").update({ status: "active" }).eq("loan_id", txn.loan_id)
@@ -246,6 +250,7 @@ export default function AdminPage() {
         .from("transactions")
         .update({ status: "approved", bank_account_id: bankAccountId })
         .eq("transaction_id", transactionId)
+      await snapshotLoanHold(txn.loan_id, txn.member_id, dateOnly(new Date()))
     } else {
       await supabase.from("transactions").update({ status: "approved" }).eq("transaction_id", transactionId)
     }
