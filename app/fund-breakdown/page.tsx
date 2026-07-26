@@ -1627,14 +1627,32 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       return
     }
 
+    // v_cash_ledger/v_bank_balances group by this resolved (bank_name,
+    // account_name) pair, not by id -- two accounts that resolve to the
+    // same pair would silently merge their balances together with no
+    // error. Checked here for a friendly message; the DB's own unique
+    // index is the real backstop.
+    const trimmedBankName = bankName.trim()
+    const trimmedAccountName = accountName.trim() || null
+    const isDuplicate = bankAccounts.some(
+      (acct) =>
+        acct.id !== editingId &&
+        acct.bank_name === trimmedBankName &&
+        (acct.account_name?.trim() || null) === trimmedAccountName
+    )
+    if (isDuplicate) {
+      setFormMessage("An account with this bank name and account name already exists.")
+      return
+    }
+
     setSaving(true)
 
     if (editingId) {
       const { error } = await supabase
         .from("bank_accounts")
         .update({
-          bank_name: bankName,
-          account_name: accountName
+          bank_name: trimmedBankName,
+          account_name: trimmedAccountName
         })
         .eq("id", editingId)
 
@@ -1645,8 +1663,8 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       }
     } else {
       const { error } = await supabase.from("bank_accounts").insert({
-        bank_name: bankName,
-        account_name: accountName
+        bank_name: trimmedBankName,
+        account_name: trimmedAccountName
       })
 
       setSaving(false)
