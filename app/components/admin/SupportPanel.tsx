@@ -298,6 +298,16 @@ function SupportEditForm({
       return
     }
 
+    // Withdrawal and Loan Release move real money out, and their receipt is
+    // proof of the actual transfer amount -- changing the amount without
+    // attaching a new receipt would leave one on file that no longer
+    // matches what's recorded.
+    const isMoneyOut = t.classification === "Member Withdrawal" || t.classification === "Loan Release"
+    if (isMoneyOut && amountNum !== Number(t.amount) && !receipt) {
+      setMessage("Amount changed for a withdrawal/loan disbursement -- attach an updated receipt before saving.")
+      return
+    }
+
     setSaving(true)
     setMessage("")
 

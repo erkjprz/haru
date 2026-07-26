@@ -139,10 +139,17 @@ export default function BorrowerPage() {
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  const statusMeta: Record<Loan["status"], { label: string; dot: string; text: string }> = {
-    closed: { label: "Repaid", dot: "bg-sage", text: "text-sage" },
-    active: { label: "Active", dot: "bg-gold", text: "text-gold" },
-    requested: { label: "Requested", dot: "bg-ink-soft", text: "text-ink-soft" }
+  // A closed loan isn't always a full repayment -- an admin can close one
+  // early via "Close Early (Write Off)" with less than totalRepayable
+  // actually repaid. Label off the real repaid amount instead of assuming
+  // every closed loan was paid off in full (same rule as LoanDetailPanel
+  // and the Breakdown > Loans list).
+  function loanStatusMeta(loan: Loan): { label: string; dot: string; text: string } {
+    if (loan.status === "active") return { label: "Active", dot: "bg-gold", text: "text-gold" }
+    if (loan.status === "requested") return { label: "Requested", dot: "bg-ink-soft", text: "text-ink-soft" }
+    return loan.repaid >= loan.totalRepayable
+      ? { label: "Repaid", dot: "bg-sage", text: "text-sage" }
+      : { label: "Closed early", dot: "bg-rust", text: "text-rust" }
   }
 
   if (checkingAccess) {
@@ -200,9 +207,10 @@ export default function BorrowerPage() {
 
           <div className="flex flex-col gap-3">
             {loans.map((loan) => {
-              const meta = statusMeta[loan.status]
+              const meta = loanStatusMeta(loan)
+              const fullyRepaid = loan.repaid >= loan.totalRepayable
               const repaidPct = loan.totalRepayable > 0
-                ? Math.min(100, ((loan.totalRepayable - loan.outstanding) / loan.totalRepayable) * 100)
+                ? Math.min(100, (loan.repaid / loan.totalRepayable) * 100)
                 : 0
 
               return (
@@ -244,7 +252,9 @@ export default function BorrowerPage() {
 
                   <div className="h-1.5 rounded-full bg-hairline overflow-hidden mt-2.5">
                     <div
-                      className={`h-full ${loan.status === "closed" ? "bg-sage" : "bg-gold"}`}
+                      className={`h-full ${
+                        loan.status === "closed" ? (fullyRepaid ? "bg-sage" : "bg-rust") : "bg-gold"
+                      }`}
                       style={{ width: `${repaidPct}%` }}
                     />
                   </div>
