@@ -796,6 +796,34 @@ export default function AdminPage() {
                   </div>
                 )}
 
+                {/* Sticky and placed right after the bulk list, not after
+                    the whole page, so it's still visible while scrolling
+                    through a long review section below -- a sticky element
+                    only starts pinning once you've scrolled past where it
+                    would normally sit, so putting it after everything else
+                    meant it stayed invisible until you'd scrolled past all
+                    the review cards too. */}
+                {selectedBulkIds.size > 0 && (
+                  <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg">
+                    <span className="text-sm font-mono">{selectedBulkIds.size} selected</span>
+                    <div className="flex gap-2">
+                      <button
+                        className="border border-paper/30 text-paper px-3 py-2 rounded-md text-sm"
+                        onClick={() => setSelectedBulkIds(new Set())}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        className="bg-paper text-ink px-4 py-2 rounded-md text-sm font-semibold disabled:opacity-50"
+                        onClick={approveBulkSelected}
+                        disabled={bulkApproving}
+                      >
+                        {bulkApproving ? "Approving..." : `Approve ${selectedBulkIds.size}`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {reviewTransactions.length > 0 && (
                   <div>
                     <div className="flex items-center justify-between gap-3">
@@ -1015,32 +1043,11 @@ export default function AdminPage() {
                 </p>
               )}
 
-              {selectedBulkIds.size > 0 && (
-                <div className="sticky bottom-4 mt-4 flex items-center justify-between gap-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg">
-                  <span className="text-sm font-mono">{selectedBulkIds.size} selected</span>
-                  <div className="flex gap-2">
-                    <button
-                      className="border border-paper/30 text-paper px-3 py-2 rounded-md text-sm"
-                      onClick={() => setSelectedBulkIds(new Set())}
-                    >
-                      Clear
-                    </button>
-                    <button
-                      className="bg-paper text-ink px-4 py-2 rounded-md text-sm font-semibold disabled:opacity-50"
-                      onClick={approveBulkSelected}
-                      disabled={bulkApproving}
-                    >
-                      {bulkApproving ? "Approving..." : `Approve ${selectedBulkIds.size}`}
-                    </button>
-                  </div>
-                </div>
-              )}
-
               <button
-                onClick={() => router.push("/fund-breakdown?tab=loans")}
+                onClick={() => router.push("/transactions")}
                 className="mt-4 text-sm text-gold hover:underline"
               >
-                View all loans →
+                View all transactions →
               </button>
             </section>
           )}
