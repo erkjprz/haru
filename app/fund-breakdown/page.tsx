@@ -1508,8 +1508,6 @@ function LoanCard({
 
 /* ============================== Banks ============================== */
 
-const CUTOVER_DATE = "2026-07-16"
-
 type Bank = {
   bank: string
   balance: number
@@ -1522,8 +1520,6 @@ type BankAccount = {
   id: string
   bank_name: string
   account_name: string | null
-  opening_balance: number
-  interest_rate: number
 }
 
 function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
@@ -1539,8 +1535,6 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [bankName, setBankName] = useState("")
   const [accountName, setAccountName] = useState("")
-  const [openingBalance, setOpeningBalance] = useState("")
-  const [interestRate, setInterestRate] = useState("")
   const [saving, setSaving] = useState(false)
   const [formMessage, setFormMessage] = useState("")
 
@@ -1612,8 +1606,6 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
     setEditingId(null)
     setBankName("")
     setAccountName("")
-    setOpeningBalance("")
-    setInterestRate("")
     setFormMessage("")
   }
 
@@ -1627,13 +1619,29 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
     setEditingId(acct.id)
     setBankName(acct.bank_name ?? "")
     setAccountName(acct.account_name ?? "")
-    setOpeningBalance(String(acct.opening_balance ?? ""))
-    setInterestRate(String(acct.interest_rate ?? ""))
   }
 
   async function saveBank() {
     if (!bankName.trim()) {
       setFormMessage("Enter a bank name.")
+      return
+    }
+
+    // v_cash_ledger/v_bank_balances group by this resolved (bank_name,
+    // account_name) pair, not by id -- two accounts that resolve to the
+    // same pair would silently merge their balances together with no
+    // error. Checked here for a friendly message; the DB's own unique
+    // index is the real backstop.
+    const trimmedBankName = bankName.trim()
+    const trimmedAccountName = accountName.trim() || null
+    const isDuplicate = bankAccounts.some(
+      (acct) =>
+        acct.id !== editingId &&
+        acct.bank_name === trimmedBankName &&
+        (acct.account_name?.trim() || null) === trimmedAccountName
+    )
+    if (isDuplicate) {
+      setFormMessage("An account with this bank name and account name already exists.")
       return
     }
 
@@ -1643,10 +1651,8 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       const { error } = await supabase
         .from("bank_accounts")
         .update({
-          bank_name: bankName,
-          account_name: accountName,
-          opening_balance: Number(openingBalance) || 0,
-          interest_rate: Number(interestRate) || 0
+          bank_name: trimmedBankName,
+          account_name: trimmedAccountName
         })
         .eq("id", editingId)
 
@@ -1657,10 +1663,8 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       }
     } else {
       const { error } = await supabase.from("bank_accounts").insert({
-        bank_name: bankName,
-        account_name: accountName,
-        opening_balance: Number(openingBalance) || 0,
-        interest_rate: Number(interestRate) || 0
+        bank_name: trimmedBankName,
+        account_name: trimmedAccountName
       })
 
       setSaving(false)
@@ -1743,11 +1747,6 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
           setBankName={setBankName}
           accountName={accountName}
           setAccountName={setAccountName}
-          interestRate={interestRate}
-          setInterestRate={setInterestRate}
-          openingBalance={openingBalance}
-          setOpeningBalance={setOpeningBalance}
-          isEditing={false}
           saving={saving}
           message={formMessage}
           onSave={saveBank}
@@ -1795,11 +1794,6 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
                   setBankName={setBankName}
                   accountName={accountName}
                   setAccountName={setAccountName}
-                  interestRate={interestRate}
-                  setInterestRate={setInterestRate}
-                  openingBalance={openingBalance}
-                  setOpeningBalance={setOpeningBalance}
-                  isEditing={true}
                   saving={saving}
                   message={formMessage}
                   onSave={saveBank}
@@ -1900,11 +1894,6 @@ function BankForm({
   setBankName,
   accountName,
   setAccountName,
-  interestRate,
-  setInterestRate,
-  openingBalance,
-  setOpeningBalance,
-  isEditing,
   saving,
   message,
   onSave,
@@ -1918,11 +1907,6 @@ function BankForm({
   setBankName: (v: string) => void
   accountName: string
   setAccountName: (v: string) => void
-  interestRate: string
-  setInterestRate: (v: string) => void
-  openingBalance: string
-  setOpeningBalance: (v: string) => void
-  isEditing: boolean
   saving: boolean
   message: string
   onSave: () => void
@@ -1954,33 +1938,6 @@ function BankForm({
             placeholder="e.g. Haru Fund Savings"
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Opening balance</label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
-            type="number"
-            placeholder="0.00"
-            value={openingBalance}
-            onChange={(e) => setOpeningBalance(e.target.value)}
-          />
-          <p className="text-xs text-ink-soft mt-1">
-            {isEditing
-              ? `The reconciled balance as of the cutover date (${CUTOVER_DATE}). Changing it affects every balance calculated from this account, so only fix it if it was wrong or never set.`
-              : "The true balance as of the cutover date."}
-          </p>
-        </div>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Interest rate (%)</label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
-            type="number"
-            placeholder="e.g. 0.25"
-            value={interestRate}
-            onChange={(e) => setInterestRate(e.target.value)}
           />
         </div>
 
