@@ -549,6 +549,10 @@ function NewTransactionForm() {
       setSubmitting(false)
 
       if (error) {
+        // The receipt already uploaded successfully above -- if the insert
+        // it belongs to failed, clean it up rather than leaving it orphaned
+        // in the bucket.
+        if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
         setMessage(error.message)
         return
       }
@@ -593,6 +597,10 @@ function NewTransactionForm() {
 
       if (error) {
         setSubmitting(false)
+        // The receipt already uploaded successfully above -- if the insert
+        // it belongs to failed, clean it up rather than leaving it orphaned
+        // in the bucket.
+        if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
         setMessage(error.message)
         return
       }
@@ -644,6 +652,10 @@ function NewTransactionForm() {
 
     if (error) {
       setSubmitting(false)
+      // The receipt already uploaded successfully above -- if the insert it
+      // belongs to failed, clean it up rather than leaving it orphaned in
+      // the bucket.
+      if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
       setMessage(error.message)
       return
     }

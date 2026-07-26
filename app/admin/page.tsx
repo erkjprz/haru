@@ -259,6 +259,10 @@ export default function AdminPage() {
 
     setActionError("")
 
+    // Tracked across both receipt-uploading branches below so the catch
+    // handler can clean up an orphaned upload if the write after it fails.
+    let uploadedReceiptUrl: string | null = null
+
     try {
       if (txn.classification === "Member Withdrawal") {
         const bankAccountId = withdrawalBankSelections[transactionId]
@@ -269,6 +273,7 @@ export default function AdminPage() {
         const receiptUrl = await uploadApprovalReceipt(receiptFile, txn.member_id)
         setUploadingReceiptId(null)
         if (!receiptUrl) return
+        uploadedReceiptUrl = receiptUrl
 
         const { error } = await supabase
           .from("transactions")
@@ -290,6 +295,7 @@ export default function AdminPage() {
         const receiptUrl = await uploadApprovalReceipt(receiptFile, txn.member_id)
         setUploadingReceiptId(null)
         if (!receiptUrl) return
+        uploadedReceiptUrl = receiptUrl
 
         await approveLoanRelease({
           loanId: txn.loan_id,
@@ -306,6 +312,10 @@ export default function AdminPage() {
         if (error) throw error
       }
     } catch (err) {
+      // The receipt already uploaded successfully above -- if the write it
+      // belongs to failed, clean it up rather than leaving it orphaned in
+      // the bucket.
+      if (uploadedReceiptUrl) await supabase.storage.from("Receipts").remove([uploadedReceiptUrl])
       setActionError(err instanceof Error ? err.message : "Something went wrong.")
       return
     }
