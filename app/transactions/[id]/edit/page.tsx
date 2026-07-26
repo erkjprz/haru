@@ -108,6 +108,7 @@ export default function EditTransactionPage() {
   const [description, setDescription] = useState("")
   const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null)
   const [existingReceiptSignedUrl, setExistingReceiptSignedUrl] = useState<string | null>(null)
+  const [interestDistributed, setInterestDistributed] = useState(false)
   const [receipt, setReceipt] = useState<File | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -204,6 +205,7 @@ export default function EditTransactionPage() {
       setToBankId(txn.to_bank_account_id ?? "")
       setDescription(txn.description ?? "")
       setExistingReceiptUrl(txn.receipt_url ?? null)
+      setInterestDistributed(txn.interest_distributed === true)
       setFormStep(1)
 
       if (isLoanReleaseType && loanRecord) {
@@ -371,9 +373,14 @@ export default function EditTransactionPage() {
 
     // Loan Release's amount mirrors the linked loan's principal, and its
     // rate/term/repayment mode live on the loan row, not the transaction --
-    // both need updating together to stay in sync.
+    // both need updating together to stay in sync. The `editable` check on
+    // load only confirmed the loan was still "requested" at that moment --
+    // re-checking it here too guards against a stale page: if someone else
+    // approved this loan while the page sat open, these writes would
+    // otherwise silently desync the loan's real terms from what was
+    // actually disbursed against.
     if (isLoanRelease) {
-      const { error: loanError } = await supabase
+      const { data: loanRows, error: loanError } = await supabase
         .from("loans")
         .update({
           principal: Number(amount),
@@ -385,6 +392,8 @@ export default function EditTransactionPage() {
           notes: description
         })
         .eq("loan_id", loanId)
+        .eq("status", "requested")
+        .select("loan_id")
 
       if (loanError) {
         setMessage(loanError.message)
@@ -392,15 +401,28 @@ export default function EditTransactionPage() {
         return
       }
 
-      const { error } = await supabase
+      if (!loanRows || loanRows.length === 0) {
+        setSaving(false)
+        setMessage("This loan has already been approved or changed since you opened it, so it can't be edited here anymore.")
+        return
+      }
+
+      const { data: txnRows, error } = await supabase
         .from("transactions")
         .update({ amount: -Number(amount), description })
         .eq("transaction_id", transactionId)
+        .eq("status", "pending")
+        .select("transaction_id")
 
       setSaving(false)
 
       if (error) {
         setMessage(error.message)
+        return
+      }
+
+      if (!txnRows || txnRows.length === 0) {
+        setMessage("This entry has changed since you opened it and can no longer be edited this way.")
         return
       }
 
@@ -432,7 +454,12 @@ export default function EditTransactionPage() {
     const signedAmount =
       classification === "Member Withdrawal" || classification === "Expense" ? -Number(amount) : Number(amount)
 
-    const { error } = await supabase
+    // The `editable` check on load only confirmed this row's status at that
+    // moment -- re-checking it here too guards against a stale page: a
+    // member-owned row must still be pending (an admin approving/rejecting
+    // it elsewhere shouldn't have this save silently overwrite that), and
+    // an admin-entered row must still not be cancelled.
+    let updateQuery = supabase
       .from("transactions")
       .update({
         amount: signedAmount,
@@ -443,6 +470,12 @@ export default function EditTransactionPage() {
         receipt_url: receiptUrl
       })
       .eq("transaction_id", transactionId)
+
+    updateQuery = MEMBER_EDITABLE.includes(classification)
+      ? updateQuery.eq("status", "pending")
+      : updateQuery.neq("status", "cancelled")
+
+    const { data: txnRows, error } = await updateQuery.select("transaction_id")
 
     setSaving(false)
 
@@ -455,6 +488,14 @@ export default function EditTransactionPage() {
         await supabase.storage.from("Receipts").remove([receiptUrl!])
       }
       setMessage(error.message)
+      return
+    }
+
+    if (!txnRows || txnRows.length === 0) {
+      if (receipt && receiptUrl !== existingReceiptUrl) {
+        await supabase.storage.from("Receipts").remove([receiptUrl!])
+      }
+      setMessage("This entry has changed since you opened it and can no longer be edited this way.")
       return
     }
 
@@ -485,14 +526,47 @@ export default function EditTransactionPage() {
     const updates: Record<string, any> = { status: "cancelled" }
     if (isLoanRelease) updates.loan_id = null
 
-    const { error } = await supabase.from("transactions").update(updates).eq("transaction_id", transactionId)
+    // The `editable` check on load only confirmed this row's status at that
+    // moment -- re-checking it here too guards against a stale page: a
+    // member-owned or Loan Release row must still be pending, and an
+    // admin-entered row must still not already be cancelled, or this would
+    // silently reverse something that's since moved on (e.g. an admin
+    // approving it elsewhere while this page sat open).
+    let cancelQuery = supabase.from("transactions").update(updates).eq("transaction_id", transactionId)
+    cancelQuery =
+      MEMBER_EDITABLE.includes(classification) || isLoanRelease
+        ? cancelQuery.eq("status", "pending")
+        : cancelQuery.neq("status", "cancelled")
+
+    const { data: txnRows, error } = await cancelQuery.select("transaction_id")
+
+    if (!error && (!txnRows || txnRows.length === 0)) {
+      setCancelling(false)
+      setMessage("This entry has changed since you opened it and can no longer be cancelled this way.")
+      return
+    }
 
     if (!error && isLoanRelease && loanId) {
-      const { error: loanError } = await supabase.from("loans").delete().eq("loan_id", loanId)
+      // Guarded the same way -- the loan should always still be "requested"
+      // here since approval flips loan and transaction status together, but
+      // this is the difference between a clean message and a confusing
+      // foreign-key error if that's somehow no longer true.
+      const { data: loanRows, error: loanError } = await supabase
+        .from("loans")
+        .delete()
+        .eq("loan_id", loanId)
+        .eq("status", "requested")
+        .select("loan_id")
 
       if (loanError) {
         setCancelling(false)
         setMessage(loanError.message)
+        return
+      }
+
+      if (!loanRows || loanRows.length === 0) {
+        setCancelling(false)
+        setMessage("The loan record couldn't be removed -- it may have already been approved. Check its status before retrying.")
         return
       }
     }
@@ -588,6 +662,13 @@ export default function EditTransactionPage() {
               </span>
             </div>
           </div>
+
+          {classification === "Bank Interest" && interestDistributed && (
+            <p className="text-[11px] text-gold bg-gold/10 border border-gold rounded-md px-3 py-2 mt-4">
+              This interest has already been split across members. Changing the amount or cancelling this entry
+              won&apos;t update what members were already credited in bank_interest_allocations.
+            </p>
+          )}
 
           <div className="space-y-4 mt-4">
             {!isLoanRelease && (
