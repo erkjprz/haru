@@ -33,6 +33,14 @@ interface CloseLoanParams {
  * loan_id/year/category columns and was the source of a bug where every
  * loan closure silently failed to record anything in a structured ledger
  * table.
+ *
+ * The share computation stays here in TypeScript, but the actual writes
+ * (allocation rows, crediting transactions, closing the loan) go through
+ * close_loan_and_distribute_gain in one atomic call -- these were
+ * previously three separate client-side calls with no rollback between
+ * them, so a failure partway through could leave gain rows recorded with
+ * no crediting transaction, or a loan stuck "active" after its gain was
+ * already distributed (risking a double distribution if closed again).
  */
 export async function closeLoanAndDistributeGain(params: CloseLoanParams) {
   const gainOrLoss = params.repaidApproved - Number(params.principal)
@@ -41,34 +49,22 @@ export async function closeLoanAndDistributeGain(params: CloseLoanParams) {
   const currentValueByMember = await computeCurrentValueByMember(closingDate, params.member_id)
   const shares = splitProportionally(currentValueByMember, gainOrLoss)
 
-  if (shares.length > 0) {
-    const gainOrLossLabel = gainOrLoss > 0 ? "gain" : "loss"
+  const gainOrLossLabel = gainOrLoss > 0 ? "gain" : "loss"
 
-    const loanGainRows = shares.map((s) => ({
-      loan_id: params.id,
-      member_id: s.member_id,
-      amount: s.amount,
-      allocation_date: closingDate,
-      current_value: s.currentValue,
-      pct_share: s.pctShare,
-      notes: `Share of ₱${Math.abs(gainOrLoss).toFixed(2)} ${gainOrLossLabel} from loan closed ${closingDate}`
-    }))
+  const rpcShares = shares.map((s) => ({
+    member_id: s.member_id,
+    amount: s.amount,
+    current_value: s.currentValue,
+    pct_share: s.pctShare,
+    notes: `Share of ₱${Math.abs(gainOrLoss).toFixed(2)} ${gainOrLossLabel} from loan closed ${closingDate}`,
+    description: `Share of ${new Date().getFullYear()} loan ${gainOrLossLabel} (from ${params.borrowerName || "a member"}'s loan)`
+  }))
 
-    await supabase.from("loan_gain_allocations").insert(loanGainRows)
+  const { error } = await supabase.rpc("close_loan_and_distribute_gain", {
+    p_loan_id: params.id,
+    p_closing_date: closingDate,
+    p_shares: rpcShares
+  })
 
-    const gainTransactions = shares.map((s) => ({
-      member_id: s.member_id,
-      bank_account_id: null,
-      loan_id: params.id,
-      classification: "Gain Allocation",
-      affects_cash: 0,
-      amount: s.amount,
-      description: `Share of ${new Date().getFullYear()} loan ${gainOrLossLabel} (from ${params.borrowerName || "a member"}'s loan)`,
-      status: "approved"
-    }))
-
-    await supabase.from("transactions").insert(gainTransactions)
-  }
-
-  await supabase.from("loans").update({ status: "closed" }).eq("loan_id", params.id)
+  if (error) throw new Error(error.message)
 }
