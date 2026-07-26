@@ -320,6 +320,17 @@ export default function AdminPage() {
       await supabase.from("loans").delete().eq("loan_id", txn.loan_id)
     }
 
+    // Rejecting a bulk row (Contribution/Loan Repayment) directly, without
+    // going through the bulk bar, left its id checked in selectedBulkIds
+    // even after it dropped out of pendingTransactions -- the sticky "N
+    // selected" bar stayed stuck showing a row that no longer existed.
+    setSelectedBulkIds((prev) => {
+      if (!prev.has(transactionId)) return prev
+      const next = new Set(prev)
+      next.delete(transactionId)
+      return next
+    })
+
     loadData()
   }
 
