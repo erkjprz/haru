@@ -296,7 +296,22 @@ export default function AdminPage() {
   }
 
   async function rejectTransaction(transactionId: string) {
+    const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
+
     await supabase.from("transactions").update({ status: "rejected" }).eq("transaction_id", transactionId)
+
+    // A rejected Loan Release never disbursed anything -- the loan it was
+    // requesting has nothing else attached to it yet (no hold, no
+    // repayments, no gain), so deleting it removes the request cleanly.
+    // Leaving the loans row behind at "requested" would strand it with no
+    // pending transaction to ever act on again, while LoanDetailPanel's
+    // "Approve & Activate" would still be reachable on it -- clicking that
+    // would flip the loan to "active" and snapshot a hold with no actual
+    // disbursement transaction behind it.
+    if (txn?.classification === "Loan Release" && txn.loan_id) {
+      await supabase.from("loans").delete().eq("loan_id", txn.loan_id)
+    }
+
     loadData()
   }
 
