@@ -23,6 +23,7 @@ export default function AdminMembersPage() {
   const [editEmail, setEditEmail] = useState("")
   const [editRole, setEditRole] = useState("member")
   const [editStatus, setEditStatus] = useState("approved")
+  const [editGainSharingEligible, setEditGainSharingEligible] = useState(true)
 
   const [search, setSearch] = useState("")
 
@@ -118,6 +119,7 @@ export default function AdminMembersPage() {
     setEditEmail(member.email ?? "")
     setEditRole(member.role ?? "member")
     setEditStatus(member.status ?? "approved")
+    setEditGainSharingEligible(member.gain_sharing_eligible !== false)
     setMessage("")
   }
 
@@ -132,7 +134,8 @@ export default function AdminMembersPage() {
         name: editName,
         email: editEmail || null,
         role: editRole,
-        status: editStatus
+        status: editStatus,
+        gain_sharing_eligible: editGainSharingEligible
       })
       .eq("member_id", id)
 
@@ -351,6 +354,15 @@ export default function AdminMembersPage() {
                       <option value="pending">Pending</option>
                       <option value="inactive">Inactive</option>
                     </select>
+                    <label className="flex items-center gap-2.5 text-sm text-ink-soft">
+                      <input
+                        type="checkbox"
+                        checked={editGainSharingEligible}
+                        onChange={(e) => setEditGainSharingEligible(e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      Eligible for gain sharing
+                    </label>
                     <div className="flex gap-2">
                       <button
                         className="bg-ink text-paper px-4 py-2 rounded-md text-sm flex-1"
@@ -388,6 +400,11 @@ export default function AdminMembersPage() {
                         >
                           {member.status}
                         </span>
+                        {member.gain_sharing_eligible === false && (
+                          <span className="text-[10px] uppercase font-mono border border-hairline rounded-full px-2 py-0.5 text-ink-soft">
+                            Not gain-sharing eligible
+                          </span>
+                        )}
                       </div>
                     </div>
 
