@@ -82,14 +82,20 @@ export default function BorrowerPage() {
       }
 
       const loanIds = (myLoans ?? []).map((l) => l.loan_id)
-      const { data: allTxns } = loanIds.length
+      const { data: allTxns, error: txnsError } = loanIds.length
         ? await supabase
             .from("transactions")
             .select("transaction_id, loan_id, classification, amount, status, txn_date, created_at")
             .in("loan_id", loanIds)
             .neq("status", "cancelled")
             .order("txn_date", { ascending: false })
-        : { data: [] }
+        : { data: [], error: null }
+
+      if (txnsError) {
+        setLoadError(txnsError.message)
+        setDataLoading(false)
+        return
+      }
 
       const withProgress: Loan[] = (myLoans ?? []).map((loan) => {
         const related = (allTxns ?? []).filter((t) => t.loan_id === loan.loan_id)
