@@ -27,48 +27,28 @@ export default function SignupPage() {
     setMessage("")
 
 
-    const { data, error } = await supabase.auth.signUp({
+    // The matching members row (name/role/gain_sharing_eligible, status
+    // "pending") is created atomically by the on_auth_user_created trigger
+    // from this signup metadata -- see handle_new_member_signup().
+    const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          name,
+          role: isBorrower ? "borrower" : "member",
+        },
+      },
     })
 
+    setLoading(false)
 
     if (error) {
-      setLoading(false)
       setMessage(error.message)
       return
     }
 
-
-    if (data.user) {
-
-      // Borrower accounts are scoped to just their own loan(s) -- see
-      // members_select/loans_select/transactions_select RLS -- and never
-      // share in the fund's investment/bank-interest gains.
-      const { error: memberError } = await supabase
-        .from("members")
-        .insert({
-          name,
-          email,
-          role: isBorrower ? "borrower" : "member",
-          status: "pending",
-          ...(isBorrower ? { gain_sharing_eligible: false } : {})
-        })
-
-
-      if (memberError) {
-        setLoading(false)
-        setMessage(memberError.message)
-        return
-      }
-
-
-      router.push("/waiting")
-      return
-    }
-
-
-    setLoading(false)
+    router.push("/waiting")
   }
 
 

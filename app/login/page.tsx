@@ -8,7 +8,7 @@ import { useAuth } from "@/app/auth-context"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { loading: authLoading, user } = useAuth()
+  const { loading: authLoading, user, member } = useAuth()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -21,12 +21,16 @@ export default function LoginPage() {
   useEffect(() => {
     if (authLoading) return
 
-    if (user) {
+    if (user && member) {
       router.replace("/dashboard")
     }
-  }, [authLoading, user, router])
+  }, [authLoading, user, member, router])
 
-  const checkingSession = authLoading || !!user
+  // A signed-in auth user with no matching members row (signup's insert
+  // failed partway, or the row was removed) would otherwise bounce forever
+  // between here and /dashboard, which each redirect to the other.
+  const orphanedAccount = !authLoading && !!user && !member
+  const checkingSession = authLoading || (!!user && !orphanedAccount)
 
   async function login() {
     if (loading) return
@@ -73,6 +77,32 @@ export default function LoginPage() {
 
   if (checkingSession) {
     return <main className="min-h-screen bg-paper" />
+  }
+
+  if (orphanedAccount) {
+    return (
+      <main className="min-h-screen bg-paper flex items-center justify-center px-5 py-8">
+        <div className="w-full max-w-md animate-in fade-in duration-500 text-center">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-gold font-mono">Est. 2017</p>
+          <h1 className="font-display text-4xl font-semibold text-ink mt-2">Haru</h1>
+
+          <div className="bg-paper-2 border border-hairline rounded-xl shadow-sm p-6 mt-8 text-left">
+            <p className="text-sm text-ink">
+              Your account setup didn&apos;t finish — we couldn&apos;t find a member record for this login.
+            </p>
+            <p className="text-sm text-ink-soft mt-2">
+              Contact an admin to have your account linked, or sign out and try creating your account again.
+            </p>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="mt-4 w-full rounded-md bg-gold py-3 font-semibold text-ink shadow-sm transition-all hover:opacity-90 active:scale-[0.99]"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </main>
+    )
   }
 
   return (
