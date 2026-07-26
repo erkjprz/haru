@@ -100,6 +100,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   const [manageOpen, setManageOpen] = useState(false)
   const [manageOpenInitialized, setManageOpenInitialized] = useState(false)
   const [approveBankChoice, setApproveBankChoice] = useState("")
+  const [approveReceipt, setApproveReceipt] = useState<File | null>(null)
   const [closing, setClosing] = useState(false)
   const [approving, setApproving] = useState(false)
   const [reopening, setReopening] = useState(false)
@@ -330,14 +331,28 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   }
 
   async function approveLoan() {
-    if (!adminLoan || !approveBankChoice) return
+    if (!adminLoan || !approveBankChoice || !approveReceipt) return
     setApproving(true)
+
+    // Loan disbursement moves real money out, and until now there was no
+    // evidence trail for it at all -- receipt_url stayed null from
+    // submission straight through approval. Requires proof of the actual
+    // outgoing transfer before the loan can be activated.
+    const fileName = `${adminLoan.member_id || "admin"}-${Date.now()}-${approveReceipt.name}`
+    const { error: uploadError } = await supabase.storage
+      .from("Receipts")
+      .upload(fileName, approveReceipt, { contentType: approveReceipt.type })
+
+    if (uploadError) {
+      setApproving(false)
+      return
+    }
 
     await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
 
     await supabase
       .from("transactions")
-      .update({ status: "approved", bank_account_id: approveBankChoice })
+      .update({ status: "approved", bank_account_id: approveBankChoice, receipt_url: fileName })
       .eq("loan_id", adminLoan.loan_id)
       .eq("classification", "Loan Release")
       .eq("status", "pending")
@@ -347,6 +362,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     await snapshotLoanHold(adminLoan.loan_id, adminLoan.member_id, dateOnly(new Date()))
 
     setApproving(false)
+    setApproveReceipt(null)
     await reloadAll()
   }
 
@@ -616,10 +632,22 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                             </option>
                           ))}
                         </select>
+                        <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Proof of transfer
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="block w-full text-xs text-ink-soft file:mr-3 file:py-1.5 file:px-3 file:rounded-sm file:border file:border-hairline file:bg-paper file:text-xs file:text-ink"
+                          onChange={(e) => setApproveReceipt(e.target.files?.[0] ?? null)}
+                        />
+                        {approveReceipt && (
+                          <p className="text-[11px] text-ink-soft truncate">{approveReceipt.name}</p>
+                        )}
                         <button
                           className="w-full bg-ink text-paper px-4 py-2.5 rounded-sm text-sm font-semibold disabled:opacity-50"
                           onClick={approveLoan}
-                          disabled={!approveBankChoice || approving}
+                          disabled={!approveBankChoice || !approveReceipt || approving}
                         >
                           {approving ? "Approving..." : "Approve & Activate"}
                         </button>
