@@ -12,7 +12,7 @@ export const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   "Expense": "Expense",
   "Loan Release": "Loan Release",
   "Loan Repayment": "Loan Repayment",
-  "Gain Allocation": "Investment Allocation",
+  "Gain Allocation": "Gain Share",
   "Bank Interest": "Bank Interest",
   "Internal Transfer": "Bank Transfer",
   "Investment": "Investment",
