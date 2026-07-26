@@ -1,13 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/app/auth-context"
 
 export default function SignupPage() {
 
   const router = useRouter()
+  const { loading: authLoading, user } = useAuth()
 
   const [accountType, setAccountType] = useState<"member" | "borrower">("member")
   const [name, setName] = useState("")
@@ -18,6 +20,20 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
 
   const isBorrower = accountType === "borrower"
+
+  // An already-signed-in user filling this out would silently create a
+  // second, unrelated account while staying logged into the first one --
+  // /login already knows how to route a signed-in user (dashboard, or the
+  // orphaned-account message), so hand off to it instead of duplicating
+  // that logic here.
+  useEffect(() => {
+    if (authLoading) return
+    if (user) {
+      router.replace("/login")
+    }
+  }, [authLoading, user, router])
+
+  const checkingSession = authLoading || !!user
 
   async function signup() {
 
@@ -51,6 +67,9 @@ export default function SignupPage() {
     router.push("/waiting")
   }
 
+  if (checkingSession) {
+    return <main className="min-h-screen bg-paper" />
+  }
 
   return (
     <main className="min-h-screen bg-paper flex items-center justify-center px-5 py-8">
