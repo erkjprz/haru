@@ -292,6 +292,15 @@ function NewTransactionForm() {
   const isLoanPayment = selectedType === "loan_payment"
   const isContribution = selectedType === "contribution"
   const isStepped = isLoanRequest || isInvestmentEntry
+  // Contribution and Loan Payment collect bank + receipt right here on the
+  // form, so an on-behalf-of submission can safely skip the queue. Loan
+  // Request always goes in pending regardless of who submits it (see
+  // submit_loan_request) -- disbursement is its own evidence-gated approval
+  // step. Withdrawal is a request too: nothing has moved yet, so it can't
+  // legitimately auto-approve without the bank/receipt the admin approval
+  // queue requires -- an on-behalf-of Withdrawal has to go through that
+  // same queue rather than skip it.
+  const willAutoApproveOnBehalf = isAdmin && !!onBehalfOfId && (isContribution || isLoanPayment)
   const showSaveAsDefault =
     (isContribution && (contributionDefault == null || contributionBankDefault == null)) ||
     (isLoanPayment && (loanPaymentDefault == null || loanPaymentBankDefault == null))
@@ -632,8 +641,7 @@ function NewTransactionForm() {
         ? "Member Withdrawal"
         : "Member Contribution"
 
-    const status =
-      isAdmin && isMemberLinkedType && onBehalfOfId ? "approved" : "pending"
+    const status = willAutoApproveOnBehalf ? "approved" : "pending"
 
     // Withdrawals are cash going out, so the ledger stores them negative.
     const { error } = await supabase
@@ -664,10 +672,13 @@ function NewTransactionForm() {
     // yet (see showSaveAsDefault) -- self-submissions use the scoped RPC
     // since regular members can't otherwise update their own row; an admin
     // saving it on someone else's behalf already has full admin write
-    // access to members.
+    // access to members. The transaction itself already succeeded above, so
+    // a failure here shouldn't block the confirmation -- just surface it so
+    // the user knows to redo it, instead of silently not saving.
+    let defaultSaveWarning = ""
     if (saveAsDefault && (isContribution || isLoanPayment)) {
       if (effectiveMemberId === memberId) {
-        await Promise.all([
+        const [{ error: amountError }, { error: bankError }] = await Promise.all([
           supabase.rpc(
             isContribution ? "set_default_contribution_amount" : "set_default_loan_payment_amount",
             { p_amount: Number(amount) }
@@ -677,8 +688,11 @@ function NewTransactionForm() {
             { p_bank_id: bankId || null }
           )
         ])
+        if (amountError || bankError) {
+          defaultSaveWarning = " (couldn't save as default -- try again next time)"
+        }
       } else {
-        await supabase
+        const { error: defaultError } = await supabase
           .from("members")
           .update(
             isContribution
@@ -686,6 +700,9 @@ function NewTransactionForm() {
               : { default_loan_payment_amount: Number(amount), default_loan_payment_bank_id: bankId || null }
           )
           .eq("member_id", effectiveMemberId)
+        if (defaultError) {
+          defaultSaveWarning = " (couldn't save as default -- try again next time)"
+        }
       }
     }
 
@@ -695,7 +712,7 @@ function NewTransactionForm() {
       selectedType === "loan_payment" ? "Loan repayment" : selectedType === "withdrawal" ? "Withdrawal" : "Contribution"
     setConfirmation({
       amount: Number(amount),
-      label: `${typeLabel} ${status === "pending" ? "submitted" : "recorded"}`,
+      label: `${typeLabel} ${status === "pending" ? "submitted" : "recorded"}${defaultSaveWarning}`,
       pending: status === "pending"
     })
   }
@@ -762,7 +779,9 @@ function NewTransactionForm() {
       </select>
       {onBehalfOfId && (
         <p className="text-sm text-gold mt-2">
-          This will be recorded as approved immediately for {allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.
+          {willAutoApproveOnBehalf
+            ? `This will be recorded as approved immediately for ${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.`
+            : `This still goes through the normal approval process for ${allMembers.find((m) => m.member_id === onBehalfOfId)?.name} -- it isn't approved immediately.`}
         </p>
       )}
     </div>
