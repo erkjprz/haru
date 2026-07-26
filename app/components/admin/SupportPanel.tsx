@@ -92,7 +92,7 @@ export function SupportPanel() {
           `
           *,
           members!transactions_member_id_fkey ( name ),
-          loans!transactions_loan_id_fkey ( name ),
+          loans!transactions_loan_id_fkey ( name, status ),
           investments!transactions_investment_id_fkey ( name ),
           bank_accounts!transactions_bank_account_id_fkey ( bank_name, account_name )
         `
@@ -308,6 +308,23 @@ function SupportEditForm({
       return
     }
 
+    // Moving a still-unapproved Loan Release to rejected/cancelled here
+    // needs the same fix the normal admin reject button and the member's
+    // own "Cancel entry" flow already apply: null the transaction's
+    // loan_id (transactions.loan_id has a non-cascading foreign key into
+    // loans) and delete the now-unreferenced loan -- otherwise it's
+    // stranded at "requested" forever with a reachable "Approve &
+    // Activate" that would activate it with nothing actually disbursed.
+    // Only safe while the loan is still "requested": once it's active or
+    // closed it has repayments, a hold snapshot, maybe a gain split, and
+    // deleting it would destroy real data, so this tool leaves it alone
+    // in that case.
+    const isUnapprovedLoanRelease =
+      t.classification === "Loan Release" &&
+      t.loan_id &&
+      t.loans?.status === "requested" &&
+      (status === "rejected" || status === "cancelled")
+
     setSaving(true)
     setMessage("")
 
@@ -326,7 +343,7 @@ function SupportEditForm({
       receiptUrl = fileName
     }
 
-    const updates = {
+    const updates: Record<string, unknown> = {
       amount: amountNum,
       description: description || null,
       bank_account_id: bankAccountId || null,
@@ -338,6 +355,7 @@ function SupportEditForm({
       status,
       receipt_url: receiptUrl
     }
+    if (isUnapprovedLoanRelease) updates.loan_id = null
 
     const { data, error } = await supabase
       .from("transactions")
@@ -347,12 +365,16 @@ function SupportEditForm({
         `
         *,
         members!transactions_member_id_fkey ( name ),
-        loans!transactions_loan_id_fkey ( name ),
+        loans!transactions_loan_id_fkey ( name, status ),
         investments!transactions_investment_id_fkey ( name ),
         bank_accounts!transactions_bank_account_id_fkey ( bank_name, account_name )
       `
       )
       .single()
+
+    if (!error && isUnapprovedLoanRelease) {
+      await supabase.from("loans").delete().eq("loan_id", t.loan_id)
+    }
 
     setSaving(false)
 
