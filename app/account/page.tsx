@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Navbar from "@/app/components/Navbar"
+import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 
 export default function AccountPage() {
   const router = useRouter()
   const { loading: authLoading, user, member } = useAuth()
+  const isBorrower = member?.role === "borrower"
 
   const [newEmail, setNewEmail] = useState("")
   const [emailMessage, setEmailMessage] = useState("")
@@ -20,13 +22,17 @@ export default function AccountPage() {
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
+  // Email/password are a universal need -- unlike the rest of the app's
+  // member-facing pages, this one deliberately doesn't redirect borrowers
+  // away. A borrower's only other self-service option is the unauthenticated
+  // "Forgot Password" flow, which can reset a password but can't fix a typo'd
+  // email -- there was previously no path anywhere for that.
   useEffect(() => {
     if (authLoading) return
     if (!member) {
       router.push("/login")
       return
     }
-    if (member.role === "borrower") router.push("/borrower")
   }, [authLoading, member, router])
 
   async function changeEmail() {
@@ -79,15 +85,15 @@ export default function AccountPage() {
 
   return (
     <>
-      <Navbar />
+      {isBorrower ? <BorrowerHeader /> : <Navbar />}
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
 
           <button
-            onClick={() => router.push("/menu")}
+            onClick={() => router.push(isBorrower ? "/borrower" : "/menu")}
             className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
           >
-            ← Menu
+            {isBorrower ? "← Your Loan" : "← Menu"}
           </button>
 
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">

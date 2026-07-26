@@ -12,6 +12,7 @@ export default function BorrowerHeader() {
   const router = useRouter()
   const pathname = usePathname()
   const onHome = pathname === "/borrower"
+  const onAccount = pathname === "/account"
 
   async function logout() {
     await supabase.auth.signOut()
@@ -31,6 +32,11 @@ export default function BorrowerHeader() {
           {!onHome && (
             <button onClick={() => router.push("/borrower")} className="text-sm font-mono text-ink-soft hover:text-ink">
               Your Loan
+            </button>
+          )}
+          {!onAccount && (
+            <button onClick={() => router.push("/account")} className="text-sm font-mono text-ink-soft hover:text-ink">
+              Account
             </button>
           )}
           <button onClick={() => router.push("/help")} className="text-sm font-mono text-ink-soft hover:text-ink">
