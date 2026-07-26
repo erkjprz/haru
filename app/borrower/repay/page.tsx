@@ -34,6 +34,7 @@ export default function BorrowerRepayPage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState("")
   const [submitted, setSubmitted] = useState(false)
+  const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
     if (authLoading) return
@@ -65,23 +66,35 @@ export default function BorrowerRepayPage() {
         ? `member_id.eq.${member!.member_id},borrower_id.eq.${borrowerRow.borrower_id}`
         : `member_id.eq.${member!.member_id}`
 
-      const { data: loans } = await supabase
+      const { data: loans, error: loansError } = await supabase
         .from("loans")
         .select("loan_id, name, principal, interest_type, interest_rate, interest_amount, status, start_date")
         .or(filter)
         .eq("status", "active")
         .order("start_date", { ascending: false })
 
+      if (loansError) {
+        setLoadError(loansError.message)
+        setDataLoading(false)
+        return
+      }
+
       setMyLoans(loans ?? [])
 
       const loanIds = (loans ?? []).map((l) => l.loan_id)
       if (loanIds.length > 0) {
-        const { data: repayments } = await supabase
+        const { data: repayments, error: repaymentsError } = await supabase
           .from("transactions")
           .select("loan_id, amount")
           .in("loan_id", loanIds)
           .eq("classification", "Loan Repayment")
           .in("status", ["pending", "approved"])
+
+        if (repaymentsError) {
+          setLoadError(repaymentsError.message)
+          setDataLoading(false)
+          return
+        }
 
         const totals: Record<string, number> = {}
         ;(repayments ?? []).forEach((r) => {
@@ -222,11 +235,13 @@ export default function BorrowerRepayPage() {
             You've already sent this money
           </h1>
 
-          {myLoans.length === 0 ? (
+          {loadError && <p className="mb-4 text-sm text-rust">Couldn&apos;t load your loans: {loadError}</p>}
+
+          {!loadError && myLoans.length === 0 ? (
             <p className="text-sm text-ink-soft text-center py-12 bg-paper-2 border border-hairline rounded-md">
               You don't have an active loan to repay right now.
             </p>
-          ) : (
+          ) : !loadError && (
             <div className="bg-paper-2 border border-hairline rounded-md p-5 space-y-4">
               <div>
                 <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
