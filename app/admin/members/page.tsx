@@ -149,9 +149,14 @@ export default function AdminMembersPage() {
   async function deactivateMember(id: string) {
     setMessage("")
 
+    // Deactivating locks the member out of the app (every page gates on
+    // status === "approved"), but computeCurrentValueByMember only checks
+    // gain_sharing_eligible, not status -- without this, a deactivated
+    // member with capital still in the fund would keep sharing in every
+    // future loan/bank-interest/investment distribution indefinitely.
     const { error } = await supabase
       .from("members")
-      .update({ status: "inactive" })
+      .update({ status: "inactive", gain_sharing_eligible: false })
       .eq("member_id", id)
 
     if (error) {
@@ -162,12 +167,16 @@ export default function AdminMembersPage() {
     loadMembers()
   }
 
-  async function reactivateMember(id: string) {
+  async function reactivateMember(id: string, isBorrower: boolean) {
     setMessage("")
 
+    // Restores eligibility based on role rather than unconditionally
+    // setting it true -- a borrower-role member is never eligible (see
+    // signup), so reactivating one shouldn't grant them gain sharing they
+    // never had in the first place.
     const { error } = await supabase
       .from("members")
-      .update({ status: "approved" })
+      .update({ status: "approved", gain_sharing_eligible: !isBorrower })
       .eq("member_id", id)
 
     if (error) {
@@ -392,7 +401,7 @@ export default function AdminMembersPage() {
                       {member.status === "inactive" ? (
                         <button
                           className="border border-sage text-sage px-4 py-2 rounded-md text-sm"
-                          onClick={() => reactivateMember(member.member_id)}
+                          onClick={() => reactivateMember(member.member_id, member.role === "borrower")}
                         >
                           Reactivate
                         </button>
