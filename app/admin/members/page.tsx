@@ -91,13 +91,18 @@ export default function AdminMembersPage() {
       return
     }
 
+    // A borrower-role member is never gain-sharing eligible (see signup and
+    // reactivateMember) -- without this, adding one here directly would
+    // default to the DB's true and incorrectly grant them a share of future
+    // distributions.
     const { error } = await supabase
       .from("members")
       .insert({
         name,
         email: email || null,
         role,
-        status: "approved"
+        status: "approved",
+        gain_sharing_eligible: role !== "borrower"
       })
 
     if (error) {
@@ -128,6 +133,12 @@ export default function AdminMembersPage() {
   }
 
   async function saveEdit(id: string) {
+    // An inactive member should never be gain-sharing eligible, regardless
+    // of the checkbox -- mirrors the invariant deactivateMember's dedicated
+    // button already enforces, so using this generic form to deactivate
+    // someone can't silently skip it.
+    const gainSharingEligible = editStatus === "inactive" ? false : editGainSharingEligible
+
     const { error } = await supabase
       .from("members")
       .update({
@@ -135,7 +146,7 @@ export default function AdminMembersPage() {
         email: editEmail || null,
         role: editRole,
         status: editStatus,
-        gain_sharing_eligible: editGainSharingEligible
+        gain_sharing_eligible: gainSharingEligible
       })
       .eq("member_id", id)
 
@@ -357,11 +368,13 @@ export default function AdminMembersPage() {
                     <label className="flex items-center gap-2.5 text-sm text-ink-soft">
                       <input
                         type="checkbox"
-                        checked={editGainSharingEligible}
+                        checked={editStatus === "inactive" ? false : editGainSharingEligible}
                         onChange={(e) => setEditGainSharingEligible(e.target.checked)}
-                        className="w-4 h-4"
+                        disabled={editStatus === "inactive"}
+                        className="w-4 h-4 disabled:opacity-50"
                       />
                       Eligible for gain sharing
+                      {editStatus === "inactive" && " (always off while inactive)"}
                     </label>
                     <div className="flex gap-2">
                       <button
