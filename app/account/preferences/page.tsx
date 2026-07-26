@@ -18,6 +18,9 @@ function AmountField({
   helper,
   value,
   onChange,
+  bankId,
+  onBankChange,
+  banks,
   onSave,
   saving,
   message
@@ -26,6 +29,9 @@ function AmountField({
   helper: string
   value: string
   onChange: (v: string) => void
+  bankId: string
+  onBankChange: (v: string) => void
+  banks: { id: string; bank_name: string; account_name: string | null }[]
   onSave: () => void
   saving: boolean
   message: string
@@ -50,6 +56,24 @@ function AmountField({
           />
         </div>
 
+        <div>
+          <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">
+            Bank the transfer goes to
+          </label>
+          <select
+            className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
+            value={bankId}
+            onChange={(e) => onBankChange(e.target.value)}
+          >
+            <option value="">Not set</option>
+            {banks.map((bank) => (
+              <option key={bank.id} value={bank.id}>
+                {bank.account_name || bank.bank_name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {message && <p className="text-sm text-ink-soft">{message}</p>}
 
         <button
@@ -69,8 +93,11 @@ export default function PreferencesPage() {
   const { loading: authLoading, member } = useAuth()
 
   const [dataLoading, setDataLoading] = useState(true)
+  const [banks, setBanks] = useState<{ id: string; bank_name: string; account_name: string | null }[]>([])
   const [contributionAmount, setContributionAmount] = useState("")
+  const [contributionBankId, setContributionBankId] = useState("")
   const [loanPaymentAmount, setLoanPaymentAmount] = useState("")
+  const [loanPaymentBankId, setLoanPaymentBankId] = useState("")
 
   const [savingContribution, setSavingContribution] = useState(false)
   const [contributionMessage, setContributionMessage] = useState("")
@@ -90,17 +117,30 @@ export default function PreferencesPage() {
     if (authLoading || !member || member.role === "borrower") return
 
     async function load() {
-      const { data } = await supabase
-        .from("members")
-        .select("default_contribution_amount, default_loan_payment_amount")
-        .eq("member_id", member!.member_id)
-        .single()
+      const [{ data }, { data: bankList }] = await Promise.all([
+        supabase
+          .from("members")
+          .select(
+            "default_contribution_amount, default_contribution_bank_id, default_loan_payment_amount, default_loan_payment_bank_id"
+          )
+          .eq("member_id", member!.member_id)
+          .single(),
+        supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name")
+      ])
+
+      setBanks(bankList ?? [])
 
       if (data?.default_contribution_amount != null) {
         setContributionAmount(String(data.default_contribution_amount))
       }
+      if (data?.default_contribution_bank_id) {
+        setContributionBankId(data.default_contribution_bank_id)
+      }
       if (data?.default_loan_payment_amount != null) {
         setLoanPaymentAmount(String(data.default_loan_payment_amount))
+      }
+      if (data?.default_loan_payment_bank_id) {
+        setLoanPaymentBankId(data.default_loan_payment_bank_id)
       }
       setDataLoading(false)
     }
@@ -113,12 +153,15 @@ export default function PreferencesPage() {
     setSavingContribution(true)
     setContributionMessage("")
 
-    const { error } = await supabase.rpc("set_default_contribution_amount", {
-      p_amount: contributionAmount.trim() ? Number(contributionAmount) : null
-    })
+    const [{ error }, { error: bankError }] = await Promise.all([
+      supabase.rpc("set_default_contribution_amount", {
+        p_amount: contributionAmount.trim() ? Number(contributionAmount) : null
+      }),
+      supabase.rpc("set_default_contribution_bank", { p_bank_id: contributionBankId || null })
+    ])
 
     setSavingContribution(false)
-    setContributionMessage(error ? error.message : contributionAmount.trim() ? "Saved." : "Cleared.")
+    setContributionMessage(error?.message || bankError?.message || "Saved.")
   }
 
   async function saveLoanPayment() {
@@ -126,12 +169,15 @@ export default function PreferencesPage() {
     setSavingLoanPayment(true)
     setLoanPaymentMessage("")
 
-    const { error } = await supabase.rpc("set_default_loan_payment_amount", {
-      p_amount: loanPaymentAmount.trim() ? Number(loanPaymentAmount) : null
-    })
+    const [{ error }, { error: bankError }] = await Promise.all([
+      supabase.rpc("set_default_loan_payment_amount", {
+        p_amount: loanPaymentAmount.trim() ? Number(loanPaymentAmount) : null
+      }),
+      supabase.rpc("set_default_loan_payment_bank", { p_bank_id: loanPaymentBankId || null })
+    ])
 
     setSavingLoanPayment(false)
-    setLoanPaymentMessage(error ? error.message : loanPaymentAmount.trim() ? "Saved." : "Cleared.")
+    setLoanPaymentMessage(error?.message || bankError?.message || "Saved.")
   }
 
   if (authLoading || !member || member.role === "borrower" || dataLoading) {
@@ -167,15 +213,18 @@ export default function PreferencesPage() {
             Preferences
           </h1>
           <p className="text-[13px] text-ink-soft mb-6">
-            Set default amounts for transactions you make often. Leave a field blank to clear it.
+            Set default amounts and banks for transactions you make often. Leave a field blank to clear it.
           </p>
 
           <div className="space-y-4">
             <AmountField
               label="Default Contribution Amount"
-              helper="Pre-fills the amount when you start a Contribution in New Transaction."
+              helper="Pre-fills the amount and bank when you start a Contribution in New Transaction."
               value={contributionAmount}
               onChange={setContributionAmount}
+              bankId={contributionBankId}
+              onBankChange={setContributionBankId}
+              banks={banks}
               onSave={saveContribution}
               saving={savingContribution}
               message={contributionMessage}
@@ -183,9 +232,12 @@ export default function PreferencesPage() {
 
             <AmountField
               label="Default Loan Payment Amount"
-              helper="Pre-fills the amount when you start a Loan Payment in New Transaction."
+              helper="Pre-fills the amount and bank when you start a Loan Payment in New Transaction."
               value={loanPaymentAmount}
               onChange={setLoanPaymentAmount}
+              bankId={loanPaymentBankId}
+              onBankChange={setLoanPaymentBankId}
+              banks={banks}
               onSave={saveLoanPayment}
               saving={savingLoanPayment}
               message={loanPaymentMessage}

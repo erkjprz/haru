@@ -121,7 +121,9 @@ function NewTransactionForm() {
   // below. Reloaded whenever the effective member changes (type switch
   // reverts to self, or an admin picks someone via "on behalf of").
   const [contributionDefault, setContributionDefault] = useState<number | null>(null)
+  const [contributionBankDefault, setContributionBankDefault] = useState<string | null>(null)
   const [loanPaymentDefault, setLoanPaymentDefault] = useState<number | null>(null)
+  const [loanPaymentBankDefault, setLoanPaymentBankDefault] = useState<string | null>(null)
   const [saveAsDefault, setSaveAsDefault] = useState(false)
 
   // Loan Request and Investment/Investment Return are the types with the
@@ -176,15 +178,21 @@ function NewTransactionForm() {
   async function loadPreferencesFor(id: string) {
     const { data } = await supabase
       .from("members")
-      .select("default_contribution_amount, default_loan_payment_amount")
+      .select(
+        "default_contribution_amount, default_contribution_bank_id, default_loan_payment_amount, default_loan_payment_bank_id"
+      )
       .eq("member_id", id)
       .maybeSingle()
 
     const contrib = data?.default_contribution_amount != null ? Number(data.default_contribution_amount) : null
+    const contribBank = data?.default_contribution_bank_id ?? null
     const loanPay = data?.default_loan_payment_amount != null ? Number(data.default_loan_payment_amount) : null
+    const loanPayBank = data?.default_loan_payment_bank_id ?? null
     setContributionDefault(contrib)
+    setContributionBankDefault(contribBank)
     setLoanPaymentDefault(loanPay)
-    return { contrib, loanPay }
+    setLoanPaymentBankDefault(loanPayBank)
+    return { contrib, contribBank, loanPay, loanPayBank }
   }
 
   useEffect(() => {
@@ -233,10 +241,14 @@ function NewTransactionForm() {
 
       await loadLoansFor(member.member_id)
 
-      const { contrib, loanPay } = await loadPreferencesFor(member.member_id)
+      const { contrib, contribBank, loanPay, loanPayBank } = await loadPreferencesFor(member.member_id)
       if (!amount) {
         if (selectedType === "contribution" && contrib != null) setAmount(String(contrib))
         if (selectedType === "loan_payment" && loanPay != null) setAmount(String(loanPay))
+      }
+      if (!bankId) {
+        if (selectedType === "contribution" && contribBank) setBankId(contribBank)
+        if (selectedType === "loan_payment" && loanPayBank) setBankId(loanPayBank)
       }
 
       setDataLoading(false)
@@ -281,7 +293,8 @@ function NewTransactionForm() {
   const isContribution = selectedType === "contribution"
   const isStepped = isLoanRequest || isInvestmentEntry
   const showSaveAsDefault =
-    (isContribution && contributionDefault == null) || (isLoanPayment && loanPaymentDefault == null)
+    (isContribution && (contributionDefault == null || contributionBankDefault == null)) ||
+    (isLoanPayment && (loanPaymentDefault == null || loanPaymentBankDefault == null))
 
   const helperText: Record<string, string> = {
     contribution: "You've already sent this money. Attach proof of deposit.",
@@ -339,9 +352,11 @@ function NewTransactionForm() {
     // member's saved default for the new type -- there's nothing typed in
     // yet to clobber.
     if ((newType === "contribution" || newType === "loan_payment") && memberId) {
-      const { contrib, loanPay } = await loadPreferencesFor(memberId)
+      const { contrib, contribBank, loanPay, loanPayBank } = await loadPreferencesFor(memberId)
       if (newType === "contribution" && contrib != null) setAmount(String(contrib))
       if (newType === "loan_payment" && loanPay != null) setAmount(String(loanPay))
+      if (newType === "contribution" && contribBank) setBankId(contribBank)
+      if (newType === "loan_payment" && loanPayBank) setBankId(loanPayBank)
     }
   }
 
@@ -390,10 +405,14 @@ function NewTransactionForm() {
     }
 
     if (selectedType === "contribution" || selectedType === "loan_payment") {
-      const { contrib, loanPay } = await loadPreferencesFor(id || memberId || "")
+      const { contrib, contribBank, loanPay, loanPayBank } = await loadPreferencesFor(id || memberId || "")
       if (!amount) {
         if (selectedType === "contribution" && contrib != null) setAmount(String(contrib))
         if (selectedType === "loan_payment" && loanPay != null) setAmount(String(loanPay))
+      }
+      if (!bankId) {
+        if (selectedType === "contribution" && contribBank) setBankId(contribBank)
+        if (selectedType === "loan_payment" && loanPayBank) setBankId(loanPayBank)
       }
     }
   }
@@ -627,17 +646,23 @@ function NewTransactionForm() {
     // access to members.
     if (saveAsDefault && (isContribution || isLoanPayment)) {
       if (effectiveMemberId === memberId) {
-        await supabase.rpc(
-          isContribution ? "set_default_contribution_amount" : "set_default_loan_payment_amount",
-          { p_amount: Number(amount) }
-        )
+        await Promise.all([
+          supabase.rpc(
+            isContribution ? "set_default_contribution_amount" : "set_default_loan_payment_amount",
+            { p_amount: Number(amount) }
+          ),
+          supabase.rpc(
+            isContribution ? "set_default_contribution_bank" : "set_default_loan_payment_bank",
+            { p_bank_id: bankId || null }
+          )
+        ])
       } else {
         await supabase
           .from("members")
           .update(
             isContribution
-              ? { default_contribution_amount: Number(amount) }
-              : { default_loan_payment_amount: Number(amount) }
+              ? { default_contribution_amount: Number(amount), default_contribution_bank_id: bankId || null }
+              : { default_loan_payment_amount: Number(amount), default_loan_payment_bank_id: bankId || null }
           )
           .eq("member_id", effectiveMemberId)
       }
@@ -864,10 +889,11 @@ function NewTransactionForm() {
                         onChange={(e) => setSaveAsDefault(e.target.checked)}
                         className="w-4 h-4 mt-0.5 shrink-0"
                       />
-                      Save ₱{fmt(Number(amount))} as {onBehalfOfId
+                      Save ₱{fmt(Number(amount))}
+                      {bankId ? ` and ${bankLabel(bankId)}` : ""} as {onBehalfOfId
                         ? `${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}'s`
                         : "my"}{" "}
-                      default {isContribution ? "contribution" : "loan payment"} amount
+                      default {isContribution ? "contribution" : "loan payment"} {bankId ? "amount and bank" : "amount"}
                     </label>
                   )}
                   </div>
