@@ -192,7 +192,11 @@ const memberSections: FaqSection[] = [
           <ol className="list-decimal list-inside space-y-1">
             <li>Tap the gold <strong>+ New</strong> button, top right of any page.</li>
             <li>Choose <strong>Contribution</strong> or <strong>Withdrawal Request</strong>.</li>
-            <li>Enter the amount and bank, and attach a receipt.</li>
+            <li>
+              For a Contribution, enter the amount and bank, and attach a receipt. For a{" "}
+              <strong>Withdrawal Request</strong>, just enter the amount — nothing&apos;s moved yet,
+              so the bank and receipt come later, when an admin approves it.
+            </li>
             <li>Submit — it shows as <strong>Pending</strong> until an admin approves it.</li>
           </ol>
         )
@@ -563,8 +567,11 @@ const adminSections: FaqSection[] = [
         a: (
           <p>
             <strong>+ New</strong>, same as members use, but as an admin you can pick{" "}
-            <strong>on behalf of</strong> a specific member — that entry posts as approved immediately
-            instead of going into the pending queue.
+            <strong>on behalf of</strong> a specific member. For a Contribution or Loan Payment,
+            that entry posts as approved immediately instead of going into the pending queue — the
+            bank and receipt are already collected right there on the form. A Withdrawal or Loan
+            Request still goes into the pending queue either way, since nothing&apos;s moved yet
+            and that evidence still needs to be collected when it&apos;s approved.
           </p>
         )
       },
