@@ -11,6 +11,7 @@ import { getPendingBankInterestGroups, distributeBankInterestGroup, type Pending
 import { SupportPanel } from "@/app/components/admin/SupportPanel"
 import { FlowBadge } from "@/app/components/TransactionFormUI"
 import { approveLoanRelease } from "@/lib/approveLoan"
+import { approveBorrowerMember } from "@/lib/approveBorrower"
 import { dateOnly } from "@/lib/currentValue"
 
 // Same in/out vocabulary as the transaction edit page's FLOW map -- money
@@ -459,17 +460,7 @@ export default function AdminPage() {
     setActionError("")
 
     try {
-      const { error: memberError } = await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
-      if (memberError) throw memberError
-
-      const chosenBorrowerId = borrowerLinkChoice[memberId]
-      if (chosenBorrowerId) {
-        const { error: borrowerError } = await supabase
-          .from("borrowers")
-          .update({ member_id: memberId })
-          .eq("borrower_id", chosenBorrowerId)
-        if (borrowerError) throw borrowerError
-      }
+      await approveBorrowerMember(memberId, borrowerLinkChoice[memberId])
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Something went wrong.")
       setBorrowerBusyId(null)
