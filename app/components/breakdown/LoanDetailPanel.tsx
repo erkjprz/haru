@@ -348,14 +348,25 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       return
     }
 
-    await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
-
-    await supabase
+    // Verify a pending Loan Release transaction actually exists for this
+    // loan before activating it -- without this, a loan whose request was
+    // rejected (or otherwise left without a pending transaction) could
+    // still be flipped to "active" and get a hold snapshotted with no real
+    // disbursement transaction behind it.
+    const { data: updatedTxns } = await supabase
       .from("transactions")
       .update({ status: "approved", bank_account_id: approveBankChoice, receipt_url: fileName })
       .eq("loan_id", adminLoan.loan_id)
       .eq("classification", "Loan Release")
       .eq("status", "pending")
+      .select("transaction_id")
+
+    if (!updatedTxns || updatedTxns.length === 0) {
+      setApproving(false)
+      return
+    }
+
+    await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
 
     // Freezes each eligible member's pool share as of release -- the money
     // moving out to fund this loan is "on hold" for them until it's repaid.
