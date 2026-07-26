@@ -20,7 +20,8 @@ async function poolShares(excludeMemberId: string | null, asOfDate: string) {
  * frozen at release since a loan only has one principal.
  */
 export async function snapshotLoanHold(loanId: string, borrowerMemberId: string | null, releaseDate: string) {
-  await supabase.from("loan_hold_allocations").delete().eq("loan_id", loanId)
+  const { error: deleteError } = await supabase.from("loan_hold_allocations").delete().eq("loan_id", loanId)
+  if (deleteError) throw new Error(deleteError.message)
 
   const shares = await poolShares(borrowerMemberId, releaseDate)
   if (shares.length === 0) return
@@ -33,7 +34,8 @@ export async function snapshotLoanHold(loanId: string, borrowerMemberId: string 
     notes: `Frozen at loan release (${releaseDate})`
   }))
 
-  await supabase.from("loan_hold_allocations").insert(rows)
+  const { error: insertError } = await supabase.from("loan_hold_allocations").insert(rows)
+  if (insertError) throw new Error(insertError.message)
 }
 
 /**
@@ -45,7 +47,8 @@ export async function snapshotLoanHold(loanId: string, borrowerMemberId: string 
  * investment's outstanding capital right now.
  */
 export async function snapshotInvestmentHold(investmentId: string, asOfDate: string) {
-  await supabase.from("investment_hold_allocations").delete().eq("investment_id", investmentId)
+  const { error: deleteError } = await supabase.from("investment_hold_allocations").delete().eq("investment_id", investmentId)
+  if (deleteError) throw new Error(deleteError.message)
 
   const shares = await poolShares(null, asOfDate)
   if (shares.length === 0) return
@@ -58,5 +61,6 @@ export async function snapshotInvestmentHold(investmentId: string, asOfDate: str
     notes: `Re-snapshotted after new capital added (${asOfDate})`
   }))
 
-  await supabase.from("investment_hold_allocations").insert(rows)
+  const { error: insertError } = await supabase.from("investment_hold_allocations").insert(rows)
+  if (insertError) throw new Error(insertError.message)
 }

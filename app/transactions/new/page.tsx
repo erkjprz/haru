@@ -599,12 +599,21 @@ function NewTransactionForm() {
 
       // New capital into an investment changes who's staking it, so
       // re-snapshot the pool's shares for this investment's hold tracking.
+      // The transaction itself already succeeded by this point, so a
+      // failure here shouldn't block the confirmation or invite a
+      // duplicate resubmit -- just surface it so an admin knows the hold
+      // needs a manual re-run.
+      let holdWarning = ""
       if (selectedType === "investment") {
-        await snapshotInvestmentHold(investmentId, dateOnly(new Date()))
+        try {
+          await snapshotInvestmentHold(investmentId, dateOnly(new Date()))
+        } catch (err) {
+          holdWarning = ` (hold recompute failed: ${err instanceof Error ? err.message : "unknown error"} -- an admin should retry)`
+        }
       }
 
       setSubmitting(false)
-      setConfirmation({ amount: Number(amount), label: `${classification} recorded`, pending: false })
+      setConfirmation({ amount: Number(amount), label: `${classification} recorded${holdWarning}`, pending: false })
       return
     }
 
