@@ -161,20 +161,24 @@ export default function AdminPage() {
         .order("created_at", { ascending: false }),
       supabase.from("borrowers").select("borrower_id, name").is("member_id", null).order("name"),
       supabase.from("borrowers").select("name, member_id").not("member_id", "is", null),
-      getPendingBankInterestGroups()
+      // getPendingBankInterestGroups() now throws on a query failure (see
+      // its own comment) instead of silently returning an empty list --
+      // caught and folded in here rather than left to reject the whole
+      // Promise.all, which would otherwise take every other query on this
+      // page down with it and leave loadData() stuck mid-await forever.
+      getPendingBankInterestGroups().then(
+        (groups) => ({ groups, error: null as string | null }),
+        (err) => ({ groups: [] as PendingBankInterestGroup[], error: err instanceof Error ? err.message : "Something went wrong." })
+      )
     ])
 
     setPendingMembers(pendingMembersRes.data ?? [])
     setUnclaimedMembers(unclaimedMembersRes.data ?? [])
     setBanks(banksRes.data ?? [])
 
-    if (pendingTxnsRes.error) {
-      setLoadError(pendingTxnsRes.error.message)
-      setPendingTransactions([])
-    } else {
-      setLoadError("")
-      setPendingTransactions(pendingTxnsRes.data ?? [])
-    }
+    const combinedError = pendingTxnsRes.error?.message || pendingGroupsRes.error || ""
+    setLoadError(combinedError)
+    setPendingTransactions(pendingTxnsRes.error ? [] : pendingTxnsRes.data ?? [])
 
     setBorrowerMembers(borrowerMembersRes.data ?? [])
     setUnclaimedBorrowers(unclaimedBorrowersRes.data ?? [])
@@ -182,7 +186,7 @@ export default function AdminPage() {
       Object.fromEntries((linkedBorrowersRes.data ?? []).map((b: any) => [b.member_id as string, b.name as string]))
     )
 
-    setPendingGroups(pendingGroupsRes)
+    setPendingGroups(pendingGroupsRes.groups)
   }
 
   useEffect(() => {

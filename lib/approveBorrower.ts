@@ -35,12 +35,19 @@ export async function linkBorrowerRecord(memberId: string, borrowerId: string) {
  * this action -- admin/page.tsx's Borrowers tab and admin/borrowers/page.tsx
  * -- so a future change to this flow only needs to happen in one place
  * instead of drifting between two near-identical implementations.
+ *
+ * Both writes go through approve_borrower_member in one DB transaction --
+ * previously these were two separate client-side calls with no rollback
+ * between them, so a link failure (e.g. the chosen loan record got claimed
+ * by someone else in the meantime, which this already guarded against)
+ * left the member permanently approved but never linked, with only a
+ * one-time error toast and no forced way back to a consistent state.
  */
 export async function approveBorrowerMember(memberId: string, linkToBorrowerId?: string) {
-  const { error: memberError } = await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
-  if (memberError) throw new Error(memberError.message)
+  const { error } = await supabase.rpc("approve_borrower_member", {
+    p_member_id: memberId,
+    p_borrower_id: linkToBorrowerId ?? null
+  })
 
-  if (linkToBorrowerId) {
-    await linkBorrowerRecord(memberId, linkToBorrowerId)
-  }
+  if (error) throw new Error(error.message)
 }

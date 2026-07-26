@@ -67,12 +67,13 @@ export async function distributeInvestmentGain(input: InvestmentDistributionInpu
 export async function getUndistributedInvestmentGain(investmentId: string, asOfDate: string): Promise<number> {
   const isOnOrBefore = (row: Parameters<typeof effectiveDate>[0]) => dateOnly(effectiveDate(row)) <= asOfDate
 
-  const { data: txns } = await supabase
+  const { data: txns, error: txnsError } = await supabase
     .from("transactions")
     .select("amount, classification, txn_date, created_at")
     .eq("investment_id", investmentId)
     .eq("status", "approved")
     .in("classification", ["Investment", "Investment Return"])
+  if (txnsError) throw new Error(txnsError.message)
 
   const invested = (txns ?? [])
     .filter((t) => t.classification === "Investment" && isOnOrBefore(t))
@@ -82,10 +83,11 @@ export async function getUndistributedInvestmentGain(investmentId: string, asOfD
     .filter((t) => t.classification === "Investment Return" && isOnOrBefore(t))
     .reduce((sum, t) => sum + Number(t.amount), 0)
 
-  const { data: allocRows } = await supabase
+  const { data: allocRows, error: allocError } = await supabase
     .from("investment_allocations")
     .select("amount, allocation_type")
     .eq("investment_id", investmentId)
+  if (allocError) throw new Error(allocError.message)
 
   const alreadyDistributed = (allocRows ?? []).reduce(
     (sum, r) => sum + (r.allocation_type === "Investment Loss" ? -Number(r.amount) : Number(r.amount)),

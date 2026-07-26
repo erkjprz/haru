@@ -48,8 +48,12 @@ export function BankDetailPanel({
   const [distributeError, setDistributeError] = useState("")
 
   async function loadPending() {
-    const groups = await getPendingBankInterestGroups()
-    setPendingGroups(groups.filter((g) => g.bank === bank))
+    try {
+      const groups = await getPendingBankInterestGroups()
+      setPendingGroups(groups.filter((g) => g.bank === bank))
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Something went wrong.")
+    }
   }
 
   async function handleDistribute(group: PendingBankInterestGroup) {
