@@ -75,20 +75,10 @@ export default function Navbar() {
   // pages even though there's no separate "Transactions" sub-route tab.
   const MENU_OWNED_PREFIXES = ["/menu", "/account", "/help"]
 
-  // Loans/Banks/Investments live as tabs on the Breakdown hub now, and
-  // member-breakdown is the Group tab's drill-down -- all of it should
-  // still read as "Breakdown" active, not fall through to Menu.
-  const BREAKDOWN_OWNED_PREFIXES = ["/fund-breakdown", "/loans", "/bank", "/investment", "/member-breakdown"]
-
   const dockItems: DockItem[] = [
     { label: "Dashboard", path: "/dashboard", icon: IconHome },
     { label: "Transactions", path: "/transactions", icon: IconTransactions },
-    {
-      label: "Breakdown",
-      path: "/fund-breakdown",
-      icon: IconBreakdown,
-      activeWhen: (p) => BREAKDOWN_OWNED_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix + "/"))
-    },
+    { label: "Breakdown", path: "/fund-breakdown", icon: IconBreakdown },
     ...(isAdmin ? [{ label: "Admin", path: "/admin", icon: IconAdmin } as DockItem] : []),
     {
       label: "Menu",
