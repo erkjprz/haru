@@ -73,7 +73,33 @@ export default function DashboardPage() {
       const pendingPromise =
         member.role === "admin"
           ? supabase.from("transactions").select("transaction_id", { count: "exact", head: true }).eq("status", "pending")
-          : Promise.resolve({ count: 0 } as any)
+          : Promise.resolve({ count: 0, error: null })
+
+      // Mirrors Admin's own "entries awaiting approval" total -- transactions,
+      // pending member signups, and pending borrower signups. Distribution
+      // groups are deliberately left out (getPendingBankInterestGroups()
+      // does real aggregation work, not a cheap count, and isn't worth
+      // paying for on every dashboard load). role='borrower' is excluded
+      // from the members count the same way Admin's Members tab excludes
+      // it -- pending borrowers are counted once, not double-counted
+      // across both.
+      const pendingMembersPromise =
+        member.role === "admin"
+          ? supabase
+              .from("members")
+              .select("member_id", { count: "exact", head: true })
+              .eq("status", "pending")
+              .neq("role", "borrower")
+          : Promise.resolve({ count: 0, error: null })
+
+      const pendingBorrowersPromise =
+        member.role === "admin"
+          ? supabase
+              .from("members")
+              .select("member_id", { count: "exact", head: true })
+              .eq("status", "pending")
+              .eq("role", "borrower")
+          : Promise.resolve({ count: 0, error: null })
 
       const myPendingPromise = supabase
         .from("transactions")
@@ -132,6 +158,8 @@ export default function DashboardPage() {
         fundResult,
         mineResult,
         pendingResult,
+        pendingMembersResult,
+        pendingBorrowersResult,
         myPendingResult,
         myApprovedResult,
         bankInterestResult,
@@ -143,6 +171,8 @@ export default function DashboardPage() {
         fundPromise,
         minePromise,
         pendingPromise,
+        pendingMembersPromise,
+        pendingBorrowersPromise,
         myPendingPromise,
         myApprovedPromise,
         bankInterestPromise,
@@ -152,7 +182,24 @@ export default function DashboardPage() {
         recentTransactionsPromise
       ])
 
-      const firstError = fundResult.error || mineResult.error
+      // Every query's error is checked -- gainLoss in particular is built
+      // to always agree with Breakdown's "Total Gain/Loss" (see comment
+      // below), so a silently-swallowed failure on any of its four sources
+      // would quietly understate it instead of showing an error, exactly
+      // the kind of mismatch this figure was written to avoid.
+      const firstError =
+        fundResult.error ||
+        mineResult.error ||
+        pendingResult.error ||
+        pendingMembersResult.error ||
+        pendingBorrowersResult.error ||
+        myPendingResult.error ||
+        myApprovedResult.error ||
+        bankInterestResult.error ||
+        loanGainResult.error ||
+        investmentAllocResult.error ||
+        bankWriteoffResult.error ||
+        recentTransactionsResult.error
       if (firstError) setLoadError(firstError.message)
 
       if (!fundResult.error && fundResult.data) {
@@ -163,7 +210,7 @@ export default function DashboardPage() {
         setMyBalance(Number(mineResult.data.withdrawable_now))
       }
 
-      setPendingCount(pendingResult.count ?? 0)
+      setPendingCount((pendingResult.count ?? 0) + (pendingMembersResult.count ?? 0) + (pendingBorrowersResult.count ?? 0))
       setMyPendingCount(myPendingResult.count ?? 0)
       setMyApprovedCount(myApprovedResult.count ?? 0)
 
