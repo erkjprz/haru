@@ -49,6 +49,20 @@ export async function closeLoanAndDistributeGain(params: CloseLoanParams) {
   const currentValueByMember = await computeCurrentValueByMember(closingDate, params.member_id)
   const shares = splitProportionally(currentValueByMember, gainOrLoss)
 
+  // splitProportionally returns [] both when gainOrLoss is exactly 0 (fine,
+  // there's nothing to distribute) and when it's nonzero but no member has a
+  // positive current value to share it against. The RPC only writes
+  // loan_gain_allocations/the Gain Allocation transaction when shares is
+  // non-empty, so silently letting a nonzero gain/loss through here would
+  // close the loan with that money never recorded anywhere -- missing from
+  // closed_date, Dashboard's Total Gain/Loss, and every per-member ledger.
+  // Matches the same guard distributeInvestmentGain already has.
+  if (gainOrLoss !== 0 && shares.length === 0) {
+    throw new Error(
+      "No member has a positive current value as of this date -- nothing to distribute this loan's gain/loss against. The loan was not closed."
+    )
+  }
+
   const gainOrLossLabel = gainOrLoss > 0 ? "gain" : "loss"
 
   const rpcShares = shares.map((s) => ({

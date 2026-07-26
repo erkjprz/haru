@@ -10,7 +10,7 @@ import { SkeletonCardList } from "@/app/components/Skeleton"
 import { getPendingBankInterestGroups, distributeBankInterestGroup, type PendingBankInterestGroup } from "@/lib/bankInterest"
 import { SupportPanel } from "@/app/components/admin/SupportPanel"
 import { FlowBadge } from "@/app/components/TransactionFormUI"
-import { snapshotLoanHold } from "@/lib/snapshotHold"
+import { approveLoanRelease } from "@/lib/approveLoan"
 import { dateOnly } from "@/lib/currentValue"
 
 // Same in/out vocabulary as the transaction edit page's FLOW map -- money
@@ -275,13 +275,12 @@ export default function AdminPage() {
           .eq("transaction_id", transactionId)
         if (error) throw error
       } else if (txn.classification === "Loan Release") {
-        // Approving a Loan Release now does the same three things
-        // loans/[id]'s "Approve & Activate" does -- activates the loan,
-        // records the disbursing bank on the release transaction, and
-        // freezes each eligible member's pool share for this loan's hold.
-        // The hold snapshot was missing here for a while, which is why a
-        // loan approved from this screen wouldn't show up under any
-        // member's "money on hold" until someone noticed.
+        // Approving a Loan Release does the same thing loans/[id]'s
+        // "Approve & Activate" does -- both call the same atomic RPC, which
+        // verifies a pending disbursement transaction actually exists,
+        // activates the loan, records the disbursing bank/receipt, and
+        // freezes each eligible member's pool share for this loan's hold,
+        // all in one DB transaction.
         const bankAccountId = loanReleaseBankSelections[transactionId]
         const receiptFile = approvalReceipts[transactionId]
         if (!bankAccountId || !receiptFile || !txn.loan_id) return
@@ -291,19 +290,13 @@ export default function AdminPage() {
         setUploadingReceiptId(null)
         if (!receiptUrl) return
 
-        const { error: loanError } = await supabase
-          .from("loans")
-          .update({ status: "active" })
-          .eq("loan_id", txn.loan_id)
-        if (loanError) throw loanError
-
-        const { error: txnError } = await supabase
-          .from("transactions")
-          .update({ status: "approved", bank_account_id: bankAccountId, receipt_url: receiptUrl })
-          .eq("transaction_id", transactionId)
-        if (txnError) throw txnError
-
-        await snapshotLoanHold(txn.loan_id, txn.member_id, dateOnly(new Date()))
+        await approveLoanRelease({
+          loanId: txn.loan_id,
+          borrowerMemberId: txn.member_id,
+          bankAccountId,
+          receiptUrl,
+          releaseDate: dateOnly(new Date())
+        })
       } else {
         const { error } = await supabase
           .from("transactions")

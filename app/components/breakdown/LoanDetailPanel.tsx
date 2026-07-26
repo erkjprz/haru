@@ -10,7 +10,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { closeLoanAndDistributeGain } from "@/lib/closeLoan"
-import { snapshotLoanHold } from "@/lib/snapshotHold"
+import { approveLoanRelease } from "@/lib/approveLoan"
 import { dateOnly } from "@/lib/currentValue"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { formatInterestLabel } from "@/lib/loanFormat"
@@ -358,30 +358,18 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         .upload(fileName, approveReceipt, { contentType: approveReceipt.type })
       if (uploadError) throw uploadError
 
-      // Verify a pending Loan Release transaction actually exists for this
-      // loan before activating it -- without this, a loan whose request was
-      // rejected (or otherwise left without a pending transaction) could
-      // still be flipped to "active" and get a hold snapshotted with no real
-      // disbursement transaction behind it.
-      const { data: updatedTxns, error: txnError } = await supabase
-        .from("transactions")
-        .update({ status: "approved", bank_account_id: approveBankChoice, receipt_url: fileName })
-        .eq("loan_id", adminLoan.loan_id)
-        .eq("classification", "Loan Release")
-        .eq("status", "pending")
-        .select("transaction_id")
-      if (txnError) throw txnError
-
-      if (!updatedTxns || updatedTxns.length === 0) {
-        throw new Error("No pending disbursement transaction found for this loan -- nothing to approve.")
-      }
-
-      const { error: loanError } = await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
-      if (loanError) throw loanError
-
-      // Freezes each eligible member's pool share as of release -- the money
-      // moving out to fund this loan is "on hold" for them until it's repaid.
-      await snapshotLoanHold(adminLoan.loan_id, adminLoan.member_id, dateOnly(new Date()))
+      // Verifies a pending Loan Release transaction actually exists for
+      // this loan before activating it, activates the loan, and freezes
+      // each eligible member's pool share for this loan's hold -- all in
+      // one DB transaction via the same atomic RPC the Txns review card
+      // uses, so a failure partway through can't leave things half-done.
+      await approveLoanRelease({
+        loanId: adminLoan.loan_id,
+        borrowerMemberId: adminLoan.member_id,
+        bankAccountId: approveBankChoice,
+        receiptUrl: fileName,
+        releaseDate: dateOnly(new Date())
+      })
     } catch (err) {
       setManageError(err instanceof Error ? err.message : "Something went wrong.")
       setApproving(false)
