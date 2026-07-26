@@ -12,6 +12,7 @@ import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
 import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
 import { InvestmentDetailPanel } from "@/app/components/breakdown/InvestmentDetailPanel"
+import { InfoBox, InfoRow, InfoSubRow } from "@/app/components/breakdown/InfoBox"
 
 type Tab = "fund" | "loans" | "banks" | "investments"
 type FundView = "you" | "group"
@@ -2286,7 +2287,7 @@ function InvestmentForm({
   )
 }
 
-/* ============================== Shared info-box helpers ============================== */
+/* ============================== Sparkline ============================== */
 
 function Sparkline({ points, color }: { points: TrendPoint[]; color: string }) {
   const { linePoints, ticks } = useMemo(() => {
@@ -2363,55 +2364,3 @@ function Sparkline({ points, color }: { points: TrendPoint[]; color: string }) {
   )
 }
 
-function InfoBox({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-paper rounded-lg px-4 py-3.5 mb-3 last:mb-0">
-      <p className="text-[10px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-2">{label}</p>
-      <div className="space-y-1.5">{children}</div>
-    </div>
-  )
-}
-
-function InfoRow({
-  label,
-  value,
-  valueClass = "text-ink",
-  bold = false
-}: {
-  label: string
-  value: string
-  valueClass?: string
-  bold?: boolean
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className={`text-[13px] ${bold ? "text-ink font-semibold" : "text-ink-soft"}`}>{label}</span>
-      <span
-        className={`font-mono [font-variant-numeric:tabular-nums] whitespace-nowrap ${
-          bold ? "text-[15px] font-bold" : "text-[13px] font-semibold"
-        } ${valueClass}`}
-      >
-        {value}
-      </span>
-    </div>
-  )
-}
-
-function InfoSubRow({
-  label,
-  value,
-  valueClass = "text-ink"
-}: {
-  label: string
-  value: string
-  valueClass?: string
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 pl-2">
-      <span className="text-[12px] text-ink-soft">{label}</span>
-      <span className={`font-mono [font-variant-numeric:tabular-nums] text-[12px] font-medium whitespace-nowrap ${valueClass}`}>
-        {value}
-      </span>
-    </div>
-  )
-}
