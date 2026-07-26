@@ -370,7 +370,13 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     if (!adminLoan) return
     setReopening(true)
 
-    await supabase.from("investment_allocations").delete().eq("loan_id", adminLoan.loan_id)
+    // closeLoanAndDistributeGain writes to loan_gain_allocations (not
+    // investment_allocations, which has no loan_id column at all) -- clear
+    // that same table here, or a loan closed a second time after reopening
+    // would pile a fresh set of gain rows on top of the stale first set,
+    // double-counting into every other member's current value via
+    // computeCurrentValueByMember's priorLoanGains sum.
+    await supabase.from("loan_gain_allocations").delete().eq("loan_id", adminLoan.loan_id)
     await supabase.from("transactions").delete().eq("loan_id", adminLoan.loan_id).eq("classification", "Gain Allocation")
     await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
 
