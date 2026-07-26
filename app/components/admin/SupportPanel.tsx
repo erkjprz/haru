@@ -374,8 +374,23 @@ function SupportEditForm({
 
     if (error) {
       setSaving(false)
+      // The new receipt already uploaded successfully above -- if the
+      // update it belongs to failed, clean it up rather than leaving it
+      // orphaned in the bucket. The old file at t.receipt_url is untouched
+      // since the update never committed.
+      if (receipt && receiptUrl !== t.receipt_url) {
+        await supabase.storage.from("Receipts").remove([receiptUrl!])
+      }
       setMessage(error.message)
       return
+    }
+
+    // The update above already committed the new receipt_url, so the old
+    // file at t.receipt_url is now unreferenced -- clean it up rather than
+    // leaving it orphaned in the bucket. Best-effort: a failure here doesn't
+    // affect the save that already succeeded.
+    if (receipt && t.receipt_url && t.receipt_url !== receiptUrl) {
+      await supabase.storage.from("Receipts").remove([t.receipt_url])
     }
 
     if (isUnapprovedLoanRelease) {

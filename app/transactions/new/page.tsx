@@ -541,7 +541,7 @@ function NewTransactionForm() {
           affects_cash: 0,
           amount: Number(amount),
           description,
-          receipt_url: null,
+          receipt_url: receiptUrl,
           status: "approved",
           submitted_by: memberId
         })
@@ -549,6 +549,10 @@ function NewTransactionForm() {
       setSubmitting(false)
 
       if (error) {
+        // The receipt already uploaded successfully above -- if the insert
+        // it belongs to failed, clean it up rather than leaving it orphaned
+        // in the bucket.
+        if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
         setMessage(error.message)
         return
       }
@@ -586,13 +590,17 @@ function NewTransactionForm() {
           classification,
           amount: selectedType === "expense" || selectedType === "investment" ? -Number(amount) : Number(amount),
           description,
-          receipt_url: null,
+          receipt_url: receiptUrl,
           status: "approved",
           submitted_by: memberId
         })
 
       if (error) {
         setSubmitting(false)
+        // The receipt already uploaded successfully above -- if the insert
+        // it belongs to failed, clean it up rather than leaving it orphaned
+        // in the bucket.
+        if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
         setMessage(error.message)
         return
       }
@@ -644,6 +652,10 @@ function NewTransactionForm() {
 
     if (error) {
       setSubmitting(false)
+      // The receipt already uploaded successfully above -- if the insert it
+      // belongs to failed, clean it up rather than leaving it orphaned in
+      // the bucket.
+      if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
       setMessage(error.message)
       return
     }

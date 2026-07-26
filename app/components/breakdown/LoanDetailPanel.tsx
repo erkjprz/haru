@@ -342,12 +342,15 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     setApproving(true)
     setManageError("")
 
+    // Declared outside the try block so the catch handler can clean it up
+    // regardless of which step below fails.
+    const fileName = `${adminLoan.member_id || "admin"}-${Date.now()}-${approveReceipt.name}`
+
     try {
       // Loan disbursement moves real money out, and until now there was no
       // evidence trail for it at all -- receipt_url stayed null from
       // submission straight through approval. Requires proof of the actual
       // outgoing transfer before the loan can be activated.
-      const fileName = `${adminLoan.member_id || "admin"}-${Date.now()}-${approveReceipt.name}`
       const { error: uploadError } = await supabase.storage
         .from("Receipts")
         .upload(fileName, approveReceipt, { contentType: approveReceipt.type })
@@ -366,6 +369,10 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         releaseDate: dateOnly(new Date())
       })
     } catch (err) {
+      // If the upload itself failed there's nothing at fileName to remove
+      // (a no-op); if it succeeded but approveLoanRelease then failed, the
+      // file is now orphaned -- clean it up either way.
+      await supabase.storage.from("Receipts").remove([fileName])
       setManageError(err instanceof Error ? err.message : "Something went wrong.")
       setApproving(false)
       return
@@ -412,12 +419,24 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       const { error: gainError } = await supabase.from("loan_gain_allocations").delete().eq("loan_id", adminLoan.loan_id)
       if (gainError) throw gainError
 
-      const { error: txnError } = await supabase
+      // Gain Allocation rows are system-generated and never carry a
+      // receipt today, but select the deleted rows back and clean up
+      // defensively in case that ever changes -- otherwise a future
+      // receipt would silently orphan in the bucket.
+      const { data: deletedGainTxns, error: txnError } = await supabase
         .from("transactions")
         .delete()
         .eq("loan_id", adminLoan.loan_id)
         .eq("classification", "Gain Allocation")
+        .select("receipt_url")
       if (txnError) throw txnError
+
+      const orphanedReceipts = (deletedGainTxns ?? [])
+        .map((t) => t.receipt_url)
+        .filter((url): url is string => !!url)
+      if (orphanedReceipts.length > 0) {
+        await supabase.storage.from("Receipts").remove(orphanedReceipts)
+      }
 
       const { error: loanError } = await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
       if (loanError) throw loanError

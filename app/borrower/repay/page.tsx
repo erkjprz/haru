@@ -159,6 +159,10 @@ export default function BorrowerRepayPage() {
     setSubmitting(false)
 
     if (error) {
+      // The receipt already uploaded successfully above -- if the insert it
+      // belongs to failed, clean it up rather than leaving it orphaned in
+      // the bucket.
+      await supabase.storage.from("Receipts").remove([fileName])
       setMessage(error.message)
       return
     }

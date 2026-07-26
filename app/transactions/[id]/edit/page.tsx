@@ -447,8 +447,23 @@ export default function EditTransactionPage() {
     setSaving(false)
 
     if (error) {
+      // The new receipt already uploaded successfully above -- if the
+      // update it belongs to failed, clean it up rather than leaving it
+      // orphaned in the bucket. The old file at existingReceiptUrl is
+      // untouched since the update never committed.
+      if (receipt && receiptUrl !== existingReceiptUrl) {
+        await supabase.storage.from("Receipts").remove([receiptUrl!])
+      }
       setMessage(error.message)
       return
+    }
+
+    // The update above already committed the new receipt_url, so the old
+    // file at existingReceiptUrl is now unreferenced -- clean it up rather
+    // than leaving it orphaned in the bucket. Best-effort: a failure here
+    // doesn't affect the save that already succeeded.
+    if (receipt && existingReceiptUrl && existingReceiptUrl !== receiptUrl) {
+      await supabase.storage.from("Receipts").remove([existingReceiptUrl])
     }
 
     router.push(backHref)
