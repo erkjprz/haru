@@ -308,6 +308,21 @@ function SupportEditForm({
       return
     }
 
+    // This tool deliberately never activates a loan or snapshots a hold --
+    // setting a still-"requested" loan's Loan Release to "approved" here
+    // would leave the loan stuck at "requested" (with a reachable but
+    // now-unusable "Approve & Activate", since that flow requires a
+    // *pending* Loan Release transaction and this one would already be
+    // "approved") with no path back through the UI. Approving a
+    // disbursement always has to go through the real approval flow so the
+    // loan and hold snapshot move together with it.
+    if (t.classification === "Loan Release" && status === "approved" && t.loans?.status === "requested") {
+      setMessage(
+        "Can't approve a loan disbursement here -- it wouldn't activate the loan or snapshot the hold. Use the Approvals tab or the loan's own \"Approve & Activate\" instead."
+      )
+      return
+    }
+
     // Moving a still-unapproved Loan Release to rejected/cancelled here
     // needs the same fix the normal admin reject button and the member's
     // own "Cancel entry" flow already apply: null the transaction's
@@ -385,6 +400,22 @@ function SupportEditForm({
         setMessage(loanError.message)
         return
       }
+    } else if (t.classification === "Loan Release" && t.loan_id && amountNum !== Number(t.amount)) {
+      // loans.principal drives total_repayable/outstanding/gain everywhere
+      // (v_loan_summary, the close-loan gain split, etc.) -- none of that
+      // reads transactions.amount directly, so fixing only the transaction
+      // here would be cosmetic-only in the ledger and never reach the
+      // number that actually matters financially. Loan Release amounts are
+      // stored negative; principal is always positive.
+      const { error: loanError } = await supabase
+        .from("loans")
+        .update({ principal: Math.abs(amountNum) })
+        .eq("loan_id", t.loan_id)
+      if (loanError) {
+        setSaving(false)
+        setMessage(loanError.message)
+        return
+      }
     }
 
     setSaving(false)
@@ -393,6 +424,13 @@ function SupportEditForm({
 
   return (
     <div className="border-t border-hairline px-4 pt-4 pb-4 space-y-3">
+      {t.classification === "Bank Interest" && t.interest_distributed && (
+        <p className="text-[11px] text-gold bg-gold/10 border border-gold rounded-md px-3 py-2">
+          This interest has already been split across members. Changing the amount here only corrects this
+          transaction -- it won&apos;t update what members were already credited in bank_interest_allocations.
+        </p>
+      )}
+
       <div>
         <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">
           Amount (as stored, including sign)
