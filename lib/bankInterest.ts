@@ -27,7 +27,7 @@ export interface PendingBankInterestGroup {
  * members), not one event per individual transaction.
  */
 export async function getPendingBankInterestGroups(): Promise<PendingBankInterestGroup[]> {
-  const { data: pendingTxns } = await supabase
+  const { data: pendingTxns, error } = await supabase
     .from("transactions")
     .select(
       `
@@ -37,6 +37,8 @@ export async function getPendingBankInterestGroups(): Promise<PendingBankInteres
     )
     .eq("classification", "Bank Interest")
     .eq("interest_distributed", false)
+
+  if (error) throw new Error(error.message)
 
   const groups = new Map<string, PendingBankInterestGroup>()
 
@@ -91,17 +93,19 @@ export async function distributeBankInterestGroup(group: PendingBankInterestGrou
   const distributionDate = dateOnly(new Date())
   const interestAmount = group.totalAmount
 
-  const { data: allMembers } = await supabase
+  const { data: allMembers, error: membersError } = await supabase
     .from("members")
     .select("member_id, name, gain_sharing_eligible")
+  if (membersError) throw new Error(membersError.message)
 
   const eligibleMembers = (allMembers ?? []).filter((m) => m.gain_sharing_eligible !== false)
 
-  const { data: contributionTxns } = await supabase
+  const { data: contributionTxns, error: contributionError } = await supabase
     .from("transactions")
     .select("member_id, classification, amount, status, txn_date, created_at")
     .in("classification", ["Member Contribution", "Member Withdrawal"])
     .eq("status", "approved")
+  if (contributionError) throw new Error(contributionError.message)
 
   const balances = eligibleMembers.map((member) => {
     const netContribution = (contributionTxns ?? [])

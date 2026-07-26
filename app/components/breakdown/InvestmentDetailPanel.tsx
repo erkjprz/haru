@@ -202,8 +202,13 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
   }
 
   async function refreshSuggestedAmount(asOfDate: string) {
-    const suggestion = await getUndistributedInvestmentGain(investmentId, asOfDate)
-    setSuggestedAmount(suggestion)
+    try {
+      const suggestion = await getUndistributedInvestmentGain(investmentId, asOfDate)
+      setSuggestedAmount(suggestion)
+    } catch (err) {
+      setSuggestedAmount(null)
+      setDistributeMessage(err instanceof Error ? err.message : "Couldn't compute a suggested amount.")
+    }
   }
 
   function closeDistribute() {
