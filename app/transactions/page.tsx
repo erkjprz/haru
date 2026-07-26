@@ -315,7 +315,7 @@ export default function TransactionsPage() {
 function TransactionsPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { member } = useAuth()
+  const { loading: authLoading, member } = useAuth()
   const isAdmin = member?.role === "admin"
   const [transactions, setTransactions] = useState<any[]>([])
   const [dataLoading, setDataLoading] = useState(true)
@@ -435,13 +435,36 @@ function TransactionsPageInner() {
     setMembers(data ?? [])
   }
 
+  // Every other main page redirects an unauthenticated/pending/borrower
+  // visitor away before rendering real content -- this one didn't, so
+  // navigating here directly just silently showed an empty list (RLS
+  // still blocks the actual data either way, but the experience should
+  // match everywhere else: bounced to the right screen instead of a
+  // confusing blank page).
   useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
+    }
+
     async function load() {
       await Promise.all([loadTransactions(), loadMembers()])
       setDataLoading(false)
     }
     load()
-  }, [])
+  }, [authLoading, member, router])
 
   // Ref-guarded run-once-on-load initializer, same as the effect above it --
   // loanFilter/investmentFilter are read once here, only at the moment
