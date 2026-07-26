@@ -830,7 +830,11 @@ function GroupPanel() {
                 value={signed(fund.net_investment_gain_loss)}
                 valueClass={tone(fund.net_investment_gain_loss)}
               />
-              <InfoSubRow label="Loan Gains Distributed" value={`₱${fmt(fund.total_loan_gain_distributed)}`} />
+              <InfoSubRow
+                label="Loan Gains Distributed"
+                value={signed(fund.total_loan_gain_distributed)}
+                valueClass={tone(fund.total_loan_gain_distributed)}
+              />
             </div>
           </InfoBox>
         </div>
