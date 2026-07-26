@@ -33,35 +33,25 @@ export async function distributeInvestmentGain(input: InvestmentDistributionInpu
 
   const label = amount < 0 ? "loss" : "gain"
 
-  const rows = shares.map((s) => ({
-    investment_id: input.investmentId,
+  const rpcShares = shares.map((s) => ({
     member_id: s.member_id,
     allocation_type: s.amount < 0 ? "Investment Loss" : "Investment Gain",
     amount: Math.abs(s.amount),
-    allocation_date: input.allocationDate,
     current_value: s.currentValue,
     pct_share: s.pctShare,
-    notes: input.notes || `Distribution of ₱${Math.abs(amount).toFixed(2)} ${label} dated ${input.allocationDate}`
+    notes: input.notes || `Distribution of ₱${Math.abs(amount).toFixed(2)} ${label} dated ${input.allocationDate}`,
+    description: `Share of investment ${label} distributed ${input.allocationDate}`
   }))
 
-  await supabase.from("investment_allocations").insert(rows)
-
-  const gainTransactions = rows
-    .filter((r) => r.amount !== 0)
-    .map((r) => ({
-      member_id: r.member_id,
-      bank_account_id: null,
-      investment_id: input.investmentId,
-      classification: "Gain Allocation",
-      affects_cash: 0,
-      amount: r.allocation_type === "Investment Loss" ? -r.amount : r.amount,
-      description: `Share of investment ${label} distributed ${input.allocationDate}`,
-      status: "approved"
-    }))
-
-  if (gainTransactions.length > 0) {
-    await supabase.from("transactions").insert(gainTransactions)
-  }
+  // The allocation rows and the crediting transactions were previously two
+  // separate client-side calls with no rollback between them -- a failure
+  // partway through could leave a distribution recorded in one place but
+  // not the other. One atomic RPC call now does both.
+  await supabase.rpc("distribute_investment_gain", {
+    p_investment_id: input.investmentId,
+    p_allocation_date: input.allocationDate,
+    p_shares: rpcShares
+  })
 }
 
 /**

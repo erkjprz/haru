@@ -133,39 +133,29 @@ export async function distributeBankInterestGroup(group: PendingBankInterestGrou
     }
   }
 
-  const bankInterestRows = shares.map((s) => ({
+  const rpcShares = shares.map((s) => ({
     member_id: s.member_id,
-    bank: group.bank,
-    allocation_date: distributionDate,
     amount: s.amount,
     current_value: s.balance,
     pct_share: totalBalance > 0 ? Number(((s.balance / totalBalance) * 100).toFixed(2)) : 0,
     notes:
       s.balance > 0
         ? `Share of ₱${interestAmount.toFixed(2)} ${group.bank} interest for ${group.year} distributed ${distributionDate}`
-        : `No contribution balance in the fund as of ${distributionDate}`
+        : `No contribution balance in the fund as of ${distributionDate}`,
+    description: `Share of ${group.year} ${group.bank} bank interest`
   }))
 
-  await supabase.from("bank_interest_allocations").insert(bankInterestRows)
-
-  const gainTransactions = shares
-    .filter((s) => s.amount !== 0)
-    .map((s) => ({
-      member_id: s.member_id,
-      bank_account_id: null,
-      classification: "Gain Allocation",
-      affects_cash: 0,
-      amount: s.amount,
-      description: `Share of ${group.year} ${group.bank} bank interest`,
-      status: "approved"
-    }))
-
-  if (gainTransactions.length > 0) {
-    await supabase.from("transactions").insert(gainTransactions)
-  }
-
-  await supabase
-    .from("transactions")
-    .update({ interest_distributed: true })
-    .in("transaction_id", group.transactionIds)
+  // The allocation rows, the crediting transactions, and marking the
+  // source transactions as distributed were previously three separate
+  // client-side calls with no rollback between them -- a failure partway
+  // through could leave a distribution half-done, and since
+  // interest_distributed has no retry path, a failed allocation insert
+  // specifically would be permanently invisible with no way to redo it.
+  // One atomic RPC call now does all three.
+  await supabase.rpc("distribute_bank_interest_group", {
+    p_bank: group.bank,
+    p_distribution_date: distributionDate,
+    p_transaction_ids: group.transactionIds,
+    p_shares: rpcShares
+  })
 }
