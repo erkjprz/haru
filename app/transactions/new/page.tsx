@@ -86,6 +86,7 @@ function NewTransactionForm() {
   const [banks, setBanks] = useState<any[]>([])
   const [allMembers, setAllMembers] = useState<any[]>([])
   const [myLoans, setMyLoans] = useState<any[]>([])
+  const [loanRepaidTotals, setLoanRepaidTotals] = useState<Record<string, number>>({})
   const [investmentsList, setInvestmentsList] = useState<any[]>([])
 
   // Dashboard shortcuts (Add Contribution, Request Withdrawal, etc.) deep
@@ -146,12 +147,30 @@ function NewTransactionForm() {
 
     const { data } = await supabase
       .from("loans")
-      .select("loan_id, principal, interest_rate, term_months, status, start_date")
+      .select("loan_id, principal, interest_type, interest_rate, interest_amount, term_months, status, start_date")
       .or(loanFilter)
       .in("status", ["active", "requested"])
       .order("start_date", { ascending: false })
 
     setMyLoans(data ?? [])
+
+    const loanIds = (data ?? []).map((l) => l.loan_id)
+    if (loanIds.length > 0) {
+      const { data: repayments } = await supabase
+        .from("transactions")
+        .select("loan_id, amount")
+        .in("loan_id", loanIds)
+        .eq("classification", "Loan Repayment")
+        .in("status", ["pending", "approved"])
+
+      const totals: Record<string, number> = {}
+      ;(repayments ?? []).forEach((r) => {
+        totals[r.loan_id] = (totals[r.loan_id] || 0) + Number(r.amount)
+      })
+      setLoanRepaidTotals(totals)
+    } else {
+      setLoanRepaidTotals({})
+    }
   }
 
   async function loadPreferencesFor(id: string) {
@@ -781,6 +800,23 @@ function NewTransactionForm() {
                             ))}
                         </select>
                       )}
+                      {selectedLoanId &&
+                        (() => {
+                          const loan = myLoans.find((l) => l.loan_id === selectedLoanId)
+                          if (!loan) return null
+                          const remaining =
+                            totalRepayable(
+                              Number(loan.principal),
+                              loan.interest_type,
+                              Number(loan.interest_rate || 0),
+                              Number(loan.interest_amount || 0)
+                            ) - (loanRepaidTotals[loan.loan_id] || 0)
+                          return (
+                            <p className="mt-2 text-sm text-ink-soft">
+                              ₱{fmt(Math.max(0, remaining))} left to pay
+                            </p>
+                          )
+                        })()}
                     </div>
                   )}
 
