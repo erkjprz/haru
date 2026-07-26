@@ -1296,6 +1296,18 @@ function termLabel(loan: Loan): string | null {
   return loan.term_months != null ? `${loan.term_months} mo` : null
 }
 
+// A closed loan isn't always a full repayment -- "Close Early (Write Off)"
+// closes it with whatever was actually repaid, which can be less than
+// total_repayable. Label off the real repayment total instead of assuming
+// every closed loan was paid off in full (same rule as LoanDetailPanel).
+function loanStatusMeta(loan: Loan): { label: string; dot: string; text: string } {
+  if (loan.status === "active") return { label: "Active", dot: "bg-gold", text: "text-gold" }
+  if (loan.status === "requested") return { label: "Requested", dot: "bg-ink-soft", text: "text-ink-soft" }
+  return loan.repayment >= loan.total_repayable
+    ? { label: "Repaid in full", dot: "bg-sage", text: "text-sage" }
+    : { label: "Closed early", dot: "bg-rust", text: "text-rust" }
+}
+
 function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
   const [loading, setLoading] = useState(true)
   const [loans, setLoans] = useState<Loan[]>([])
@@ -1331,12 +1343,6 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  const statusMeta: Record<Loan["status"], { label: string; dot: string; text: string }> = {
-    closed: { label: "Repaid", dot: "bg-sage", text: "text-sage" },
-    active: { label: "Active", dot: "bg-gold", text: "text-gold" },
-    requested: { label: "Requested", dot: "bg-ink-soft", text: "text-ink-soft" }
-  }
-
   if (loading) {
     return <SkeletonCardList rows={4} />
   }
@@ -1366,7 +1372,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
               <LoanCard
                 key={loan.loan_id}
                 loan={loan}
-                meta={statusMeta[loan.status]}
+                meta={loanStatusMeta(loan)}
                 fmt={fmt}
                 isMine={loan.borrower_member_id === myMemberId}
                 onClick={() => setSelectedLoanId(loan.loan_id)}
@@ -1378,13 +1384,13 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
 
       {closedLoans.length > 0 && (
         <section>
-          <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Repaid</h2>
+          <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Closed</h2>
           <div className="flex flex-col gap-3">
             {closedLoans.map((loan) => (
               <LoanCard
                 key={loan.loan_id}
                 loan={loan}
-                meta={statusMeta[loan.status]}
+                meta={loanStatusMeta(loan)}
                 fmt={fmt}
                 isMine={loan.borrower_member_id === myMemberId}
                 onClick={() => setSelectedLoanId(loan.loan_id)}
@@ -1410,10 +1416,12 @@ function LoanCard({
   isMine: boolean
   onClick: () => void
 }) {
-  const repaidPct =
-    loan.total_repayable > 0
-      ? Math.min(100, ((loan.total_repayable - loan.outstanding) / loan.total_repayable) * 100)
-      : 0
+  // Driven by the real repaid amount, not total_repayable - outstanding --
+  // outstanding is forced to 0 for any closed loan (see v_loan_summary),
+  // which would otherwise show a full bar even for a write-off that was
+  // never actually repaid.
+  const repaidPct = loan.total_repayable > 0 ? Math.min(100, (loan.repayment / loan.total_repayable) * 100) : 0
+  const fullyRepaid = loan.repayment >= loan.total_repayable
 
   const dateLabel = new Date(loan.start_date).toLocaleDateString(undefined, { month: "short", year: "numeric" })
 
@@ -1461,9 +1469,15 @@ function LoanCard({
         </div>
         {loan.status === "closed" ? (
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Gain</p>
-            <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-sage">
-              +₱{fmt(loan.gain)}
+            <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">
+              {loan.gain >= 0 ? "Gain" : "Loss"}
+            </p>
+            <p
+              className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                loan.gain >= 0 ? "text-sage" : "text-rust"
+              }`}
+            >
+              {loan.gain >= 0 ? "+" : "-"}₱{fmt(Math.abs(loan.gain))}
             </p>
           </div>
         ) : (
@@ -1477,7 +1491,12 @@ function LoanCard({
       </div>
 
       <div className="h-1.5 rounded-full bg-hairline overflow-hidden mt-2.5">
-        <div className={`h-full ${loan.status === "closed" ? "bg-sage" : "bg-gold"}`} style={{ width: `${repaidPct}%` }} />
+        <div
+          className={`h-full ${
+            loan.status === "closed" ? (fullyRepaid ? "bg-sage" : "bg-rust") : "bg-gold"
+          }`}
+          style={{ width: `${repaidPct}%` }}
+        />
       </div>
     </button>
   )
