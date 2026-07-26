@@ -85,6 +85,8 @@ export default function AdminPage() {
   const [banks, setBanks] = useState<any[]>([])
   const [withdrawalBankSelections, setWithdrawalBankSelections] = useState<Record<string, string>>({})
   const [loanReleaseBankSelections, setLoanReleaseBankSelections] = useState<Record<string, string>>({})
+  const [approvalReceipts, setApprovalReceipts] = useState<Record<string, File>>({})
+  const [uploadingReceiptId, setUploadingReceiptId] = useState<string | null>(null)
   const [selectedBulkIds, setSelectedBulkIds] = useState<Set<string>>(new Set())
   const [bulkApproving, setBulkApproving] = useState(false)
   const [editAmounts, setEditAmounts] = useState<Record<string, string>>({})
@@ -224,16 +226,39 @@ export default function AdminPage() {
 
   // ---- Transactions ----
 
+  // Withdrawal and Loan Release move real money out of the fund, and until
+  // now there was no evidence trail for it at all -- receipt_url stayed
+  // null from submission straight through approval. Requires the admin to
+  // attach proof of the actual outgoing transfer before either can be
+  // approved, same storage bucket/naming convention member-side receipts
+  // already use.
+  async function uploadApprovalReceipt(file: File, memberId: string | null): Promise<string | null> {
+    const fileName = `${memberId || "admin"}-${Date.now()}-${file.name}`
+    const { error } = await supabase.storage.from("Receipts").upload(fileName, file, { contentType: file.type })
+    if (error) {
+      setLoadError(error.message)
+      return null
+    }
+    return fileName
+  }
+
   async function approveTransaction(transactionId: string) {
     const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
     if (!txn) return
 
     if (txn.classification === "Member Withdrawal") {
       const bankAccountId = withdrawalBankSelections[transactionId]
-      if (!bankAccountId) return
+      const receiptFile = approvalReceipts[transactionId]
+      if (!bankAccountId || !receiptFile) return
+
+      setUploadingReceiptId(transactionId)
+      const receiptUrl = await uploadApprovalReceipt(receiptFile, txn.member_id)
+      setUploadingReceiptId(null)
+      if (!receiptUrl) return
+
       await supabase
         .from("transactions")
-        .update({ status: "approved", bank_account_id: bankAccountId })
+        .update({ status: "approved", bank_account_id: bankAccountId, receipt_url: receiptUrl })
         .eq("transaction_id", transactionId)
     } else if (txn.classification === "Loan Release") {
       // Approving a Loan Release now does the same three things
@@ -244,17 +269,29 @@ export default function AdminPage() {
       // loan approved from this screen wouldn't show up under any
       // member's "money on hold" until someone noticed.
       const bankAccountId = loanReleaseBankSelections[transactionId]
-      if (!bankAccountId || !txn.loan_id) return
+      const receiptFile = approvalReceipts[transactionId]
+      if (!bankAccountId || !receiptFile || !txn.loan_id) return
+
+      setUploadingReceiptId(transactionId)
+      const receiptUrl = await uploadApprovalReceipt(receiptFile, txn.member_id)
+      setUploadingReceiptId(null)
+      if (!receiptUrl) return
+
       await supabase.from("loans").update({ status: "active" }).eq("loan_id", txn.loan_id)
       await supabase
         .from("transactions")
-        .update({ status: "approved", bank_account_id: bankAccountId })
+        .update({ status: "approved", bank_account_id: bankAccountId, receipt_url: receiptUrl })
         .eq("transaction_id", transactionId)
       await snapshotLoanHold(txn.loan_id, txn.member_id, dateOnly(new Date()))
     } else {
       await supabase.from("transactions").update({ status: "approved" }).eq("transaction_id", transactionId)
     }
 
+    setApprovalReceipts((prev) => {
+      const next = { ...prev }
+      delete next[transactionId]
+      return next
+    })
     loadData()
   }
 
@@ -988,16 +1025,44 @@ export default function AdminPage() {
                                 </div>
                               )}
 
+                              <div className="mb-3">
+                                <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                                  Proof of transfer
+                                </label>
+                                <input
+                                  type="file"
+                                  accept="image/*,.pdf"
+                                  className="block w-full text-xs text-ink-soft file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-hairline file:bg-paper file:text-xs file:text-ink"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (file) {
+                                      setApprovalReceipts((prev) => ({ ...prev, [t.transaction_id]: file }))
+                                    }
+                                  }}
+                                />
+                                {approvalReceipts[t.transaction_id] && (
+                                  <p className="mt-1 text-[11px] text-ink-soft truncate">
+                                    {approvalReceipts[t.transaction_id].name}
+                                  </p>
+                                )}
+                              </div>
+
                               <div className="flex gap-2">
                                 <button
                                   className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
                                   onClick={() => approveTransaction(t.transaction_id)}
                                   disabled={
+                                    !approvalReceipts[t.transaction_id] ||
+                                    uploadingReceiptId === t.transaction_id ||
                                     (needsWithdrawalBank && !withdrawalBankSelections[t.transaction_id]) ||
                                     (needsLoanBank && !loanReleaseBankSelections[t.transaction_id])
                                   }
                                 >
-                                  {needsLoanBank ? "Approve & activate" : "Approve"}
+                                  {uploadingReceiptId === t.transaction_id
+                                    ? "Uploading..."
+                                    : needsLoanBank
+                                    ? "Approve & activate"
+                                    : "Approve"}
                                 </button>
                                 <button
                                   className="border border-hairline px-4 py-2 rounded-md text-sm"

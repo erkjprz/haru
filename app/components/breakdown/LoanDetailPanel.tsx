@@ -100,6 +100,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   const [manageOpen, setManageOpen] = useState(false)
   const [manageOpenInitialized, setManageOpenInitialized] = useState(false)
   const [approveBankChoice, setApproveBankChoice] = useState("")
+  const [approveReceipt, setApproveReceipt] = useState<File | null>(null)
   const [closing, setClosing] = useState(false)
   const [approving, setApproving] = useState(false)
   const [reopening, setReopening] = useState(false)
@@ -330,14 +331,28 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   }
 
   async function approveLoan() {
-    if (!adminLoan || !approveBankChoice) return
+    if (!adminLoan || !approveBankChoice || !approveReceipt) return
     setApproving(true)
+
+    // Loan disbursement moves real money out, and until now there was no
+    // evidence trail for it at all -- receipt_url stayed null from
+    // submission straight through approval. Requires proof of the actual
+    // outgoing transfer before the loan can be activated.
+    const fileName = `${adminLoan.member_id || "admin"}-${Date.now()}-${approveReceipt.name}`
+    const { error: uploadError } = await supabase.storage
+      .from("Receipts")
+      .upload(fileName, approveReceipt, { contentType: approveReceipt.type })
+
+    if (uploadError) {
+      setApproving(false)
+      return
+    }
 
     await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
 
     await supabase
       .from("transactions")
-      .update({ status: "approved", bank_account_id: approveBankChoice })
+      .update({ status: "approved", bank_account_id: approveBankChoice, receipt_url: fileName })
       .eq("loan_id", adminLoan.loan_id)
       .eq("classification", "Loan Release")
       .eq("status", "pending")
@@ -347,6 +362,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     await snapshotLoanHold(adminLoan.loan_id, adminLoan.member_id, dateOnly(new Date()))
 
     setApproving(false)
+    setApproveReceipt(null)
     await reloadAll()
   }
 
@@ -370,7 +386,13 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     if (!adminLoan) return
     setReopening(true)
 
-    await supabase.from("investment_allocations").delete().eq("loan_id", adminLoan.loan_id)
+    // closeLoanAndDistributeGain writes to loan_gain_allocations (not
+    // investment_allocations, which has no loan_id column at all) -- clear
+    // that same table here, or a loan closed a second time after reopening
+    // would pile a fresh set of gain rows on top of the stale first set,
+    // double-counting into every other member's current value via
+    // computeCurrentValueByMember's priorLoanGains sum.
+    await supabase.from("loan_gain_allocations").delete().eq("loan_id", adminLoan.loan_id)
     await supabase.from("transactions").delete().eq("loan_id", adminLoan.loan_id).eq("classification", "Gain Allocation")
     await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
 
@@ -396,15 +418,27 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     )
   }
 
+  // A closed loan isn't always a full repayment -- "Close Early (Write Off)"
+  // closes it with whatever was actually repaid, which can be less (or, if
+  // extra interest came in, more) than total_repayable. Label and color off
+  // the real repayment total instead of assuming every closed loan was paid
+  // off in full.
+  const fullyRepaid = loan.repayment >= loan.total_repayable
   const statusMeta: Record<Loan["status"], { label: string; dot: string; text: string }> = {
-    closed: { label: "Repaid in full", dot: "bg-sage", text: "text-sage" },
+    closed: fullyRepaid
+      ? { label: "Repaid in full", dot: "bg-sage", text: "text-sage" }
+      : { label: "Closed early", dot: "bg-rust", text: "text-rust" },
     active: { label: "Active", dot: "bg-gold", text: "text-gold" },
     requested: { label: "Requested", dot: "bg-ink-soft", text: "text-ink-soft" }
   }
   const meta = statusMeta[loan.status]
 
+  // Driven by the real repaid amount, not total_repayable - outstanding --
+  // outstanding is forced to 0 for any closed loan (see v_loan_summary),
+  // which would otherwise show a full green bar even for a write-off that
+  // was never actually repaid.
   const repaidPct = loan.total_repayable > 0
-    ? Math.min(100, ((loan.total_repayable - loan.outstanding) / loan.total_repayable) * 100)
+    ? Math.min(100, (loan.repayment / loan.total_repayable) * 100)
     : 0
 
   const startLabel = new Date(loan.start_date).toLocaleDateString(undefined, {
@@ -456,12 +490,14 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         <div className="mt-3">
           <div className="h-2 rounded-full bg-hairline overflow-hidden">
             <div
-              className={`h-full ${loan.status === "closed" ? "bg-sage" : "bg-gold"}`}
+              className={`h-full ${
+                loan.status === "closed" ? (fullyRepaid ? "bg-sage" : "bg-rust") : "bg-gold"
+              }`}
               style={{ width: `${repaidPct}%` }}
             />
           </div>
           <p className="text-[11px] text-ink-soft mt-1.5">
-            ₱{fmt(loan.total_repayable - loan.outstanding)} repaid of ₱{fmt(loan.total_repayable)} total repayable
+            ₱{fmt(loan.repayment)} repaid of ₱{fmt(loan.total_repayable)} total repayable
           </p>
         </div>
       </div>
@@ -481,9 +517,11 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
 
         <InfoBox label="Gain">
           <InfoRow
-            label={loan.status === "closed" ? "Interest earned" : "Interest so far"}
-            value={loan.status === "closed" ? `+₱${fmt(loan.gain)}` : "—"}
-            valueClass={loan.status === "closed" ? "text-sage" : "text-ink-soft"}
+            label={loan.status === "closed" ? (loan.gain >= 0 ? "Interest earned" : "Loss") : "Interest so far"}
+            value={loan.status === "closed" ? `${loan.gain >= 0 ? "+" : "-"}₱${fmt(Math.abs(loan.gain))}` : "—"}
+            valueClass={
+              loan.status === "closed" ? (loan.gain >= 0 ? "text-sage" : "text-rust") : "text-ink-soft"
+            }
             bold
           />
           {closedLabel && <InfoRow label="Closed" value={closedLabel} />}
@@ -594,10 +632,22 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                             </option>
                           ))}
                         </select>
+                        <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Proof of transfer
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="block w-full text-xs text-ink-soft file:mr-3 file:py-1.5 file:px-3 file:rounded-sm file:border file:border-hairline file:bg-paper file:text-xs file:text-ink"
+                          onChange={(e) => setApproveReceipt(e.target.files?.[0] ?? null)}
+                        />
+                        {approveReceipt && (
+                          <p className="text-[11px] text-ink-soft truncate">{approveReceipt.name}</p>
+                        )}
                         <button
                           className="w-full bg-ink text-paper px-4 py-2.5 rounded-sm text-sm font-semibold disabled:opacity-50"
                           onClick={approveLoan}
-                          disabled={!approveBankChoice || approving}
+                          disabled={!approveBankChoice || !approveReceipt || approving}
                         >
                           {approving ? "Approving..." : "Approve & Activate"}
                         </button>
@@ -634,8 +684,8 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                           const loss = Math.abs(Math.min(0, netResult))
                           const confirmMsg =
                             netResult < 0
-                              ? `Close this loan now and record a ₱${fmt(loss)} loss, split across other members? This can't be undone from the app.`
-                              : `Close this loan now even though it's not fully repaid? This will distribute a ₱${fmt(netResult)} gain based on what's been repaid so far. This can't be undone from the app.`
+                              ? `Close this loan now and record a ₱${fmt(loss)} loss, split across other members? You can reopen it later from this same page if needed.`
+                              : `Close this loan now even though it's not fully repaid? This will distribute a ₱${fmt(netResult)} gain based on what's been repaid so far. You can reopen it later from this same page if needed.`
                           if (confirm(confirmMsg)) {
                             handleClose()
                           }
@@ -651,7 +701,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                         className="w-full text-xs text-ink-soft border border-hairline rounded-sm px-3 py-2.5 disabled:opacity-50"
                         onClick={() => {
                           const confirmMsg =
-                            "Reopen this loan? This will set it back to active and delete any gain/loss allocations recorded when it was closed (only if it was closed after loan reopening support was added — older closures may need manual cleanup in Supabase)."
+                            "Reopen this loan? This sets it back to active and removes the gain/loss allocations recorded when it was closed."
                           if (confirm(confirmMsg)) {
                             reopenLoan()
                           }
@@ -866,8 +916,12 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                     )}
                   </div>
                   <div className="flex flex-col items-end shrink-0">
-                    <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-sage">
-                      +₱{fmt(s.amount)}
+                    <p
+                      className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                        s.amount >= 0 ? "text-sage" : "text-rust"
+                      }`}
+                    >
+                      {s.amount >= 0 ? "+" : "-"}₱{fmt(Math.abs(s.amount))}
                     </p>
                     <p className="text-[11px] text-ink-soft font-mono whitespace-nowrap">
                       {s.pct_share.toFixed(2)}% of ₱{fmt(s.current_value)}
