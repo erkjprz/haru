@@ -45,29 +45,36 @@ export async function computeCurrentValueByMember(
 ): Promise<Map<string, number>> {
   const isOnOrBefore = (row: Parameters<typeof effectiveDate>[0]) => dateOnly(effectiveDate(row)) <= asOfDate
 
-  const { data: allMembers } = await supabase.from("members").select("member_id, gain_sharing_eligible")
+  const { data: allMembers, error: membersError } = await supabase
+    .from("members")
+    .select("member_id, gain_sharing_eligible")
+  if (membersError) throw new Error(membersError.message)
 
   const eligibleMembers = (allMembers ?? []).filter(
     (m) => m.member_id !== excludeMemberId && m.gain_sharing_eligible !== false
   )
 
-  const { data: contributionTxns } = await supabase
+  const { data: contributionTxns, error: contributionError } = await supabase
     .from("transactions")
     .select("member_id, amount, txn_date, created_at")
     .in("classification", ["Member Contribution", "Member Withdrawal"])
     .eq("status", "approved")
+  if (contributionError) throw new Error(contributionError.message)
 
-  const { data: bankInterestRows } = await supabase
+  const { data: bankInterestRows, error: bankInterestError } = await supabase
     .from("bank_interest_allocations")
     .select("member_id, amount, allocation_date")
+  if (bankInterestError) throw new Error(bankInterestError.message)
 
-  const { data: loanGainRows } = await supabase
+  const { data: loanGainRows, error: loanGainError } = await supabase
     .from("loan_gain_allocations")
     .select("member_id, amount, allocation_date")
+  if (loanGainError) throw new Error(loanGainError.message)
 
-  const { data: investmentRows } = await supabase
+  const { data: investmentRows, error: investmentError } = await supabase
     .from("investment_allocations")
     .select("member_id, amount, allocation_type, allocation_date, investments(name)")
+  if (investmentError) throw new Error(investmentError.message)
 
   const currentValueByMember = new Map<string, number>()
 
