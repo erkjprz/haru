@@ -71,7 +71,16 @@ export default function AdminBorrowersPage() {
     setBusyId(memberId)
     setMessage("")
 
-    await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
+    const { error: memberError } = await supabase
+      .from("members")
+      .update({ status: "approved" })
+      .eq("member_id", memberId)
+
+    if (memberError) {
+      setMessage(memberError.message)
+      setBusyId(null)
+      return
+    }
 
     const chosenBorrowerId = linkChoice[memberId]
     if (chosenBorrowerId) {
