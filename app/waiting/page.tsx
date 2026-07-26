@@ -1,4 +1,16 @@
+"use client"
+
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase"
+
 export default function WaitingPage() {
+  const router = useRouter()
+
+  async function signOut() {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
   return (
     <main className="min-h-screen bg-paper flex items-center justify-center px-5 py-8">
 
@@ -104,6 +116,24 @@ export default function WaitingPage() {
 
         </div>
 
+        {/* Only way out of this page otherwise -- no other navigation lives
+            here, so without this, fixing a typo'd signup email or
+            abandoning the account entirely had no path in the UI at all. */}
+        <div className="mt-6 flex items-center justify-center gap-4">
+          <button
+            onClick={() => router.push("/account")}
+            className="text-xs font-mono text-ink-soft hover:text-ink transition-colors"
+          >
+            Account Settings
+          </button>
+          <span className="text-hairline">·</span>
+          <button
+            onClick={signOut}
+            className="text-xs font-mono text-ink-soft hover:text-ink transition-colors"
+          >
+            Sign Out
+          </button>
+        </div>
 
         <p className="mt-6 text-center text-xs text-ink-soft">
           Thank you for joining Haru.
