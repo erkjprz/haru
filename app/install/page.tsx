@@ -5,6 +5,12 @@ import Link from "next/link"
 
 type Platform = "ios" | "android"
 
+// Only used for the illustrative browser-bar mockups below -- a fixed
+// label is fine there since it's just showing what a browser address bar
+// looks like, not a real link. The real Copy Link/Share URLs are always
+// built from window.location so they stay correct if this app is ever
+// served from a different domain (a custom domain, a renamed Vercel
+// project, etc.) instead of silently pointing at a stale hardcoded one.
 const INSTALL_HOST = "est2017.vercel.app"
 // APP_PATH is where the walkthrough tells people to actually be (in their
 // browser, not this page) when they do the OS-level "Add to Home
@@ -377,11 +383,13 @@ const AUTOPLAY_MS = 2600
 // Shared by both the top (getting yourself set up) and bottom (bringing
 // someone else in) sections, so the two never drift out of sync.
 function ShareBar({
+  host,
   copied,
   canShare,
   onCopy,
   onShare
 }: {
+  host: string
   copied: boolean
   canShare: boolean
   onCopy: () => void
@@ -390,7 +398,7 @@ function ShareBar({
   return (
     <div className="flex items-center gap-2 bg-paper-2 border border-hairline rounded-md pl-3.5 pr-1.5 py-1.5">
       <span className="flex-1 font-mono text-[13px] overflow-x-auto whitespace-nowrap">
-        {INSTALL_HOST}
+        {host}
         {SHARE_PATH}
       </span>
       <div className="flex items-center gap-1.5 shrink-0">
@@ -422,6 +430,10 @@ export default function InstallPage() {
   const [playing, setPlaying] = useState(true)
   const [copied, setCopied] = useState(false)
   const [canShare, setCanShare] = useState(false)
+  // Defaults to INSTALL_HOST for the first paint (matches the illustrative
+  // mockups) and corrects to the real host once mounted -- window.location
+  // isn't available during SSR.
+  const [host, setHost] = useState(INSTALL_HOST)
   const touchStartX = useRef<number | null>(null)
 
   const steps = platform === "ios" ? iosSteps() : androidSteps()
@@ -430,6 +442,7 @@ export default function InstallPage() {
     const ua = navigator.userAgent || ""
     setPlatform(/android/i.test(ua) ? "android" : "ios")
     setCanShare(typeof navigator.share === "function")
+    setHost(window.location.host)
   }, [])
 
   useEffect(() => {
@@ -453,7 +466,7 @@ export default function InstallPage() {
   }
 
   async function copyLink() {
-    const text = `https://${INSTALL_HOST}${SHARE_PATH}`
+    const text = `${window.location.origin}${SHARE_PATH}`
     try {
       await navigator.clipboard.writeText(text)
     } catch {
@@ -471,7 +484,7 @@ export default function InstallPage() {
   }
 
   async function shareLink() {
-    const url = `https://${INSTALL_HOST}${SHARE_PATH}`
+    const url = `${window.location.origin}${SHARE_PATH}`
     try {
       await navigator.share({
         title: "Est. 2017",
@@ -595,7 +608,7 @@ export default function InstallPage() {
             Send them this same link so they see this walkthrough too, instead of landing cold on the sign-in
             screen.
           </p>
-          <ShareBar copied={copied} canShare={canShare} onCopy={copyLink} onShare={shareLink} />
+          <ShareBar host={host} copied={copied} canShare={canShare} onCopy={copyLink} onShare={shareLink} />
         </div>
       </div>
     </main>
