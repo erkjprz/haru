@@ -118,7 +118,17 @@ export default function AdminPage() {
       linkedBorrowersRes,
       pendingGroupsRes
     ] = await Promise.all([
-      supabase.from("members").select("*").eq("status", "pending").order("created_at", { ascending: false }),
+      // role='borrower' pending signups are handled entirely by the
+      // Borrowers tab (which offers borrower-record linking the generic
+      // Members tab doesn't) -- excluded here so a pending borrower isn't
+      // double-counted across both tabs' totals, or approved through the
+      // wrong tab and skip the chance to link their loan history.
+      supabase
+        .from("members")
+        .select("*")
+        .eq("status", "pending")
+        .neq("role", "borrower")
+        .order("created_at", { ascending: false }),
       supabase.rpc("list_unclaimed_members"),
       supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name"),
       supabase
