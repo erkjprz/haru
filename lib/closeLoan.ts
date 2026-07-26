@@ -60,9 +60,11 @@ export async function closeLoanAndDistributeGain(params: CloseLoanParams) {
     description: `Share of ${new Date().getFullYear()} loan ${gainOrLossLabel} (from ${params.borrowerName || "a member"}'s loan)`
   }))
 
-  await supabase.rpc("close_loan_and_distribute_gain", {
+  const { error } = await supabase.rpc("close_loan_and_distribute_gain", {
     p_loan_id: params.id,
     p_closing_date: closingDate,
     p_shares: rpcShares
   })
+
+  if (error) throw new Error(error.message)
 }

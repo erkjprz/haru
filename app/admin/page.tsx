@@ -103,6 +103,7 @@ export default function AdminPage() {
 
   const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>([])
   const [distributingKey, setDistributingKey] = useState<string | null>(null)
+  const [distributeError, setDistributeError] = useState("")
 
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
@@ -525,9 +526,16 @@ export default function AdminPage() {
   async function distribute(group: PendingBankInterestGroup) {
     const key = `${group.year}-${group.bank}`
     setDistributingKey(key)
-    await distributeBankInterestGroup(group)
-    setDistributingKey(null)
-    loadData()
+    setDistributeError("")
+
+    try {
+      await distributeBankInterestGroup(group)
+      loadData()
+    } catch (err) {
+      setDistributeError(err instanceof Error ? err.message : "Something went wrong.")
+    } finally {
+      setDistributingKey(null)
+    }
   }
 
   const filteredMembers = pendingMembers.filter((m) => {
@@ -1246,6 +1254,7 @@ export default function AdminPage() {
                 )
               })}
               {pendingGroups.length === 0 && <p className="text-sm text-ink-soft">Nothing waiting to be distributed</p>}
+              {distributeError && <p className="text-sm text-rust">{distributeError}</p>}
 
               <button
                 onClick={() => router.push("/fund-breakdown?tab=banks")}

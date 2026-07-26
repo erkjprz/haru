@@ -39,6 +39,7 @@ export function BankDetailPanel({
   const [loadError, setLoadError] = useState("")
   const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>([])
   const [distributingYear, setDistributingYear] = useState<number | null>(null)
+  const [distributeError, setDistributeError] = useState("")
 
   async function loadPending() {
     const groups = await getPendingBankInterestGroups()
@@ -47,9 +48,16 @@ export function BankDetailPanel({
 
   async function handleDistribute(group: PendingBankInterestGroup) {
     setDistributingYear(group.year)
-    await distributeBankInterestGroup(group)
-    await Promise.all([loadPending(), load()])
-    setDistributingYear(null)
+    setDistributeError("")
+
+    try {
+      await distributeBankInterestGroup(group)
+      await Promise.all([loadPending(), load()])
+    } catch (err) {
+      setDistributeError(err instanceof Error ? err.message : "Something went wrong.")
+    } finally {
+      setDistributingYear(null)
+    }
   }
 
   async function load() {
@@ -212,6 +220,7 @@ export function BankDetailPanel({
               </div>
             ))}
           </div>
+          {distributeError && <p className="mt-3 text-xs text-rust">{distributeError}</p>}
         </section>
       )}
 

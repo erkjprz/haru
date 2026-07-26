@@ -102,6 +102,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   const [approveBankChoice, setApproveBankChoice] = useState("")
   const [approveReceipt, setApproveReceipt] = useState<File | null>(null)
   const [closing, setClosing] = useState(false)
+  const [closeError, setCloseError] = useState("")
   const [approving, setApproving] = useState(false)
   const [reopening, setReopening] = useState(false)
 
@@ -380,17 +381,22 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   async function handleClose() {
     if (!adminLoan) return
     setClosing(true)
+    setCloseError("")
 
-    await closeLoanAndDistributeGain({
-      id: adminLoan.loan_id,
-      member_id: adminLoan.member_id,
-      principal: adminLoan.principal,
-      repaidApproved: adminLoan.repaidApproved,
-      borrowerName: loan?.borrower
-    })
-
-    setClosing(false)
-    await reloadAll()
+    try {
+      await closeLoanAndDistributeGain({
+        id: adminLoan.loan_id,
+        member_id: adminLoan.member_id,
+        principal: adminLoan.principal,
+        repaidApproved: adminLoan.repaidApproved,
+        borrowerName: loan?.borrower
+      })
+      await reloadAll()
+    } catch (err) {
+      setCloseError(err instanceof Error ? err.message : "Something went wrong.")
+    } finally {
+      setClosing(false)
+    }
   }
 
   async function reopenLoan() {
@@ -706,6 +712,8 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                         {closing ? "Closing..." : "Close Early (Write Off)"}
                       </button>
                     )}
+
+                    {closeError && <p className="mt-2 text-xs text-rust">{closeError}</p>}
 
                     {adminLoan.status === "closed" && (
                       <button

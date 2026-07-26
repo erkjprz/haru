@@ -47,11 +47,13 @@ export async function distributeInvestmentGain(input: InvestmentDistributionInpu
   // separate client-side calls with no rollback between them -- a failure
   // partway through could leave a distribution recorded in one place but
   // not the other. One atomic RPC call now does both.
-  await supabase.rpc("distribute_investment_gain", {
+  const { error } = await supabase.rpc("distribute_investment_gain", {
     p_investment_id: input.investmentId,
     p_allocation_date: input.allocationDate,
     p_shares: rpcShares
   })
+
+  if (error) throw new Error(error.message)
 }
 
 /**

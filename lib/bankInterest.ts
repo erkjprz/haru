@@ -152,10 +152,12 @@ export async function distributeBankInterestGroup(group: PendingBankInterestGrou
   // interest_distributed has no retry path, a failed allocation insert
   // specifically would be permanently invisible with no way to redo it.
   // One atomic RPC call now does all three.
-  await supabase.rpc("distribute_bank_interest_group", {
+  const { error } = await supabase.rpc("distribute_bank_interest_group", {
     p_bank: group.bank,
     p_distribution_date: distributionDate,
     p_transaction_ids: group.transactionIds,
     p_shares: rpcShares
   })
+
+  if (error) throw new Error(error.message)
 }
