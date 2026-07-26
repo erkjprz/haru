@@ -176,14 +176,17 @@ type YearRow = {
   investmentGainLoss: number
 }
 
-function YouPanel({ memberId }: { memberId: string }) {
+// Shared by YouPanel and MemberBreakdownSheet -- both need the exact same
+// all-time performance snapshot plus by-year breakdown for a member,
+// differing only in whether the value-over-time trend is needed too (only
+// YouPanel renders a sparkline for it). Keeping this in one place means a
+// fix to one no longer has to be remembered for the other.
+function useMemberBreakdown(memberId: string, includeTrend: boolean) {
   const [dataLoading, setDataLoading] = useState(true)
   const [performance, setPerformance] = useState<MemberPerformance | null>(null)
   const [years, setYears] = useState<YearRow[]>([])
-  const [myTrend, setMyTrend] = useState<TrendPoint[]>([])
+  const [trend, setTrend] = useState<TrendPoint[]>([])
   const [loadError, setLoadError] = useState("")
-  const [yearIndex, setYearIndex] = useState(0)
-  const yearTouchStartX = useRef<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -197,11 +200,13 @@ function YouPanel({ memberId }: { memberId: string }) {
         .eq("member_id", memberId)
         .single()
 
-      const trendPromise = supabase
-        .from("v_member_value_timeline")
-        .select("event_date, running_total")
-        .eq("member_id", memberId)
-        .order("event_date", { ascending: true })
+      const trendPromise = includeTrend
+        ? supabase
+            .from("v_member_value_timeline")
+            .select("event_date, running_total")
+            .eq("member_id", memberId)
+            .order("event_date", { ascending: true })
+        : Promise.resolve({ data: null as any, error: null as any })
 
       const txPromise = supabase
         .from("transactions")
@@ -250,8 +255,8 @@ function YouPanel({ memberId }: { memberId: string }) {
         investmentDatesResult.error
       if (firstError) setLoadError(firstError.message)
 
-      if (!trendResult.error && trendResult.data) {
-        setMyTrend(trendResult.data.map((r: any) => ({ value: Number(r.running_total), date: r.event_date })))
+      if (includeTrend && !trendResult.error && trendResult.data) {
+        setTrend((trendResult.data as any[]).map((r: any) => ({ value: Number(r.running_total), date: r.event_date })))
       }
 
       if (!performanceResult.error && performanceResult.data) {
@@ -334,7 +339,15 @@ function YouPanel({ memberId }: { memberId: string }) {
     return () => {
       cancelled = true
     }
-  }, [memberId])
+  }, [memberId, includeTrend])
+
+  return { dataLoading, performance, years, trend, loadError }
+}
+
+function YouPanel({ memberId }: { memberId: string }) {
+  const { dataLoading, performance, years, trend: myTrend, loadError } = useMemberBreakdown(memberId, true)
+  const [yearIndex, setYearIndex] = useState(0)
+  const yearTouchStartX = useRef<number | null>(null)
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -966,149 +979,7 @@ function MemberBreakdownSheet({
   isSelf: boolean
   onClose: () => void
 }) {
-  const [dataLoading, setDataLoading] = useState(true)
-  const [performance, setPerformance] = useState<MemberPerformance | null>(null)
-  const [years, setYears] = useState<YearRow[]>([])
-  const [loadError, setLoadError] = useState("")
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      const performancePromise = supabase
-        .from("v_member_performance")
-        .select(
-          "total_contribution, total_withdrawal, net_contribution, bank_interest, investment_gain_loss, loan_gain, bank_writeoff, total_value, money_on_hold, withdrawable_now"
-        )
-        .eq("member_id", memberId)
-        .single()
-
-      const txPromise = supabase
-        .from("transactions")
-        .select("txn_date, classification, amount")
-        .eq("member_id", memberId)
-        .eq("status", "approved")
-        .in("classification", ["Member Contribution", "Member Withdrawal", "Bank Write-off"])
-
-      const bankInterestPromise = supabase
-        .from("bank_interest_allocations")
-        .select("allocation_date, amount")
-        .eq("member_id", memberId)
-
-      const loanGainPromise = supabase
-        .from("loan_gain_allocations")
-        .select("allocation_date, amount")
-        .eq("member_id", memberId)
-
-      const investmentAllocPromise = supabase
-        .from("investment_allocations")
-        .select("investment_id, allocation_type, amount, allocation_date")
-        .eq("member_id", memberId)
-
-      const investmentDatesPromise = supabase.from("v_investment_dates").select("investment_id, last_txn_date")
-
-      const [performanceResult, txResult, bankInterestResult, loanGainResult, investmentAllocResult, investmentDatesResult] =
-        await Promise.all([
-          performancePromise,
-          txPromise,
-          bankInterestPromise,
-          loanGainPromise,
-          investmentAllocPromise,
-          investmentDatesPromise
-        ])
-
-      if (cancelled) return
-
-      const firstError =
-        performanceResult.error ||
-        txResult.error ||
-        bankInterestResult.error ||
-        loanGainResult.error ||
-        investmentAllocResult.error ||
-        investmentDatesResult.error
-      if (firstError) setLoadError(firstError.message)
-
-      if (!performanceResult.error && performanceResult.data) {
-        setPerformance({
-          total_contribution: Number(performanceResult.data.total_contribution),
-          total_withdrawal: Number(performanceResult.data.total_withdrawal),
-          net_contribution: Number(performanceResult.data.net_contribution),
-          bank_interest: Number(performanceResult.data.bank_interest),
-          investment_gain_loss: Number(performanceResult.data.investment_gain_loss),
-          loan_gain: Number(performanceResult.data.loan_gain),
-          bank_writeoff: Number(performanceResult.data.bank_writeoff),
-          total_value: Number(performanceResult.data.total_value),
-          money_on_hold: Number(performanceResult.data.money_on_hold),
-          withdrawable_now: Number(performanceResult.data.withdrawable_now)
-        })
-      }
-
-      const byYear: Record<string, YearRow> = {}
-      const ensure = (year: string) => {
-        if (!byYear[year]) {
-          byYear[year] = {
-            year,
-            contribution: 0,
-            withdrawal: 0,
-            netContribution: 0,
-            bankInterest: 0,
-            loanGain: 0,
-            bankWriteoff: 0,
-            investmentGainLoss: 0
-          }
-        }
-        return byYear[year]
-      }
-
-      ;(txResult.data ?? []).forEach((t: any) => {
-        const year = (t.txn_date || "").slice(0, 4)
-        if (!year) return
-        const amount = Number(t.amount)
-        const row = ensure(year)
-        if (t.classification === "Member Contribution") {
-          row.contribution += amount
-          row.netContribution += amount
-        } else if (t.classification === "Member Withdrawal") {
-          row.withdrawal += amount
-          row.netContribution += amount
-        } else if (t.classification === "Bank Write-off") {
-          row.bankWriteoff += amount
-        }
-      })
-
-      ;(bankInterestResult.data ?? []).forEach((r: any) => {
-        const year = (r.allocation_date || "").slice(0, 4)
-        if (!year) return
-        ensure(year).bankInterest += Number(r.amount)
-      })
-
-      ;(loanGainResult.data ?? []).forEach((r: any) => {
-        const year = (r.allocation_date || "").slice(0, 4)
-        if (!year) return
-        ensure(year).loanGain += Number(r.amount)
-      })
-
-      const investmentDateByInvestmentId: Record<string, string> = {}
-      ;(investmentDatesResult.data ?? []).forEach((r: any) => {
-        investmentDateByInvestmentId[r.investment_id] = r.last_txn_date
-      })
-
-      ;(investmentAllocResult.data ?? []).forEach((r: any) => {
-        const year = (r.allocation_date || investmentDateByInvestmentId[r.investment_id] || "").slice(0, 4)
-        if (!year) return
-        const amount = r.allocation_type === "Investment Loss" ? -Number(r.amount) : Number(r.amount)
-        ensure(year).investmentGainLoss += amount
-      })
-
-      setYears(Object.values(byYear).sort((a, b) => b.year.localeCompare(a.year)))
-      setDataLoading(false)
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [memberId])
+  const { dataLoading, performance, years, loadError } = useMemberBreakdown(memberId, false)
 
   // Opening this while the Group carousel is scrolled down would otherwise
   // leave the Breakdown header out of view -- jump back to top so it's
@@ -1541,9 +1412,15 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   async function load() {
     const bankAccountsPromise = supabase.from("bank_accounts").select("*").order("bank_name")
     const balancesPromise = supabase.from("v_bank_balances").select("*")
+    // bank falls back to the linked bank_accounts.bank_name -- transactions
+    // recorded through the current form only set bank_account_id, leaving
+    // the legacy bank text column null. v_cash_ledger already resolves the
+    // same way (COALESCE(t.bank, ba.account_name, ba.bank_name)); this
+    // mirrors it so a bank's balance and its interest/tax never disagree
+    // about which bank a transaction belongs to.
     const interestPromise = supabase
       .from("transactions")
-      .select("bank, classification, amount")
+      .select("bank, classification, amount, bank_accounts!transactions_bank_account_id_fkey ( bank_name )")
       .eq("status", "approved")
       .in("classification", ["Bank Interest", "Tax"])
     const distributedPromise = supabase.from("bank_interest_allocations").select("bank, amount")
@@ -1579,10 +1456,17 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
 
     if (!interestResult.error) {
       for (const row of interestResult.data ?? []) {
-        if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
-        if (row.classification === "Bank Interest") byBank[row.bank].interest_earned += Number(row.amount)
-        if (row.classification === "Tax") byBank[row.bank].tax += Number(row.amount)
+        const bankName = row.bank || (row as any).bank_accounts?.bank_name
+        // Shouldn't happen -- every transaction here should resolve to a
+        // real bank one way or the other -- but skip rather than pool
+        // unattributed interest/tax into a bogus "unknown bank" card.
+        if (!bankName) continue
+        if (!byBank[bankName]) byBank[bankName] = { bank: bankName, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+        if (row.classification === "Bank Interest") byBank[bankName].interest_earned += Number(row.amount)
+        if (row.classification === "Tax") byBank[bankName].tax += Number(row.amount)
       }
+    } else {
+      setLoadError(interestResult.error.message)
     }
 
     if (!distributedResult.error) {
@@ -1590,6 +1474,8 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
         if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
         byBank[row.bank].distributed += Number(row.amount)
       }
+    } else {
+      setLoadError(distributedResult.error.message)
     }
 
     setBanks(Object.values(byBank).sort((a, b) => b.balance - a.balance))
@@ -2036,9 +1922,26 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
         .update({ name, affects_cash: affectsCash ? 1 : 0 })
         .eq("investment_id", editingId)
 
-      setSaving(false)
       if (error) {
+        setSaving(false)
         setFormMessage(error.message)
+        return
+      }
+
+      // v_cash_ledger reads each transaction's own affects_cash, not the
+      // investment's -- without this, flipping the toggle here would leave
+      // every transaction already recorded against this investment still
+      // treated the old way, silently contradicting what the toggle now
+      // says.
+      const { error: syncError } = await supabase
+        .from("transactions")
+        .update({ affects_cash: affectsCash ? 1 : 0 })
+        .eq("investment_id", editingId)
+        .in("classification", ["Investment", "Investment Return"])
+
+      setSaving(false)
+      if (syncError) {
+        setFormMessage(`Investment saved, but couldn't update its existing transactions: ${syncError.message}`)
         return
       }
     } else {

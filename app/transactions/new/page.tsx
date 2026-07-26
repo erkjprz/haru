@@ -233,7 +233,7 @@ function NewTransactionForm() {
 
         const { data: investmentList } = await supabase
           .from("investments")
-          .select("investment_id, name")
+          .select("investment_id, name, affects_cash")
           .order("name")
 
         setInvestmentsList(investmentList ?? [])
@@ -589,7 +589,15 @@ function NewTransactionForm() {
 
       // submitted_by records which admin recorded this -- editing this
       // entry later is restricted to that same admin (see canEdit on the
-      // Transactions list).
+      // Transactions list). affects_cash mirrors the selected investment's
+      // own flag for Investment/Investment Return rows -- v_cash_ledger
+      // reads the transaction's affects_cash, not the investment's, so
+      // without this an "outside the tracked cash trail" investment would
+      // still silently count as real cash movement.
+      const selectedInvestment = isInvestmentEntry
+        ? investmentsList.find((inv) => inv.investment_id === investmentId)
+        : null
+
       const { error } = await supabase
         .from("transactions")
         .insert({
@@ -601,7 +609,8 @@ function NewTransactionForm() {
           description,
           receipt_url: receiptUrl,
           status: "approved",
-          submitted_by: memberId
+          submitted_by: memberId,
+          ...(isInvestmentEntry ? { affects_cash: selectedInvestment?.affects_cash ? 1 : 0 } : {})
         })
 
       if (error) {
