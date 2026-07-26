@@ -117,6 +117,20 @@ export async function distributeBankInterestGroup(group: PendingBankInterestGrou
 
   const totalBalance = balances.reduce((sum, b) => sum + b.balance, 0)
 
+  // Unlike loan gain sharing, every eligible member gets a row here even
+  // at ₱0 balance -- but if literally nobody has a positive balance,
+  // every share computes to ₱0 regardless of interestAmount, and the RPC
+  // would still mark the source transactions distributed. That silently
+  // discards real bank interest income with no error and no way to retry
+  // it, since interest_distributed has no reset path. Matches the guard
+  // closeLoanAndDistributeGain/distributeInvestmentGain already have for
+  // the same "nowhere to distribute this to" scenario.
+  if (interestAmount !== 0 && totalBalance <= 0) {
+    throw new Error(
+      "No member has a positive contribution balance as of this date -- nothing to distribute this interest against."
+    )
+  }
+
   const shares = balances.map((b) => ({
     member_id: b.member.member_id,
     memberName: b.member.name as string,
