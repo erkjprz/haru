@@ -87,39 +87,23 @@ export default function BorrowerRequestLoanPage() {
 
     setSubmitting(true)
 
-    const { data: newLoan, error: loanError } = await supabase
-      .from("loans")
-      .insert({
-        member_id: member!.member_id,
-        principal: Number(amount),
-        interest_type: interestType,
-        interest_rate: interestType === "rate" ? Number(interestRate) : 0,
-        interest_amount: interestType === "amount" ? Number(interestAmount) : null,
-        term_months: Number(termMonths),
-        repayment_frequency: repaymentFrequency,
-        status: "requested",
-        start_date: new Date().toISOString().slice(0, 10),
-        notes: description
-      })
-      .select()
-      .single()
-
-    if (loanError) {
-      setMessage(loanError.message)
-      setSubmitting(false)
-      return
-    }
-
-    // Loan releases are cash going out, so the ledger stores them negative.
-    const { error } = await supabase.from("transactions").insert({
-      member_id: member!.member_id,
-      bank_account_id: null,
-      loan_id: newLoan.loan_id,
-      classification: "Loan Release",
-      amount: -Number(amount),
-      description,
-      receipt_url: null,
-      status: "pending"
+    // Both the loans row and its paired "Loan Release" transaction are
+    // written in one atomic RPC call -- previously these were two separate
+    // client-side inserts, and a failure on the second one (dropped
+    // connection, closed tab mid-submit) left an orphaned loan stuck at
+    // "requested" with nothing in the approval queue to ever approve it
+    // against, and no error shown. See submit_loan_request in Supabase.
+    const { error } = await supabase.rpc("submit_loan_request", {
+      p_member_id: member!.member_id,
+      p_principal: Number(amount),
+      p_interest_type: interestType,
+      p_interest_rate: interestType === "rate" ? Number(interestRate) : 0,
+      p_interest_amount: interestType === "amount" ? Number(interestAmount) : null,
+      p_term_months: Number(termMonths),
+      p_repayment_frequency: repaymentFrequency,
+      p_start_date: new Date().toISOString().slice(0, 10),
+      p_notes: description,
+      p_description: description
     })
 
     setSubmitting(false)
