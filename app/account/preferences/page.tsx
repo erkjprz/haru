@@ -110,11 +110,15 @@ export default function PreferencesPage() {
       router.push("/login")
       return
     }
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
     if (member.role === "borrower") router.push("/borrower")
   }, [authLoading, member, router])
 
   useEffect(() => {
-    if (authLoading || !member || member.role === "borrower") return
+    if (authLoading || !member || member.status !== "approved" || member.role === "borrower") return
 
     async function load() {
       const [{ data }, { data: bankList }] = await Promise.all([
@@ -180,7 +184,7 @@ export default function PreferencesPage() {
     setLoanPaymentMessage(error?.message || bankError?.message || "Saved.")
   }
 
-  if (authLoading || !member || member.role === "borrower" || dataLoading) {
+  if (authLoading || !member || member.status !== "approved" || member.role === "borrower" || dataLoading) {
     return (
       <>
         <Navbar />
