@@ -106,6 +106,7 @@ export default function AdminPage() {
   const [distributeError, setDistributeError] = useState("")
 
   const [loadError, setLoadError] = useState("")
+  const [actionError, setActionError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
   const [memberSearch, setMemberSearch] = useState("")
@@ -201,8 +202,15 @@ export default function AdminPage() {
 
   async function approveMember(memberId: string) {
     setMemberBusyId(memberId)
-    await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
+    setActionError("")
+    const { error } = await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
     setMemberBusyId(null)
+
+    if (error) {
+      setActionError(error.message)
+      return
+    }
+
     loadData()
   }
 
@@ -211,6 +219,7 @@ export default function AdminPage() {
     if (!targetId) return
 
     setMemberBusyId(pendingId)
+    setActionError("")
     const { error } = await supabase.rpc("admin_link_member", {
       p_pending_member_id: pendingId,
       p_target_member_id: targetId
@@ -218,7 +227,7 @@ export default function AdminPage() {
     setMemberBusyId(null)
 
     if (error) {
-      setLoadError(error.message)
+      setActionError(error.message)
       return
     }
 
@@ -237,7 +246,7 @@ export default function AdminPage() {
     const fileName = `${memberId || "admin"}-${Date.now()}-${file.name}`
     const { error } = await supabase.storage.from("Receipts").upload(fileName, file, { contentType: file.type })
     if (error) {
-      setLoadError(error.message)
+      setActionError(error.message)
       return null
     }
     return fileName
@@ -247,45 +256,64 @@ export default function AdminPage() {
     const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
     if (!txn) return
 
-    if (txn.classification === "Member Withdrawal") {
-      const bankAccountId = withdrawalBankSelections[transactionId]
-      const receiptFile = approvalReceipts[transactionId]
-      if (!bankAccountId || !receiptFile) return
+    setActionError("")
 
-      setUploadingReceiptId(transactionId)
-      const receiptUrl = await uploadApprovalReceipt(receiptFile, txn.member_id)
-      setUploadingReceiptId(null)
-      if (!receiptUrl) return
+    try {
+      if (txn.classification === "Member Withdrawal") {
+        const bankAccountId = withdrawalBankSelections[transactionId]
+        const receiptFile = approvalReceipts[transactionId]
+        if (!bankAccountId || !receiptFile) return
 
-      await supabase
-        .from("transactions")
-        .update({ status: "approved", bank_account_id: bankAccountId, receipt_url: receiptUrl })
-        .eq("transaction_id", transactionId)
-    } else if (txn.classification === "Loan Release") {
-      // Approving a Loan Release now does the same three things
-      // loans/[id]'s "Approve & Activate" does -- activates the loan,
-      // records the disbursing bank on the release transaction, and
-      // freezes each eligible member's pool share for this loan's hold.
-      // The hold snapshot was missing here for a while, which is why a
-      // loan approved from this screen wouldn't show up under any
-      // member's "money on hold" until someone noticed.
-      const bankAccountId = loanReleaseBankSelections[transactionId]
-      const receiptFile = approvalReceipts[transactionId]
-      if (!bankAccountId || !receiptFile || !txn.loan_id) return
+        setUploadingReceiptId(transactionId)
+        const receiptUrl = await uploadApprovalReceipt(receiptFile, txn.member_id)
+        setUploadingReceiptId(null)
+        if (!receiptUrl) return
 
-      setUploadingReceiptId(transactionId)
-      const receiptUrl = await uploadApprovalReceipt(receiptFile, txn.member_id)
-      setUploadingReceiptId(null)
-      if (!receiptUrl) return
+        const { error } = await supabase
+          .from("transactions")
+          .update({ status: "approved", bank_account_id: bankAccountId, receipt_url: receiptUrl })
+          .eq("transaction_id", transactionId)
+        if (error) throw error
+      } else if (txn.classification === "Loan Release") {
+        // Approving a Loan Release now does the same three things
+        // loans/[id]'s "Approve & Activate" does -- activates the loan,
+        // records the disbursing bank on the release transaction, and
+        // freezes each eligible member's pool share for this loan's hold.
+        // The hold snapshot was missing here for a while, which is why a
+        // loan approved from this screen wouldn't show up under any
+        // member's "money on hold" until someone noticed.
+        const bankAccountId = loanReleaseBankSelections[transactionId]
+        const receiptFile = approvalReceipts[transactionId]
+        if (!bankAccountId || !receiptFile || !txn.loan_id) return
 
-      await supabase.from("loans").update({ status: "active" }).eq("loan_id", txn.loan_id)
-      await supabase
-        .from("transactions")
-        .update({ status: "approved", bank_account_id: bankAccountId, receipt_url: receiptUrl })
-        .eq("transaction_id", transactionId)
-      await snapshotLoanHold(txn.loan_id, txn.member_id, dateOnly(new Date()))
-    } else {
-      await supabase.from("transactions").update({ status: "approved" }).eq("transaction_id", transactionId)
+        setUploadingReceiptId(transactionId)
+        const receiptUrl = await uploadApprovalReceipt(receiptFile, txn.member_id)
+        setUploadingReceiptId(null)
+        if (!receiptUrl) return
+
+        const { error: loanError } = await supabase
+          .from("loans")
+          .update({ status: "active" })
+          .eq("loan_id", txn.loan_id)
+        if (loanError) throw loanError
+
+        const { error: txnError } = await supabase
+          .from("transactions")
+          .update({ status: "approved", bank_account_id: bankAccountId, receipt_url: receiptUrl })
+          .eq("transaction_id", transactionId)
+        if (txnError) throw txnError
+
+        await snapshotLoanHold(txn.loan_id, txn.member_id, dateOnly(new Date()))
+      } else {
+        const { error } = await supabase
+          .from("transactions")
+          .update({ status: "approved" })
+          .eq("transaction_id", transactionId)
+        if (error) throw error
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Something went wrong.")
+      return
     }
 
     setApprovalReceipts((prev) => {
@@ -300,25 +328,34 @@ export default function AdminPage() {
     const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
     const isLoanRelease = txn?.classification === "Loan Release" && txn.loan_id
 
-    // transactions.loan_id has a foreign key into loans with no cascade, so
-    // the reference has to be cleared before the loan row can be deleted --
-    // same fix already used by the member-facing "Cancel entry" flow on
-    // /transactions/[id]/edit.
-    await supabase
-      .from("transactions")
-      .update(isLoanRelease ? { status: "rejected", loan_id: null } : { status: "rejected" })
-      .eq("transaction_id", transactionId)
+    setActionError("")
 
-    // A rejected Loan Release never disbursed anything -- the loan it was
-    // requesting has nothing else attached to it yet (no hold, no
-    // repayments, no gain), so deleting it removes the request cleanly.
-    // Leaving the loans row behind at "requested" would strand it with no
-    // pending transaction to ever act on again, while LoanDetailPanel's
-    // "Approve & Activate" would still be reachable on it -- clicking that
-    // would flip the loan to "active" and snapshot a hold with no actual
-    // disbursement transaction behind it.
-    if (isLoanRelease) {
-      await supabase.from("loans").delete().eq("loan_id", txn.loan_id)
+    try {
+      // transactions.loan_id has a foreign key into loans with no cascade, so
+      // the reference has to be cleared before the loan row can be deleted --
+      // same fix already used by the member-facing "Cancel entry" flow on
+      // /transactions/[id]/edit.
+      const { error: txnError } = await supabase
+        .from("transactions")
+        .update(isLoanRelease ? { status: "rejected", loan_id: null } : { status: "rejected" })
+        .eq("transaction_id", transactionId)
+      if (txnError) throw txnError
+
+      // A rejected Loan Release never disbursed anything -- the loan it was
+      // requesting has nothing else attached to it yet (no hold, no
+      // repayments, no gain), so deleting it removes the request cleanly.
+      // Leaving the loans row behind at "requested" would strand it with no
+      // pending transaction to ever act on again, while LoanDetailPanel's
+      // "Approve & Activate" would still be reachable on it -- clicking that
+      // would flip the loan to "active" and snapshot a hold with no actual
+      // disbursement transaction behind it.
+      if (isLoanRelease) {
+        const { error: loanError } = await supabase.from("loans").delete().eq("loan_id", txn.loan_id)
+        if (loanError) throw loanError
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Something went wrong.")
+      return
     }
 
     // Rejecting a bulk row (Contribution/Loan Repayment) directly, without
@@ -357,8 +394,16 @@ export default function AdminPage() {
     const ids = Array.from(selectedBulkIds)
     if (ids.length === 0) return
     setBulkApproving(true)
-    await supabase.from("transactions").update({ status: "approved" }).in("transaction_id", ids)
+    setActionError("")
+
+    const { error } = await supabase.from("transactions").update({ status: "approved" }).in("transaction_id", ids)
     setBulkApproving(false)
+
+    if (error) {
+      setActionError(error.message)
+      return
+    }
+
     setSelectedBulkIds(new Set())
     loadData()
   }
@@ -376,25 +421,34 @@ export default function AdminPage() {
     if (!Number.isFinite(newAmount) || newAmount <= 0) return
 
     setSavingEditId(id)
+    setActionError("")
 
-    const signedAmount = Number(t.amount) < 0 ? -newAmount : newAmount
-    await supabase.from("transactions").update({ amount: signedAmount }).eq("transaction_id", id)
+    try {
+      const signedAmount = Number(t.amount) < 0 ? -newAmount : newAmount
+      const { error: txnError } = await supabase.from("transactions").update({ amount: signedAmount }).eq("transaction_id", id)
+      if (txnError) throw txnError
 
-    if (t.classification === "Loan Release" && t.loan_id) {
-      const loanUpdate: Record<string, number> = { principal: newAmount }
+      if (t.classification === "Loan Release" && t.loan_id) {
+        const loanUpdate: Record<string, number> = { principal: newAmount }
 
-      if (t.loans?.interest_type === "amount") {
-        const v = editInterestAmount[id]
-        if (v !== undefined && v !== "") loanUpdate.interest_amount = Number(v)
-      } else {
-        const v = editInterestRate[id]
-        if (v !== undefined && v !== "") loanUpdate.interest_rate = Number(v)
+        if (t.loans?.interest_type === "amount") {
+          const v = editInterestAmount[id]
+          if (v !== undefined && v !== "") loanUpdate.interest_amount = Number(v)
+        } else {
+          const v = editInterestRate[id]
+          if (v !== undefined && v !== "") loanUpdate.interest_rate = Number(v)
+        }
+
+        const termV = editTermMonths[id]
+        if (termV !== undefined && termV !== "") loanUpdate.term_months = Number(termV)
+
+        const { error: loanError } = await supabase.from("loans").update(loanUpdate).eq("loan_id", t.loan_id)
+        if (loanError) throw loanError
       }
-
-      const termV = editTermMonths[id]
-      if (termV !== undefined && termV !== "") loanUpdate.term_months = Number(termV)
-
-      await supabase.from("loans").update(loanUpdate).eq("loan_id", t.loan_id)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Something went wrong.")
+      setSavingEditId(null)
+      return
     }
 
     setSavingEditId(null)
@@ -409,11 +463,24 @@ export default function AdminPage() {
 
   async function approveBorrower(memberId: string) {
     setBorrowerBusyId(memberId)
-    await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
+    setActionError("")
 
-    const chosenBorrowerId = borrowerLinkChoice[memberId]
-    if (chosenBorrowerId) {
-      await supabase.from("borrowers").update({ member_id: memberId }).eq("borrower_id", chosenBorrowerId)
+    try {
+      const { error: memberError } = await supabase.from("members").update({ status: "approved" }).eq("member_id", memberId)
+      if (memberError) throw memberError
+
+      const chosenBorrowerId = borrowerLinkChoice[memberId]
+      if (chosenBorrowerId) {
+        const { error: borrowerError } = await supabase
+          .from("borrowers")
+          .update({ member_id: memberId })
+          .eq("borrower_id", chosenBorrowerId)
+        if (borrowerError) throw borrowerError
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Something went wrong.")
+      setBorrowerBusyId(null)
+      return
     }
 
     setBorrowerBusyId(null)
@@ -631,6 +698,8 @@ export default function AdminPage() {
           {loadError && (
             <p className="mt-4 text-sm text-rust">Couldn&apos;t load some data: {loadError}</p>
           )}
+
+          {actionError && <p className="mt-4 text-sm text-rust">{actionError}</p>}
 
           {/* Top-level section nav -- plain underline tabs, matching
               Breakdown's page-level pattern, distinct from the pill toggle

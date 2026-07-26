@@ -102,7 +102,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   const [approveBankChoice, setApproveBankChoice] = useState("")
   const [approveReceipt, setApproveReceipt] = useState<File | null>(null)
   const [closing, setClosing] = useState(false)
-  const [closeError, setCloseError] = useState("")
+  const [manageError, setManageError] = useState("")
   const [approving, setApproving] = useState(false)
   const [reopening, setReopening] = useState(false)
 
@@ -290,40 +290,51 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     setEditTermMonths(String(adminLoan.term_months ?? ""))
     setEditRepaymentFrequency(adminLoan.repayment_frequency)
     setEditNotes(adminLoan.notes ?? "")
+    setManageError("")
     setIsEditing(true)
   }
 
   function cancelEditLoan() {
+    setManageError("")
     setIsEditing(false)
   }
 
   async function saveLoanEdit() {
     if (!adminLoan) return
     setSavingEdit(true)
+    setManageError("")
 
-    const updates: any = {
-      interest_type: editInterestType,
-      interest_rate: editInterestType === "rate" ? Number(editInterestRate) : 0,
-      interest_amount: editInterestType === "amount" ? Number(editInterestAmount) : null,
-      term_months: Number(editTermMonths),
-      repayment_frequency: editRepaymentFrequency,
-      notes: editNotes
-    }
+    try {
+      const updates: any = {
+        interest_type: editInterestType,
+        interest_rate: editInterestType === "rate" ? Number(editInterestRate) : 0,
+        interest_amount: editInterestType === "amount" ? Number(editInterestAmount) : null,
+        term_months: Number(editTermMonths),
+        repayment_frequency: editRepaymentFrequency,
+        notes: editNotes
+      }
 
-    if (adminLoan.status === "requested") {
-      updates.principal = Number(editPrincipal)
-    }
+      if (adminLoan.status === "requested") {
+        updates.principal = Number(editPrincipal)
+      }
 
-    await supabase.from("loans").update(updates).eq("loan_id", adminLoan.loan_id)
+      const { error: loanError } = await supabase.from("loans").update(updates).eq("loan_id", adminLoan.loan_id)
+      if (loanError) throw loanError
 
-    if (adminLoan.status === "requested") {
-      // Loan releases are stored negative in the ledger.
-      await supabase
-        .from("transactions")
-        .update({ amount: -Number(editPrincipal) })
-        .eq("loan_id", adminLoan.loan_id)
-        .eq("classification", "Loan Release")
-        .eq("status", "pending")
+      if (adminLoan.status === "requested") {
+        // Loan releases are stored negative in the ledger.
+        const { error: txnError } = await supabase
+          .from("transactions")
+          .update({ amount: -Number(editPrincipal) })
+          .eq("loan_id", adminLoan.loan_id)
+          .eq("classification", "Loan Release")
+          .eq("status", "pending")
+        if (txnError) throw txnError
+      }
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : "Something went wrong.")
+      setSavingEdit(false)
+      return
     }
 
     setSavingEdit(false)
@@ -334,44 +345,48 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   async function approveLoan() {
     if (!adminLoan || !approveBankChoice || !approveReceipt) return
     setApproving(true)
+    setManageError("")
 
-    // Loan disbursement moves real money out, and until now there was no
-    // evidence trail for it at all -- receipt_url stayed null from
-    // submission straight through approval. Requires proof of the actual
-    // outgoing transfer before the loan can be activated.
-    const fileName = `${adminLoan.member_id || "admin"}-${Date.now()}-${approveReceipt.name}`
-    const { error: uploadError } = await supabase.storage
-      .from("Receipts")
-      .upload(fileName, approveReceipt, { contentType: approveReceipt.type })
+    try {
+      // Loan disbursement moves real money out, and until now there was no
+      // evidence trail for it at all -- receipt_url stayed null from
+      // submission straight through approval. Requires proof of the actual
+      // outgoing transfer before the loan can be activated.
+      const fileName = `${adminLoan.member_id || "admin"}-${Date.now()}-${approveReceipt.name}`
+      const { error: uploadError } = await supabase.storage
+        .from("Receipts")
+        .upload(fileName, approveReceipt, { contentType: approveReceipt.type })
+      if (uploadError) throw uploadError
 
-    if (uploadError) {
+      // Verify a pending Loan Release transaction actually exists for this
+      // loan before activating it -- without this, a loan whose request was
+      // rejected (or otherwise left without a pending transaction) could
+      // still be flipped to "active" and get a hold snapshotted with no real
+      // disbursement transaction behind it.
+      const { data: updatedTxns, error: txnError } = await supabase
+        .from("transactions")
+        .update({ status: "approved", bank_account_id: approveBankChoice, receipt_url: fileName })
+        .eq("loan_id", adminLoan.loan_id)
+        .eq("classification", "Loan Release")
+        .eq("status", "pending")
+        .select("transaction_id")
+      if (txnError) throw txnError
+
+      if (!updatedTxns || updatedTxns.length === 0) {
+        throw new Error("No pending disbursement transaction found for this loan -- nothing to approve.")
+      }
+
+      const { error: loanError } = await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
+      if (loanError) throw loanError
+
+      // Freezes each eligible member's pool share as of release -- the money
+      // moving out to fund this loan is "on hold" for them until it's repaid.
+      await snapshotLoanHold(adminLoan.loan_id, adminLoan.member_id, dateOnly(new Date()))
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : "Something went wrong.")
       setApproving(false)
       return
     }
-
-    // Verify a pending Loan Release transaction actually exists for this
-    // loan before activating it -- without this, a loan whose request was
-    // rejected (or otherwise left without a pending transaction) could
-    // still be flipped to "active" and get a hold snapshotted with no real
-    // disbursement transaction behind it.
-    const { data: updatedTxns } = await supabase
-      .from("transactions")
-      .update({ status: "approved", bank_account_id: approveBankChoice, receipt_url: fileName })
-      .eq("loan_id", adminLoan.loan_id)
-      .eq("classification", "Loan Release")
-      .eq("status", "pending")
-      .select("transaction_id")
-
-    if (!updatedTxns || updatedTxns.length === 0) {
-      setApproving(false)
-      return
-    }
-
-    await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
-
-    // Freezes each eligible member's pool share as of release -- the money
-    // moving out to fund this loan is "on hold" for them until it's repaid.
-    await snapshotLoanHold(adminLoan.loan_id, adminLoan.member_id, dateOnly(new Date()))
 
     setApproving(false)
     setApproveReceipt(null)
@@ -381,7 +396,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   async function handleClose() {
     if (!adminLoan) return
     setClosing(true)
-    setCloseError("")
+    setManageError("")
 
     try {
       await closeLoanAndDistributeGain({
@@ -393,7 +408,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       })
       await reloadAll()
     } catch (err) {
-      setCloseError(err instanceof Error ? err.message : "Something went wrong.")
+      setManageError(err instanceof Error ? err.message : "Something went wrong.")
     } finally {
       setClosing(false)
     }
@@ -402,16 +417,32 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   async function reopenLoan() {
     if (!adminLoan) return
     setReopening(true)
+    setManageError("")
 
-    // closeLoanAndDistributeGain writes to loan_gain_allocations (not
-    // investment_allocations, which has no loan_id column at all) -- clear
-    // that same table here, or a loan closed a second time after reopening
-    // would pile a fresh set of gain rows on top of the stale first set,
-    // double-counting into every other member's current value via
-    // computeCurrentValueByMember's priorLoanGains sum.
-    await supabase.from("loan_gain_allocations").delete().eq("loan_id", adminLoan.loan_id)
-    await supabase.from("transactions").delete().eq("loan_id", adminLoan.loan_id).eq("classification", "Gain Allocation")
-    await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
+    try {
+      // closeLoanAndDistributeGain writes to loan_gain_allocations (not
+      // investment_allocations, which has no loan_id column at all) -- clear
+      // that same table here, or a loan closed a second time after reopening
+      // would pile a fresh set of gain rows on top of the stale first set,
+      // double-counting into every other member's current value via
+      // computeCurrentValueByMember's priorLoanGains sum.
+      const { error: gainError } = await supabase.from("loan_gain_allocations").delete().eq("loan_id", adminLoan.loan_id)
+      if (gainError) throw gainError
+
+      const { error: txnError } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("loan_id", adminLoan.loan_id)
+        .eq("classification", "Gain Allocation")
+      if (txnError) throw txnError
+
+      const { error: loanError } = await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
+      if (loanError) throw loanError
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : "Something went wrong.")
+      setReopening(false)
+      return
+    }
 
     setReopening(false)
     await reloadAll()
@@ -713,7 +744,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                       </button>
                     )}
 
-                    {closeError && <p className="mt-2 text-xs text-rust">{closeError}</p>}
+                    {manageError && <p className="mt-2 text-xs text-rust">{manageError}</p>}
 
                     {adminLoan.status === "closed" && (
                       <button
@@ -841,6 +872,8 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                       Cancel
                     </button>
                   </div>
+
+                  {manageError && <p className="text-xs text-rust">{manageError}</p>}
                 </div>
               )}
             </div>
