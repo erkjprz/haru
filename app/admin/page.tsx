@@ -26,6 +26,16 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
   "Loan Release": { arrow: "↓", tone: "out" }
 }
 
+// Contribution and Loan Repayment are both money coming in with nothing
+// left for an admin to decide -- no bank to pick, no loan to activate --
+// so they're safe to wave through in a batch. Withdrawal and Loan Release
+// are money going out and always need an admin to choose which fund bank
+// it's paid from (Loan Release also activates the loan), so they stay in
+// the one-at-a-time review list. Shared between the bulk/review split
+// below and approveBulkSelected's own query filter, so a tampered
+// selectedBulkIds can't blanket-approve either of those two.
+const BULK_CLASSIFICATIONS = new Set(["Member Contribution", "Loan Repayment"])
+
 type Tab = "members" | "txns" | "borrowers" | "distrib" | "support"
 
 type ExportRow = {
@@ -400,12 +410,30 @@ export default function AdminPage() {
     setBulkApproving(true)
     setActionError("")
 
-    const { error } = await supabase.from("transactions").update({ status: "approved" }).in("transaction_id", ids)
+    // The UI only ever offers bulk-select checkboxes for Contribution/Loan
+    // Repayment rows, but selectedBulkIds is still just client state --
+    // scoping the write itself to BULK_CLASSIFICATIONS means a stale or
+    // tampered selection can't blanket-approve a Withdrawal or Loan Release,
+    // which would skip the bank/receipt evidence requirement entirely, and
+    // for Loan Release, skip the atomic RPC that actually activates the loan.
+    const { data, error } = await supabase
+      .from("transactions")
+      .update({ status: "approved" })
+      .in("transaction_id", ids)
+      .in("classification", Array.from(BULK_CLASSIFICATIONS))
+      .select("transaction_id")
+
     setBulkApproving(false)
 
     if (error) {
       setActionError(error.message)
       return
+    }
+
+    if (!data || data.length !== ids.length) {
+      setActionError(
+        "Some selected transactions couldn't be bulk-approved and were skipped -- use the individual review flow for those instead."
+      )
     }
 
     setSelectedBulkIds(new Set())
@@ -614,13 +642,6 @@ export default function AdminPage() {
     return matchesSearch && matchesType
   })
 
-  // Contribution and Loan Repayment are both money coming in with nothing
-  // left for an admin to decide -- no bank to pick, no loan to activate --
-  // so they're safe to wave through in a batch. Withdrawal and Loan
-  // Release are money going out, and always need an admin to choose which
-  // fund bank it's paid from (Loan Release also activates the loan), so
-  // they stay in the one-at-a-time review list.
-  const BULK_CLASSIFICATIONS = new Set(["Member Contribution", "Loan Repayment"])
   const bulkTransactions = filteredTransactions.filter((t) => BULK_CLASSIFICATIONS.has(t.classification))
   const reviewTransactions = filteredTransactions.filter((t) => !BULK_CLASSIFICATIONS.has(t.classification))
 
