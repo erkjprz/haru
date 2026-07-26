@@ -320,6 +320,7 @@ function NewTransactionForm() {
     setReceiptFile(null)
     setBankId("")
     setToBankId("")
+    setAmount("")
     setInterestType("rate")
     setInterestRate("")
     setInterestAmount("")
@@ -334,15 +335,13 @@ function NewTransactionForm() {
       await loadLoansFor(memberId)
     }
 
-    // Switching type reverts "on behalf of" to self (cleared above) -- reload
-    // self's saved defaults and prefill the amount from them, but never
-    // clobber something the member already typed in.
+    // Amount was just cleared above, so this always prefills from the
+    // member's saved default for the new type -- there's nothing typed in
+    // yet to clobber.
     if ((newType === "contribution" || newType === "loan_payment") && memberId) {
       const { contrib, loanPay } = await loadPreferencesFor(memberId)
-      if (!amount) {
-        if (newType === "contribution" && contrib != null) setAmount(String(contrib))
-        if (newType === "loan_payment" && loanPay != null) setAmount(String(loanPay))
-      }
+      if (newType === "contribution" && contrib != null) setAmount(String(contrib))
+      if (newType === "loan_payment" && loanPay != null) setAmount(String(loanPay))
     }
   }
 
