@@ -17,6 +17,7 @@ import { formatInterestLabel } from "@/lib/loanFormat"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
+import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
 
 type Loan = {
   loan_id: string
@@ -52,12 +53,6 @@ type RecentTransaction = {
   classification: string
   amount: number
   status: string
-}
-
-const TXN_TYPE_LABELS: Record<string, string> = {
-  "Loan Release": "Loan Disbursement",
-  "Loan Repayment": "Loan Repayment",
-  "Gain Allocation": "Investment Allocation"
 }
 
 type AdminLoan = {

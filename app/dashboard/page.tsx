@@ -6,22 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
-
-const TXN_TYPE_LABELS: Record<string, string> = {
-  "Member Contribution": "Contribution",
-  "Member Withdrawal": "Withdrawal",
-  "Expense": "Expense",
-  "Loan Release": "Loan Disbursement",
-  "Loan Repayment": "Loan Repayment",
-  "Gain Allocation": "Investment Allocation",
-  "Bank Interest": "Bank Interest",
-  "Internal Transfer": "Bank Transfer",
-  "Investment": "Investment",
-  "Investment Return": "Investment Return",
-  "Tax": "Tax",
-  "Bank Write-off": "Bank Write-off",
-  "Opening Balance": "Opening Balance"
-}
+import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
 
 type RecentTransaction = {
   transaction_id: string
