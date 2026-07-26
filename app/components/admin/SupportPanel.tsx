@@ -378,6 +378,14 @@ function SupportEditForm({
       return
     }
 
+    // The update above already committed the new receipt_url, so the old
+    // file at t.receipt_url is now unreferenced -- clean it up rather than
+    // leaving it orphaned in the bucket. Best-effort: a failure here doesn't
+    // affect the save that already succeeded.
+    if (receipt && t.receipt_url && t.receipt_url !== receiptUrl) {
+      await supabase.storage.from("Receipts").remove([t.receipt_url])
+    }
+
     if (isUnapprovedLoanRelease) {
       const { error: loanError } = await supabase.from("loans").delete().eq("loan_id", t.loan_id)
       if (loanError) {

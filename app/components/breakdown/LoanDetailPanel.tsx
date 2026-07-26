@@ -412,12 +412,24 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       const { error: gainError } = await supabase.from("loan_gain_allocations").delete().eq("loan_id", adminLoan.loan_id)
       if (gainError) throw gainError
 
-      const { error: txnError } = await supabase
+      // Gain Allocation rows are system-generated and never carry a
+      // receipt today, but select the deleted rows back and clean up
+      // defensively in case that ever changes -- otherwise a future
+      // receipt would silently orphan in the bucket.
+      const { data: deletedGainTxns, error: txnError } = await supabase
         .from("transactions")
         .delete()
         .eq("loan_id", adminLoan.loan_id)
         .eq("classification", "Gain Allocation")
+        .select("receipt_url")
       if (txnError) throw txnError
+
+      const orphanedReceipts = (deletedGainTxns ?? [])
+        .map((t) => t.receipt_url)
+        .filter((url): url is string => !!url)
+      if (orphanedReceipts.length > 0) {
+        await supabase.storage.from("Receipts").remove(orphanedReceipts)
+      }
 
       const { error: loanError } = await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
       if (loanError) throw loanError
