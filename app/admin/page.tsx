@@ -297,8 +297,16 @@ export default function AdminPage() {
 
   async function rejectTransaction(transactionId: string) {
     const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
+    const isLoanRelease = txn?.classification === "Loan Release" && txn.loan_id
 
-    await supabase.from("transactions").update({ status: "rejected" }).eq("transaction_id", transactionId)
+    // transactions.loan_id has a foreign key into loans with no cascade, so
+    // the reference has to be cleared before the loan row can be deleted --
+    // same fix already used by the member-facing "Cancel entry" flow on
+    // /transactions/[id]/edit.
+    await supabase
+      .from("transactions")
+      .update(isLoanRelease ? { status: "rejected", loan_id: null } : { status: "rejected" })
+      .eq("transaction_id", transactionId)
 
     // A rejected Loan Release never disbursed anything -- the loan it was
     // requesting has nothing else attached to it yet (no hold, no
@@ -308,7 +316,7 @@ export default function AdminPage() {
     // "Approve & Activate" would still be reachable on it -- clicking that
     // would flip the loan to "active" and snapshot a hold with no actual
     // disbursement transaction behind it.
-    if (txn?.classification === "Loan Release" && txn.loan_id) {
+    if (isLoanRelease) {
       await supabase.from("loans").delete().eq("loan_id", txn.loan_id)
     }
 
