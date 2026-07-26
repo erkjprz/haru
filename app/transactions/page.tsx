@@ -8,22 +8,7 @@ import ReceiptModal from "@/app/components/ReceiptModal"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import { dateOnly } from "@/lib/currentValue"
-
-const typeLabels: Record<string, string> = {
-  "Member Contribution": "Contribution",
-  "Member Withdrawal": "Withdrawal",
-  "Expense": "Expense",
-  "Loan Release": "Loan Disbursement",
-  "Loan Repayment": "Loan Repayment",
-  "Gain Allocation": "Investment Allocation",
-  "Bank Interest": "Bank Interest",
-  "Internal Transfer": "Bank Transfer",
-  "Investment": "Investment",
-  "Investment Return": "Investment Return",
-  "Tax": "Tax",
-  "Bank Write-off": "Bank Write-off",
-  "Opening Balance": "Opening Balance"
-}
+import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 
 const typeColor: Record<string, string> = {
   "Member Contribution": "text-sage border-sage",

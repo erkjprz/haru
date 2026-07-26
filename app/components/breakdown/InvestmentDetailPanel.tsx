@@ -12,6 +12,7 @@ import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
 import { distributeInvestmentGain, getUndistributedInvestmentGain } from "@/lib/distributeInvestment"
 import { dateOnly } from "@/lib/currentValue"
+import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
 
 type Investment = {
   investment_id: string
@@ -41,12 +42,6 @@ type RecentTransaction = {
 }
 
 const ALLOCATION_TYPES = ["Investment Gain", "Investment Loss"]
-
-const TXN_TYPE_LABELS: Record<string, string> = {
-  Investment: "Investment",
-  "Investment Return": "Investment Return",
-  "Gain Allocation": "Investment Allocation"
-}
 
 export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: string; onBack: () => void }) {
   const router = useRouter()

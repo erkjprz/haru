@@ -13,6 +13,7 @@ import { FlowBadge } from "@/app/components/TransactionFormUI"
 import { approveLoanRelease } from "@/lib/approveLoan"
 import { approveBorrowerMember } from "@/lib/approveBorrower"
 import { dateOnly } from "@/lib/currentValue"
+import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 
 // Same in/out vocabulary as the transaction edit page's FLOW map -- money
 // coming in (Contribution, Loan Repayment) has nothing left for an admin
@@ -23,17 +24,6 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
   "Member Withdrawal": { arrow: "↓", tone: "out" },
   "Loan Repayment": { arrow: "↑", tone: "in" },
   "Loan Release": { arrow: "↓", tone: "out" }
-}
-
-const typeLabels: Record<string, string> = {
-  "Member Contribution": "Contribution",
-  "Member Withdrawal": "Withdrawal",
-  "Expense": "Expense",
-  "Loan Release": "Loan Disbursement",
-  "Loan Repayment": "Loan Repayment",
-  "Gain Allocation": "Investment Allocation",
-  "Bank Interest": "Bank Interest",
-  "Internal Transfer": "Bank Transfer"
 }
 
 type Tab = "members" | "txns" | "borrowers" | "distrib" | "support"
@@ -856,7 +846,7 @@ export default function AdminPage() {
                     onChange={(e) => setTxnTypeFilter(e.target.value)}
                   >
                     <option value="">All types</option>
-                    {Object.keys(typeLabels).map((key) => (
+                    {Object.keys(FLOW).map((key) => (
                       <option key={key} value={key}>
                         {typeLabels[key]}
                       </option>

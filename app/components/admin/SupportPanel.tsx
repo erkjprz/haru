@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 import { ReceiptField } from "@/app/components/TransactionFormUI"
+import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 
 const STATUS_OPTIONS = ["pending", "approved", "rejected", "cancelled"]
 
@@ -37,22 +38,6 @@ function matchLegacyBankText(banks: BankAccount[], legacyText: string | null): B
       (b) => b.bank_name.toLowerCase() === needle || (b.account_name ?? "").toLowerCase() === needle
     ) ?? null
   )
-}
-
-const typeLabels: Record<string, string> = {
-  "Member Contribution": "Contribution",
-  "Member Withdrawal": "Withdrawal",
-  "Loan Request": "Loan Request",
-  "Expense": "Expense",
-  "Loan Release": "Loan Disbursement",
-  "Loan Repayment": "Loan Repayment",
-  "Gain Allocation": "Investment Allocation",
-  "Bank Interest": "Bank Interest",
-  "Internal Transfer": "Bank Transfer",
-  "Investment": "Investment",
-  "Investment Return": "Investment Return",
-  "Tax": "Tax",
-  "Bank Write-off": "Bank Write-off"
 }
 
 const statusColor: Record<string, string> = {

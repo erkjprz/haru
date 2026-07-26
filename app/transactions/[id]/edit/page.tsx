@@ -37,7 +37,7 @@ const TYPE_LABEL: Record<string, string> = {
   "Member Contribution": "Contribution",
   "Member Withdrawal": "Withdrawal Request",
   "Loan Repayment": "Loan Payment",
-  "Loan Release": "Loan Disbursement",
+  "Loan Release": "Loan Release",
   "Bank Interest": "Bank Interest",
   "Expense": "Expense",
   "Internal Transfer": "Bank Transfer"
