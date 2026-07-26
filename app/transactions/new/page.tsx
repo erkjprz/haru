@@ -541,7 +541,7 @@ function NewTransactionForm() {
           affects_cash: 0,
           amount: Number(amount),
           description,
-          receipt_url: null,
+          receipt_url: receiptUrl,
           status: "approved",
           submitted_by: memberId
         })
@@ -586,7 +586,7 @@ function NewTransactionForm() {
           classification,
           amount: selectedType === "expense" || selectedType === "investment" ? -Number(amount) : Number(amount),
           description,
-          receipt_url: null,
+          receipt_url: receiptUrl,
           status: "approved",
           submitted_by: memberId
         })
