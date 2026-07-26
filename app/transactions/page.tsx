@@ -427,10 +427,15 @@ function TransactionsPageInner() {
   }
 
   async function loadMembers() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("members")
       .select("member_id, name")
       .order("name")
+
+    if (error) {
+      setLoadError(error.message)
+      return
+    }
 
     setMembers(data ?? [])
   }
