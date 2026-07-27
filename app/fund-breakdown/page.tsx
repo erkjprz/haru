@@ -1981,7 +1981,8 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const gains = investments.filter((i) => i.gain_loss > 0).sort((a, b) => b.gain_loss - a.gain_loss)
-  const losses = investments.filter((i) => i.gain_loss <= 0).sort((a, b) => a.gain_loss - b.gain_loss)
+  const losses = investments.filter((i) => i.gain_loss < 0).sort((a, b) => a.gain_loss - b.gain_loss)
+  const flat = investments.filter((i) => i.gain_loss === 0)
   const netTotal = investments.reduce((sum, i) => sum + i.gain_loss, 0)
 
   function renderInvestmentGroup(inv: Investment) {
@@ -2099,9 +2100,16 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {losses.length > 0 && (
-        <section>
+        <section className={flat.length > 0 ? "mb-7" : ""}>
           <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Losses</h2>
           <div className="flex flex-col gap-3">{losses.map(renderInvestmentGroup)}</div>
+        </section>
+      )}
+
+      {flat.length > 0 && (
+        <section>
+          <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Flat</h2>
+          <div className="flex flex-col gap-3">{flat.map(renderInvestmentGroup)}</div>
         </section>
       )}
     </div>
