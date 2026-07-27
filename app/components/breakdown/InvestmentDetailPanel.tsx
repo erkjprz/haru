@@ -154,12 +154,17 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     }
   }, [investmentId, member, loadInvestment, loadShares, loadRecentTransactions])
 
-  async function openDistribute() {
+  // startClosed pre-checks the "close after distributing" box for the
+  // dedicated Close Investment entry point -- same form either way, since
+  // closing is just a distribution that also flips the investment's status
+  // (see runDistribute). The checkbox stays editable either way, so opening
+  // via either button just sets where you start.
+  async function openDistribute(startClosed: boolean) {
     setShowDistributeForm(true)
     setDistributeDate(dateOnly(new Date()))
     setDistributeAmount("")
     setDistributeNotes("")
-    setCloseOnDistribute(false)
+    setCloseOnDistribute(startClosed)
     setDistributeMessage("")
     await refreshSuggestedAmount(dateOnly(new Date()))
   }
@@ -477,10 +482,16 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
             <div className="flex items-center gap-2 flex-wrap mb-3">
               <button
                 className="shrink-0 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-                onClick={openDistribute}
+                onClick={() => openDistribute(false)}
               >
                 <span className="text-lg leading-none">+</span>
                 Distribute Gain/Loss
+              </button>
+              <button
+                className="shrink-0 border border-hairline text-ink-soft px-4 py-2 rounded-sm text-sm font-medium"
+                onClick={() => openDistribute(true)}
+              >
+                Close Investment
               </button>
             </div>
           )}
