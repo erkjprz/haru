@@ -151,7 +151,9 @@ export default function NotificationsPage() {
       <Header />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+var(--dock-h)+env(safe-area-inset-bottom))]">
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-6">Notifications</h1>
+          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">Activity</div>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">Notifications</h1>
+          <p className="text-[13px] text-ink-soft mb-6">Everything Haru has sent you, newest first.</p>
 
           <PushToggle memberId={member.member_id} />
 
