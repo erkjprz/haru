@@ -34,6 +34,7 @@ type Share = {
   allocation_type: string
   notes: string | null
   allocation_date: string | null
+  is_closing_distribution: boolean
 }
 
 type RecentTransaction = {
@@ -90,7 +91,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     // of this table's history, not something decided in this pass).
     const { data, error } = await supabase
       .from("investment_allocations")
-      .select("id, amount, allocation_type, member_id, notes, allocation_date, members(name)")
+      .select("id, amount, allocation_type, member_id, notes, allocation_date, is_closing_distribution, members(name)")
       .eq("investment_id", investmentId)
 
     if (!error && data) {
@@ -102,7 +103,8 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
           amount: Number(r.amount),
           allocation_type: r.allocation_type,
           notes: r.notes ?? null,
-          allocation_date: r.allocation_date ?? null
+          allocation_date: r.allocation_date ?? null,
+          is_closing_distribution: r.is_closing_distribution === true
         }))
       )
       setLoadError("")
@@ -303,14 +305,20 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
   const totalShared = signedShares.reduce((sum, s) => sum + s.signed, 0)
   const unallocated = Number((investment.gain_loss - totalShared).toFixed(2))
 
-  // Group per-member rows by distribution event (allocation_date) -- a
-  // still-open investment can be distributed multiple times over its life
-  // (yearly, ad hoc, etc.), so the flat member list is broken into one
-  // section per event, newest first. Legacy rows predating allocation_date
-  // tracking have no event to group under.
+  // Group per-member rows by distribution event -- a still-open investment
+  // can be distributed multiple times over its life (yearly, ad hoc, etc.),
+  // so the flat member list is broken into one section per event, newest
+  // first. Keyed on (date, is_closing_distribution) rather than just date --
+  // a regular distribution and a later closing one can legitimately land on
+  // the same calendar day (e.g. closing right after a top-up distribution),
+  // and since both split against the same unchanged member proportions,
+  // their per-member amounts can come out identical -- without this split,
+  // the two events would merge into one group and read as an accidental
+  // duplicate rather than two separate, correct distributions. Legacy rows
+  // predating allocation_date tracking have no event to group under.
   const dateGroups = new Map<string, typeof signedShares>()
   for (const s of signedShares) {
-    const key = s.allocation_date ?? "legacy"
+    const key = s.allocation_date ? `${s.allocation_date}:${s.is_closing_distribution}` : "legacy"
     const bucket = dateGroups.get(key)
     if (bucket) bucket.push(s)
     else dateGroups.set(key, [s])
@@ -322,12 +330,18 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
   })
   const shareGroups = groupKeys.map((key) => {
     const groupShares = dateGroups.get(key)!
+    const isClosingGroup = groupShares[0]?.is_closing_distribution === true
+    const dateLabel =
+      key === "legacy"
+        ? "Undated (legacy)"
+        : new Date(`${groupShares[0].allocation_date}T00:00:00`).toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "short",
+            day: "numeric"
+          })
     return {
       key,
-      label:
-        key === "legacy"
-          ? "Undated (legacy)"
-          : new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
+      label: isClosingGroup ? `${dateLabel} · Closing` : dateLabel,
       shares: groupShares,
       subtotal: groupShares.reduce((sum, s) => sum + s.signed, 0)
     }
