@@ -105,7 +105,7 @@ export default function BorrowerHeader() {
           onClick={() => router.push("/borrower")}
           className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono"
         >
-          Haru
+          Est. 2017
         </button>
         <div className="flex items-center gap-2">
           <NotificationBell />
