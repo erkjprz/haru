@@ -89,6 +89,7 @@ export default function NotificationsPage() {
   const [dataLoading, setDataLoading] = useState(true)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loadError, setLoadError] = useState("")
+  const [clearing, setClearing] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -131,6 +132,14 @@ export default function NotificationsPage() {
     if (n.link) router.push(n.link)
   }
 
+  async function clearAll() {
+    if (clearing || !member) return
+    setClearing(true)
+    const { error } = await supabase.from("notifications").delete().eq("member_id", member.member_id)
+    setClearing(false)
+    if (!error) setNotifications([])
+  }
+
   const Header = member?.role === "borrower" ? BorrowerHeader : Navbar
 
   if (authLoading || !member || member.status !== "approved" || dataLoading) {
@@ -163,6 +172,18 @@ export default function NotificationsPage() {
             <p className="text-sm text-ink-soft text-center py-12 bg-paper-2 border border-hairline rounded-md">
               Nothing yet.
             </p>
+          )}
+
+          {notifications.length > 0 && (
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={clearAll}
+                disabled={clearing}
+                className="text-[13px] text-ink-soft hover:text-ink transition-colors disabled:opacity-60"
+              >
+                {clearing ? "Clearing..." : "Clear All"}
+              </button>
+            </div>
           )}
 
           {notifications.length > 0 && (
