@@ -128,6 +128,11 @@ export default function EditTransactionPage() {
   const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null)
   const [existingReceiptSignedUrl, setExistingReceiptSignedUrl] = useState<string | null>(null)
   const [interestDistributed, setInterestDistributed] = useState(false)
+  // Whether this row's investment has ever had a gain/loss distribution run
+  // against it -- Investment/Investment Return have no per-transaction flag
+  // the way Bank Interest does, since a distribution pools every approved
+  // transaction under the investment rather than crediting off one row.
+  const [investmentAlreadyDistributed, setInvestmentAlreadyDistributed] = useState(false)
   const [receipt, setReceipt] = useState<File | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -240,6 +245,18 @@ export default function EditTransactionPage() {
       setExistingReceiptUrl(txn.receipt_url ?? null)
       setInterestDistributed(txn.interest_distributed === true)
       setFormStep(1)
+
+      const isInvestmentEntryType = txn.classification === "Investment" || txn.classification === "Investment Return"
+      if (isInvestmentEntryType && txn.investment_id) {
+        const { data: existingAllocation } = await supabase
+          .from("investment_allocations")
+          .select("id")
+          .eq("investment_id", txn.investment_id)
+          .limit(1)
+          .maybeSingle()
+
+        setInvestmentAlreadyDistributed(!!existingAllocation)
+      }
 
       if (isLoanReleaseType && loanRecord) {
         setLoanId(loanRecord.loan_id)
@@ -716,6 +733,13 @@ export default function EditTransactionPage() {
             <p className="text-[11px] text-gold bg-gold/10 border border-gold rounded-md px-3 py-2 mt-4">
               This interest has already been split across members. Changing the amount or cancelling this entry
               won&apos;t update what members were already credited in bank_interest_allocations.
+            </p>
+          )}
+
+          {isInvestmentEntry && investmentAlreadyDistributed && (
+            <p className="text-[11px] text-gold bg-gold/10 border border-gold rounded-md px-3 py-2 mt-4">
+              This investment has already had a gain/loss distribution run against it. Changing this entry&apos;s
+              amount or cancelling it won&apos;t update what members were already credited from Distribute Gain/Loss.
             </p>
           )}
 
