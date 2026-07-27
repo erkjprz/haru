@@ -422,41 +422,27 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     setReopening(true)
     setManageError("")
 
-    try {
-      // closeLoanAndDistributeGain writes to loan_gain_allocations (not
-      // investment_allocations, which has no loan_id column at all) -- clear
-      // that same table here, or a loan closed a second time after reopening
-      // would pile a fresh set of gain rows on top of the stale first set,
-      // double-counting into every other member's current value via
-      // computeCurrentValueByMember's priorLoanGains sum.
-      const { error: gainError } = await supabase.from("loan_gain_allocations").delete().eq("loan_id", adminLoan.loan_id)
-      if (gainError) throw gainError
+    // Deleting loan_gain_allocations/its paired Gain Allocation
+    // transactions and flipping the loan back to active used to be three
+    // separate client calls with no rollback between them -- a failure
+    // partway through could leave the loan stuck "closed" with its gain
+    // rows already gone (or a stale set left behind to double-count into
+    // computeCurrentValueByMember's priorLoanGains sum on the next close).
+    // One atomic RPC now does all three.
+    const { data: orphanedReceipts, error } = await supabase.rpc("reopen_loan", { p_loan_id: adminLoan.loan_id })
 
-      // Gain Allocation rows are system-generated and never carry a
-      // receipt today, but select the deleted rows back and clean up
-      // defensively in case that ever changes -- otherwise a future
-      // receipt would silently orphan in the bucket.
-      const { data: deletedGainTxns, error: txnError } = await supabase
-        .from("transactions")
-        .delete()
-        .eq("loan_id", adminLoan.loan_id)
-        .eq("classification", "Gain Allocation")
-        .select("receipt_url")
-      if (txnError) throw txnError
-
-      const orphanedReceipts = (deletedGainTxns ?? [])
-        .map((t) => t.receipt_url)
-        .filter((url): url is string => !!url)
-      if (orphanedReceipts.length > 0) {
-        await supabase.storage.from("Receipts").remove(orphanedReceipts)
-      }
-
-      const { error: loanError } = await supabase.from("loans").update({ status: "active" }).eq("loan_id", adminLoan.loan_id)
-      if (loanError) throw loanError
-    } catch (err) {
-      setManageError(err instanceof Error ? err.message : "Something went wrong.")
+    if (error) {
+      setManageError(error.message)
       setReopening(false)
       return
+    }
+
+    // Gain Allocation rows are system-generated and never carry a receipt
+    // today, but clean up defensively in case that ever changes -- the DB
+    // state already committed by this point, so a failure here shouldn't
+    // block the reopen, just leave an orphaned file to clean up later.
+    if (orphanedReceipts && orphanedReceipts.length > 0) {
+      await supabase.storage.from("Receipts").remove(orphanedReceipts)
     }
 
     setReopening(false)
