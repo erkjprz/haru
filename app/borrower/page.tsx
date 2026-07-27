@@ -187,6 +187,8 @@ export default function BorrowerPage() {
           </h1>
           <p className="text-[13px] text-ink-soft mb-6">Request a loan, or repay one you already have.</p>
 
+          {member && <NotificationPrompt memberId={member.member_id} />}
+
           <div className="flex gap-2 mb-7">
             <button
               onClick={() => router.push("/borrower/request")}
@@ -203,8 +205,6 @@ export default function BorrowerPage() {
               </button>
             )}
           </div>
-
-          {member && <NotificationPrompt memberId={member.member_id} />}
 
           {loadError && <p className="mb-4 text-sm text-rust">Couldn't load your loans: {loadError}</p>}
 
