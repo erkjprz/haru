@@ -1980,9 +1980,15 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
     )
   }
 
-  const gains = investments.filter((i) => i.gain_loss > 0).sort((a, b) => b.gain_loss - a.gain_loss)
-  const losses = investments.filter((i) => i.gain_loss < 0).sort((a, b) => a.gain_loss - b.gain_loss)
-  const flat = investments.filter((i) => i.gain_loss === 0)
+  // Active takes priority over gain/loss direction -- a still-open
+  // investment's current gain/loss is just an interim snapshot, not a
+  // settled outcome, so it belongs with the other ongoing investments
+  // rather than being sorted by a number that can still move. Gains/Losses
+  // are scoped to closed investments only, where the number is final.
+  const active = investments.filter((i) => i.status === "open")
+  const closedInvestments = investments.filter((i) => i.status === "closed")
+  const gains = closedInvestments.filter((i) => i.gain_loss > 0).sort((a, b) => b.gain_loss - a.gain_loss)
+  const losses = closedInvestments.filter((i) => i.gain_loss <= 0).sort((a, b) => a.gain_loss - b.gain_loss)
   const netTotal = investments.reduce((sum, i) => sum + i.gain_loss, 0)
 
   function renderInvestmentGroup(inv: Investment) {
@@ -2092,24 +2098,24 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
         <p className="text-sm text-ink-soft text-center py-12">No investments on record yet.</p>
       )}
 
+      {active.length > 0 && (
+        <section className={gains.length > 0 || losses.length > 0 ? "mb-7" : ""}>
+          <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Active</h2>
+          <div className="flex flex-col gap-3">{active.map(renderInvestmentGroup)}</div>
+        </section>
+      )}
+
       {gains.length > 0 && (
-        <section className="mb-7">
+        <section className={losses.length > 0 ? "mb-7" : ""}>
           <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Gains</h2>
           <div className="flex flex-col gap-3">{gains.map(renderInvestmentGroup)}</div>
         </section>
       )}
 
       {losses.length > 0 && (
-        <section className={flat.length > 0 ? "mb-7" : ""}>
+        <section>
           <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Losses</h2>
           <div className="flex flex-col gap-3">{losses.map(renderInvestmentGroup)}</div>
-        </section>
-      )}
-
-      {flat.length > 0 && (
-        <section>
-          <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Flat</h2>
-          <div className="flex flex-col gap-3">{flat.map(renderInvestmentGroup)}</div>
         </section>
       )}
     </div>
@@ -2153,10 +2159,7 @@ function InvestmentCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-display text-[17px] font-semibold text-ink truncate">{inv.investment}</p>
-          <p className="text-[12px] text-ink-soft">
-            ₱{fmt(inv.invested)} invested
-            {inv.status === "closed" && " · Closed"}
-          </p>
+          <p className="text-[12px] text-ink-soft">₱{fmt(inv.invested)} invested</p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <div className="flex items-center gap-1.5">
@@ -2169,6 +2172,11 @@ function InvestmentCard({
               {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
             </span>
           </div>
+          {inv.status === "closed" && (
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-gold border border-gold rounded-full px-2 py-0.5">
+              Closed
+            </span>
+          )}
           {showEdit ? (
             <button
               onClick={(e) => {
