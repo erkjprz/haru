@@ -6,13 +6,14 @@ import { NotificationBell } from "@/app/components/NotificationBell"
 
 // Borrower accounts get this instead of the full Navbar -- no dashboard,
 // loans list, or "+ New" transaction button, since none of those apply to
-// a restricted borrower account. The wordmark and "Your Loan" both go home
-// (/borrower) -- previously there was no way back from a page like Help
-// short of the browser's own back button.
+// a restricted borrower account. The wordmark goes home (/borrower) --
+// previously there was no way back from a page like Help short of the
+// browser's own back button. No separate "Your Loan" link: it did the same
+// thing as tapping the wordmark, and having both crowded this row on
+// narrow screens once the notification bell was added.
 export default function BorrowerHeader() {
   const router = useRouter()
   const pathname = usePathname()
-  const onHome = pathname === "/borrower"
   const onAccount = pathname === "/account"
 
   async function logout() {
@@ -36,11 +37,6 @@ export default function BorrowerHeader() {
         </button>
         <div className="flex items-center gap-4">
           <NotificationBell />
-          {!onHome && (
-            <button onClick={() => router.push("/borrower")} className="text-sm font-mono text-ink-soft hover:text-ink">
-              Your Loan
-            </button>
-          )}
           {!onAccount && (
             <button onClick={() => router.push("/account")} className="text-sm font-mono text-ink-soft hover:text-ink">
               Account
