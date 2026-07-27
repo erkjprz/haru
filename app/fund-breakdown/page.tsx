@@ -1856,6 +1856,8 @@ type Investment = {
   invested: number
   returned: number
   gain_loss: number
+  status: "open" | "closed"
+  closed_date: string | null
 }
 
 function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
@@ -1979,7 +1981,8 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const gains = investments.filter((i) => i.gain_loss > 0).sort((a, b) => b.gain_loss - a.gain_loss)
-  const losses = investments.filter((i) => i.gain_loss <= 0).sort((a, b) => a.gain_loss - b.gain_loss)
+  const losses = investments.filter((i) => i.gain_loss < 0).sort((a, b) => a.gain_loss - b.gain_loss)
+  const flat = investments.filter((i) => i.gain_loss === 0)
   const netTotal = investments.reduce((sum, i) => sum + i.gain_loss, 0)
 
   function renderInvestmentGroup(inv: Investment) {
@@ -2097,9 +2100,16 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {losses.length > 0 && (
-        <section>
+        <section className={flat.length > 0 ? "mb-7" : ""}>
           <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Losses</h2>
           <div className="flex flex-col gap-3">{losses.map(renderInvestmentGroup)}</div>
+        </section>
+      )}
+
+      {flat.length > 0 && (
+        <section>
+          <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Flat</h2>
+          <div className="flex flex-col gap-3">{flat.map(renderInvestmentGroup)}</div>
         </section>
       )}
     </div>
@@ -2143,7 +2153,10 @@ function InvestmentCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-display text-[17px] font-semibold text-ink truncate">{inv.investment}</p>
-          <p className="text-[12px] text-ink-soft">₱{fmt(inv.invested)} invested</p>
+          <p className="text-[12px] text-ink-soft">
+            ₱{fmt(inv.invested)} invested
+            {inv.status === "closed" && " · Closed"}
+          </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <div className="flex items-center gap-1.5">
