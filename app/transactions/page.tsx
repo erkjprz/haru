@@ -779,19 +779,32 @@ function TransactionsPageInner() {
               // it's still pending (the loan itself is still "requested";
               // once approved, transaction.status flips to "approved" too,
               // so this stays a reliable proxy without a separate query).
-              // Admin entries (Bank Interest/Expense/Bank Transfer) are
-              // always inserted already-approved with no owning member, so
-              // editing is restricted to whichever admin actually recorded
-              // it (submitted_by) -- older entries from before this was
-              // tracked have no submitted_by on file, so any admin can
-              // still edit those rather than locking everyone out.
+              // This first branch already covers a member's own pending
+              // Investment Return too (see /transactions/new), since it's a
+              // generic "pending row I own" check, not classification-gated.
+              // Admin entries (Bank Interest/Expense/Bank Transfer/
+              // Investment) are always inserted already-approved with no
+              // owning member, so editing is restricted to whichever admin
+              // actually recorded it (submitted_by) -- older entries from
+              // before this was tracked have no submitted_by on file, so any
+              // admin can still edit those rather than locking everyone out.
+              // Investment Return can't join that static list the same way,
+              // since a member's own pending row also has submitted_by ==
+              // null (per the DB's insert policy) -- without the member_id
+              // guard, this branch would let any admin edit a member's still
+              // -pending submission directly, bypassing the review queue.
               const canEdit =
                 (transaction.status === "pending" &&
                   transaction.member_id === member?.member_id &&
                   transaction.classification !== "Loan Release") ||
                 (isAdmin &&
-                  ((["Bank Interest", "Expense", "Internal Transfer"].includes(transaction.classification) &&
+                  ((["Bank Interest", "Expense", "Internal Transfer", "Investment"].includes(
+                    transaction.classification
+                  ) &&
                     (transaction.submitted_by == null || transaction.submitted_by === member?.member_id)) ||
+                    (transaction.classification === "Investment Return" &&
+                      transaction.member_id == null &&
+                      (transaction.submitted_by == null || transaction.submitted_by === member?.member_id)) ||
                     (transaction.classification === "Loan Release" && transaction.status === "pending")))
 
               const label = monthLabel(transaction)
