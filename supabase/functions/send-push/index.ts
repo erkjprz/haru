@@ -12,11 +12,7 @@ Deno.serve(async (req: Request) => {
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
 
-  const { data: secretRows, error: secretError } = await admin
-    .schema("vault")
-    .from("decrypted_secrets")
-    .select("name, decrypted_secret")
-    .in("name", ["push_dispatch_secret", "vapid_public_key", "vapid_private_key", "vapid_subject"])
+  const { data: secretRows, error: secretError } = await admin.rpc("get_push_secrets")
 
   if (secretError || !secretRows) {
     return new Response("Secret lookup failed", { status: 500 })
