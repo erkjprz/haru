@@ -150,7 +150,8 @@ export default function AdminPage() {
           members!transactions_member_id_fkey ( name, email ),
           submitted_by_member:members!transactions_submitted_by_fkey ( name ),
           bank_accounts!transactions_bank_account_id_fkey ( bank_name, account_name ),
-          loans!transactions_loan_id_fkey ( interest_type, interest_rate, interest_amount, term_months )
+          loans!transactions_loan_id_fkey ( interest_type, interest_rate, interest_amount, term_months ),
+          investments!transactions_investment_id_fkey ( name )
         `
         )
         .eq("status", "pending")
