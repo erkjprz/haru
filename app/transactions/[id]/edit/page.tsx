@@ -20,13 +20,19 @@ import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 
 // Member-submitted types: editable by the member who owns the row, only
-// while it's still pending.
+// while it's still pending. Investment Return is also member-submittable
+// now (see /transactions/new), but only when this particular row actually
+// has a member_id -- an admin's own Investment Return has none, so that
+// shape is handled by the isAdminSimpleType check below instead. See
+// isMemberOwnedInvestmentReturn/isAdminOwnedInvestmentReturn in load().
 const MEMBER_EDITABLE = ["Member Contribution", "Member Withdrawal", "Loan Repayment"]
 
 // Admin-entered types: always inserted already-approved with no owning
 // member, so "pending" never applies -- editable by an admin at any time
-// (short of already being cancelled).
-const ADMIN_EDITABLE = ["Bank Interest", "Expense", "Internal Transfer"]
+// (short of already being cancelled). Investment is always admin-only, so
+// it's safe to list statically -- Investment Return isn't, for the reason
+// above.
+const ADMIN_EDITABLE = ["Bank Interest", "Expense", "Internal Transfer", "Investment"]
 
 // Loan Release is handled separately (see load()): it's paired with a
 // "loans" row, so it's only editable by an admin, and only while that loan
@@ -40,7 +46,9 @@ const TYPE_LABEL: Record<string, string> = {
   "Loan Release": "Loan Release",
   "Bank Interest": "Bank Interest",
   "Expense": "Expense",
-  "Internal Transfer": "Bank Transfer"
+  "Internal Transfer": "Bank Transfer",
+  "Investment": "Investment",
+  "Investment Return": "Investment Return"
 }
 
 const HELPER_TEXT: Record<string, string> = {
@@ -50,7 +58,9 @@ const HELPER_TEXT: Record<string, string> = {
   "Loan Release": "This member is requesting to borrow from the fund. No bank is assigned until you approve it from the loan's own page.",
   "Bank Interest": "Recording interest earned by a bank account. Attach the bank statement or screenshot showing it credited. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
   "Expense": "Recording money spent out of the fund. Attach a receipt or proof of payment. Goes straight in as approved.",
-  "Internal Transfer": "Moving money between two of the fund's own banks. Attach a screenshot of the transfer confirmation. Doesn't affect total contributions or cash — it's just internal."
+  "Internal Transfer": "Moving money between two of the fund's own banks. Attach a screenshot of the transfer confirmation. Doesn't affect total contributions or cash — it's just internal.",
+  "Investment": "Moving fund cash into a venture. Attach proof it went out (wire confirmation, receipt, etc).",
+  "Investment Return": "Cash coming back from a venture -- a payout, sale, or exit. Attach proof of deposit."
 }
 
 const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = {
@@ -60,7 +70,9 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
   "Loan Release": { arrow: "↓", tone: "out" },
   "Bank Interest": { arrow: "↑", tone: "in" },
   "Expense": { arrow: "↓", tone: "out" },
-  "Internal Transfer": { arrow: "⇄", tone: "neutral" }
+  "Internal Transfer": { arrow: "⇄", tone: "neutral" },
+  "Investment": { arrow: "↓", tone: "out" },
+  "Investment Return": { arrow: "↑", tone: "in" }
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -93,12 +105,19 @@ export default function EditTransactionPage() {
 
   const [banks, setBanks] = useState<any[]>([])
   const [myLoans, setMyLoans] = useState<any[]>([])
+  const [investmentsList, setInvestmentsList] = useState<any[]>([])
 
   const [classification, setClassification] = useState("")
   const [status, setStatus] = useState("")
   const [bankId, setBankId] = useState("")
   const [toBankId, setToBankId] = useState("")
   const [loanId, setLoanId] = useState("")
+  const [investmentId, setInvestmentId] = useState("")
+  // Set once at load from the row's actual member_id -- Investment Return
+  // can be either a member's own pending submission or an admin's
+  // already-approved one (see /transactions/new), so this can't be derived
+  // from classification alone the way it can for every other type.
+  const [isMemberOwned, setIsMemberOwned] = useState(false)
   const [amount, setAmount] = useState("")
   const [interestType, setInterestType] = useState<InterestType>("rate")
   const [interestRate, setInterestRate] = useState("")
@@ -109,6 +128,11 @@ export default function EditTransactionPage() {
   const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null)
   const [existingReceiptSignedUrl, setExistingReceiptSignedUrl] = useState<string | null>(null)
   const [interestDistributed, setInterestDistributed] = useState(false)
+  // Whether this row's investment has ever had a gain/loss distribution run
+  // against it -- Investment/Investment Return have no per-transaction flag
+  // the way Bank Interest does, since a distribution pools every approved
+  // transaction under the investment rather than crediting off one row.
+  const [investmentAlreadyDistributed, setInvestmentAlreadyDistributed] = useState(false)
   const [receipt, setReceipt] = useState<File | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -163,14 +187,26 @@ export default function EditTransactionPage() {
 
       setBanks(bankList ?? [])
 
+      const { data: investmentList } = await supabase
+        .from("investments")
+        .select("investment_id, name, affects_cash")
+        .order("name")
+
+      setInvestmentsList(investmentList ?? [])
+
       const { data: txn, error } = await supabase
         .from("transactions")
         .select("*")
         .eq("transaction_id", transactionId)
         .single()
 
-      const isMemberType = txn ? MEMBER_EDITABLE.includes(txn.classification) : false
-      const isAdminSimpleType = txn ? ADMIN_EDITABLE.includes(txn.classification) : false
+      // Investment Return straddles both buckets depending on who actually
+      // submitted this particular row (see the comment on MEMBER_EDITABLE
+      // above) -- everything else is a static, unambiguous classification.
+      const isMemberOwnedInvestmentReturn = txn ? txn.classification === "Investment Return" && txn.member_id != null : false
+      const isAdminOwnedInvestmentReturn = txn ? txn.classification === "Investment Return" && txn.member_id == null : false
+      const isMemberType = txn ? MEMBER_EDITABLE.includes(txn.classification) || isMemberOwnedInvestmentReturn : false
+      const isAdminSimpleType = txn ? ADMIN_EDITABLE.includes(txn.classification) || isAdminOwnedInvestmentReturn : false
       const isLoanReleaseType = txn ? txn.classification === "Loan Release" : false
 
       let loanRecord: any = null
@@ -203,10 +239,24 @@ export default function EditTransactionPage() {
       setStatus(txn.status)
       setBankId(txn.bank_account_id ?? "")
       setToBankId(txn.to_bank_account_id ?? "")
+      setInvestmentId(txn.investment_id ?? "")
+      setIsMemberOwned(isMemberType)
       setDescription(txn.description ?? "")
       setExistingReceiptUrl(txn.receipt_url ?? null)
       setInterestDistributed(txn.interest_distributed === true)
       setFormStep(1)
+
+      const isInvestmentEntryType = txn.classification === "Investment" || txn.classification === "Investment Return"
+      if (isInvestmentEntryType && txn.investment_id) {
+        const { data: existingAllocation } = await supabase
+          .from("investment_allocations")
+          .select("id")
+          .eq("investment_id", txn.investment_id)
+          .limit(1)
+          .maybeSingle()
+
+        setInvestmentAlreadyDistributed(!!existingAllocation)
+      }
 
       if (isLoanReleaseType && loanRecord) {
         setLoanId(loanRecord.loan_id)
@@ -255,12 +305,14 @@ export default function EditTransactionPage() {
   const isBankTransfer = classification === "Internal Transfer"
   const isLoanPayment = classification === "Loan Repayment"
   const isLoanRelease = classification === "Loan Release"
+  const isInvestmentEntry = classification === "Investment" || classification === "Investment Return"
   const needsBank =
     classification === "Member Contribution" ||
     classification === "Loan Repayment" ||
     classification === "Bank Interest" ||
     classification === "Expense" ||
-    isBankTransfer
+    isBankTransfer ||
+    isInvestmentEntry
   // Every editable type requires a receipt except Member Withdrawal and
   // Loan Release, where nothing has actually moved yet -- mirrors the same
   // rule on /transactions/new (see the comment there for why admin-entered
@@ -367,6 +419,11 @@ export default function EditTransactionPage() {
         setMessage("Select which loan you're paying.")
         return
       }
+
+      if (isInvestmentEntry && !investmentId) {
+        setMessage("Select which investment this is for.")
+        return
+      }
     }
 
     setSaving(true)
@@ -448,11 +505,18 @@ export default function EditTransactionPage() {
       receiptUrl = fileName
     }
 
-    // Withdrawals and expenses are cash going out, so the ledger stores
-    // them negative -- matches the sign convention handleSubmit uses on
-    // /transactions/new.
+    // Withdrawals, expenses, and Investment outflows are cash going out, so
+    // the ledger stores them negative -- matches the sign convention
+    // handleSubmit uses on /transactions/new.
     const signedAmount =
-      classification === "Member Withdrawal" || classification === "Expense" ? -Number(amount) : Number(amount)
+      classification === "Member Withdrawal" || classification === "Expense" || classification === "Investment"
+        ? -Number(amount)
+        : Number(amount)
+
+    // affects_cash mirrors the selected investment's own flag, same as
+    // /transactions/new -- v_cash_ledger reads the transaction's own flag,
+    // not the investment's.
+    const selectedInvestment = isInvestmentEntry ? investmentsList.find((inv) => inv.investment_id === investmentId) : null
 
     // The `editable` check on load only confirmed this row's status at that
     // moment -- re-checking it here too guards against a stale page: a
@@ -466,12 +530,14 @@ export default function EditTransactionPage() {
         bank_account_id: needsBank ? bankId : null,
         to_bank_account_id: isBankTransfer ? toBankId : null,
         loan_id: isLoanPayment ? loanId : null,
+        investment_id: isInvestmentEntry ? investmentId : null,
         description,
-        receipt_url: receiptUrl
+        receipt_url: receiptUrl,
+        ...(isInvestmentEntry ? { affects_cash: selectedInvestment?.affects_cash ? 1 : 0 } : {})
       })
       .eq("transaction_id", transactionId)
 
-    updateQuery = MEMBER_EDITABLE.includes(classification)
+    updateQuery = MEMBER_EDITABLE.includes(classification) || isMemberOwned
       ? updateQuery.eq("status", "pending")
       : updateQuery.neq("status", "cancelled")
 
@@ -534,7 +600,7 @@ export default function EditTransactionPage() {
     // approving it elsewhere while this page sat open).
     let cancelQuery = supabase.from("transactions").update(updates).eq("transaction_id", transactionId)
     cancelQuery =
-      MEMBER_EDITABLE.includes(classification) || isLoanRelease
+      MEMBER_EDITABLE.includes(classification) || isMemberOwned || isLoanRelease
         ? cancelQuery.eq("status", "pending")
         : cancelQuery.neq("status", "cancelled")
 
@@ -670,6 +736,13 @@ export default function EditTransactionPage() {
             </p>
           )}
 
+          {isInvestmentEntry && investmentAlreadyDistributed && (
+            <p className="text-[11px] text-gold bg-gold/10 border border-gold rounded-md px-3 py-2 mt-4">
+              This investment has already had a gain/loss distribution run against it. Changing this entry&apos;s
+              amount or cancelling it won&apos;t update what members were already credited from Distribute Gain/Loss.
+            </p>
+          )}
+
           <div className="space-y-4 mt-4">
             {!isLoanRelease && (
               <>
@@ -699,6 +772,27 @@ export default function EditTransactionPage() {
                               ))}
                           </select>
                         )}
+                      </div>
+                    )}
+
+                    {isInvestmentEntry && (
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Investment
+                          <RequiredMark />
+                        </label>
+                        <select
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                          value={investmentId}
+                          onChange={(e) => setInvestmentId(e.target.value)}
+                        >
+                          <option value="">Select an investment</option>
+                          {investmentsList.map((inv) => (
+                            <option key={inv.investment_id} value={inv.investment_id}>
+                              {inv.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     )}
 
