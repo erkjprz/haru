@@ -11,6 +11,7 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
 import { distributeInvestmentGain, getUndistributedInvestmentGain } from "@/lib/distributeInvestment"
+import { closeInvestmentAndDistributeGain } from "@/lib/closeInvestment"
 import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
 
@@ -21,6 +22,8 @@ type Investment = {
   invested: number
   returned: number
   gain_loss: number
+  status: "open" | "closed"
+  closed_date: string | null
 }
 
 type Share = {
@@ -58,9 +61,27 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
   const [distributeDate, setDistributeDate] = useState(dateOnly(new Date()))
   const [distributeAmount, setDistributeAmount] = useState("")
   const [distributeNotes, setDistributeNotes] = useState("")
+  const [closeOnDistribute, setCloseOnDistribute] = useState(false)
   const [distributing, setDistributing] = useState(false)
   const [distributeMessage, setDistributeMessage] = useState("")
   const [suggestedAmount, setSuggestedAmount] = useState<number | null>(null)
+  const [reopening, setReopening] = useState(false)
+  const [reopenError, setReopenError] = useState("")
+
+  const loadInvestment = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("v_investment_summary")
+      .select("*")
+      .eq("investment_id", investmentId)
+      .single()
+
+    if (error || !data) {
+      setNotFound(true)
+      return
+    }
+
+    setInvestment(data as Investment)
+  }, [investmentId])
 
   const loadShares = useCallback(async () => {
     // Per-member split, per Section 8: Perfume Biz is a flat equal
@@ -122,22 +143,8 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     let cancelled = false
 
     async function load() {
-      const investmentPromise = supabase
-        .from("v_investment_summary")
-        .select("*")
-        .eq("investment_id", investmentId)
-        .single()
-
-      const [investmentResult] = await Promise.all([investmentPromise, loadShares(), loadRecentTransactions()])
-
+      await Promise.all([loadInvestment(), loadShares(), loadRecentTransactions()])
       if (cancelled) return
-
-      if (investmentResult.error || !investmentResult.data) {
-        setNotFound(true)
-      } else {
-        setInvestment(investmentResult.data as Investment)
-      }
-
       setDataLoading(false)
     }
 
@@ -145,13 +152,14 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     return () => {
       cancelled = true
     }
-  }, [investmentId, member, loadShares, loadRecentTransactions])
+  }, [investmentId, member, loadInvestment, loadShares, loadRecentTransactions])
 
   async function openDistribute() {
     setShowDistributeForm(true)
     setDistributeDate(dateOnly(new Date()))
     setDistributeAmount("")
     setDistributeNotes("")
+    setCloseOnDistribute(false)
     setDistributeMessage("")
     await refreshSuggestedAmount(dateOnly(new Date()))
   }
@@ -172,8 +180,16 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
   }
 
   async function runDistribute() {
-    const amountNum = Number(distributeAmount)
-    if (!distributeAmount.trim() || Number.isNaN(amountNum) || amountNum === 0) {
+    const amountNum = distributeAmount.trim() ? Number(distributeAmount) : 0
+    if (Number.isNaN(amountNum)) {
+      setDistributeMessage("Enter a valid amount (positive for a gain, negative for a loss).")
+      return
+    }
+    // A regular distribution with nothing to distribute makes no sense to
+    // submit, but closing with a zero remainder is a legitimate "nothing
+    // left to settle, just mark it done" case -- same as a loan that
+    // closes with no gain or loss.
+    if (!closeOnDistribute && amountNum === 0) {
       setDistributeMessage("Enter a nonzero amount (positive for a gain, negative for a loss).")
       return
     }
@@ -183,26 +199,92 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     }
 
     const label = amountNum < 0 ? "loss" : "gain"
-    const confirmMsg = `Distribute a ₱${Math.abs(amountNum).toFixed(2)} ${label} across eligible members, based on their current value as of ${distributeDate}? This can't be undone from the app.`
+    const confirmMsg = closeOnDistribute
+      ? amountNum !== 0
+        ? `Close this investment and record a final ₱${fmt(Math.abs(amountNum))} ${label}, split across eligible members based on their current value as of ${distributeDate}? You can reopen it later from this same page if needed.`
+        : `Close this investment now with nothing left to distribute? You can reopen it later from this same page if needed.`
+      : `Distribute a ₱${Math.abs(amountNum).toFixed(2)} ${label} across eligible members, based on their current value as of ${distributeDate}? This can't be undone from the app.`
     if (!confirm(confirmMsg)) return
 
     setDistributing(true)
     setDistributeMessage("")
 
     try {
-      await distributeInvestmentGain({
-        investmentId,
-        allocationDate: distributeDate,
-        amount: amountNum,
-        notes: distributeNotes || undefined
-      })
+      if (closeOnDistribute) {
+        await closeInvestmentAndDistributeGain({
+          investmentId,
+          closingDate: distributeDate,
+          amount: amountNum,
+          notes: distributeNotes || undefined,
+          investmentName: investment?.investment
+        })
+      } else {
+        await distributeInvestmentGain({
+          investmentId,
+          allocationDate: distributeDate,
+          amount: amountNum,
+          notes: distributeNotes || undefined
+        })
+      }
       closeDistribute()
-      await loadShares()
+      await Promise.all([loadShares(), loadInvestment()])
     } catch (err) {
       setDistributeMessage(err instanceof Error ? err.message : "Something went wrong.")
     } finally {
       setDistributing(false)
     }
+  }
+
+  async function reopenInvestment() {
+    setReopening(true)
+    setReopenError("")
+
+    try {
+      // Only undo this investment's closing distribution, not its prior
+      // distribution history -- unlike a loan (which only ever distributes
+      // once, at close), an investment can already have regular ad hoc
+      // distributions on the books from before it closed.
+      const { error: allocError } = await supabase
+        .from("investment_allocations")
+        .delete()
+        .eq("investment_id", investmentId)
+        .eq("is_closing_distribution", true)
+      if (allocError) throw allocError
+
+      // Gain Allocation rows are system-generated and never carry a
+      // receipt today, but select the deleted rows back and clean up
+      // defensively in case that ever changes -- otherwise a future
+      // receipt would silently orphan in the bucket. Mirrors loans'
+      // reopenLoan.
+      const { data: deletedGainTxns, error: txnError } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("investment_id", investmentId)
+        .eq("classification", "Gain Allocation")
+        .eq("is_closing_distribution", true)
+        .select("receipt_url")
+      if (txnError) throw txnError
+
+      const orphanedReceipts = (deletedGainTxns ?? [])
+        .map((t) => t.receipt_url)
+        .filter((url): url is string => !!url)
+      if (orphanedReceipts.length > 0) {
+        await supabase.storage.from("Receipts").remove(orphanedReceipts)
+      }
+
+      const { error: investmentError } = await supabase
+        .from("investments")
+        .update({ status: "open", closed_date: null })
+        .eq("investment_id", investmentId)
+      if (investmentError) throw investmentError
+    } catch (err) {
+      setReopenError(err instanceof Error ? err.message : "Something went wrong.")
+      setReopening(false)
+      return
+    }
+
+    setReopening(false)
+    await Promise.all([loadShares(), loadInvestment()])
   }
 
   const fmt = (n: number) =>
@@ -278,6 +360,11 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         >
           {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
         </span>
+        {investment.status === "closed" && (
+          <span className="text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2 py-0.5">
+            Closed
+          </span>
+        )}
       </div>
       <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
         {investment.investment}
@@ -311,6 +398,16 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
             valueClass={isGain ? "text-sage" : isFlat ? "text-ink" : "text-rust"}
             bold
           />
+          {investment.status === "closed" && investment.closed_date && (
+            <InfoRow
+              label="Closed"
+              value={new Date(`${investment.closed_date}T00:00:00`).toLocaleDateString(undefined, {
+                month: "long",
+                day: "numeric",
+                year: "numeric"
+              })}
+            />
+          )}
         </InfoBox>
       </div>
 
@@ -376,7 +473,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
             </p>
           </div>
 
-          {isAdmin && (
+          {isAdmin && investment.status === "open" && (
             <div className="flex items-center gap-2 flex-wrap mb-3">
               <button
                 className="shrink-0 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
@@ -385,6 +482,25 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
                 <span className="text-lg leading-none">+</span>
                 Distribute Gain/Loss
               </button>
+            </div>
+          )}
+
+          {isAdmin && investment.status === "closed" && (
+            <div className="flex flex-col items-end gap-1.5 mb-3">
+              <button
+                className="shrink-0 text-xs text-ink-soft border border-hairline rounded-sm px-3 py-2 disabled:opacity-50"
+                onClick={() => {
+                  const confirmMsg =
+                    "Reopen this investment? This sets it back to open and removes the final gain/loss distribution recorded when it was closed -- any earlier distributions stay as they are."
+                  if (confirm(confirmMsg)) {
+                    reopenInvestment()
+                  }
+                }}
+                disabled={reopening}
+              >
+                {reopening ? "Reopening..." : "Reopen Investment"}
+              </button>
+              {reopenError && <p className="text-xs text-rust">{reopenError}</p>}
             </div>
           )}
         </div>
@@ -406,6 +522,8 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
             setAmount={setDistributeAmount}
             notes={distributeNotes}
             setNotes={setDistributeNotes}
+            closeOnDistribute={closeOnDistribute}
+            setCloseOnDistribute={setCloseOnDistribute}
             suggestedAmount={suggestedAmount}
             distributing={distributing}
             message={distributeMessage}
@@ -490,6 +608,8 @@ function DistributeForm({
   setAmount,
   notes,
   setNotes,
+  closeOnDistribute,
+  setCloseOnDistribute,
   suggestedAmount,
   distributing,
   message,
@@ -503,6 +623,8 @@ function DistributeForm({
   setAmount: (v: string) => void
   notes: string
   setNotes: (v: string) => void
+  closeOnDistribute: boolean
+  setCloseOnDistribute: (v: boolean) => void
   suggestedAmount: number | null
   distributing: boolean
   message: string
@@ -566,13 +688,32 @@ function DistributeForm({
           />
         </div>
 
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-0.5 shrink-0"
+            checked={closeOnDistribute}
+            onChange={(e) => setCloseOnDistribute(e.target.checked)}
+          />
+          <span className="text-[13px] text-ink-soft">
+            Close this investment after distributing -- marks it done and hides it from further distributions.
+            {closeOnDistribute && " A zero amount is fine here if there's nothing left to settle."}
+          </span>
+        </label>
+
         <div className="flex gap-3">
           <button
             className="bg-ink text-paper px-4 py-3 rounded-sm text-sm font-medium flex-1 disabled:opacity-50"
             onClick={onSave}
             disabled={distributing}
           >
-            {distributing ? "Distributing..." : "Distribute"}
+            {distributing
+              ? closeOnDistribute
+                ? "Closing & distributing..."
+                : "Distributing..."
+              : closeOnDistribute
+              ? "Close & Distribute"
+              : "Distribute"}
           </button>
           <button className="border border-hairline rounded-sm px-4 py-3 text-sm" onClick={onCancel}>
             Cancel

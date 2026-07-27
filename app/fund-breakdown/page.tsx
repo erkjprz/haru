@@ -1856,6 +1856,8 @@ type Investment = {
   invested: number
   returned: number
   gain_loss: number
+  status: "open" | "closed"
+  closed_date: string | null
 }
 
 function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
@@ -2143,7 +2145,10 @@ function InvestmentCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-display text-[17px] font-semibold text-ink truncate">{inv.investment}</p>
-          <p className="text-[12px] text-ink-soft">₱{fmt(inv.invested)} invested</p>
+          <p className="text-[12px] text-ink-soft">
+            ₱{fmt(inv.invested)} invested
+            {inv.status === "closed" && " · Closed"}
+          </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <div className="flex items-center gap-1.5">
