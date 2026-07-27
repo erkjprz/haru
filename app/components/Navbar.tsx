@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
+import { NotificationBell } from "@/app/components/NotificationBell"
 
 function IconHome({ active }: { active: boolean }) {
   return (
@@ -104,16 +105,19 @@ export default function Navbar() {
           <span className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono">
             Est. 2017
           </span>
-          {!onNewTransactionPage && (
-            <button
-              onClick={() => router.push("/transactions/new")}
-              aria-label="New Transaction"
-              className="bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-            >
-              <span className="text-lg leading-none">+</span>
-              New
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            {!onNewTransactionPage && (
+              <button
+                onClick={() => router.push("/transactions/new")}
+                aria-label="New Transaction"
+                className="bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+              >
+                <span className="text-lg leading-none">+</span>
+                New
+              </button>
+            )}
+          </div>
         </div>
       </nav>
 

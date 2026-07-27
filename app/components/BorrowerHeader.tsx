@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { NotificationBell } from "@/app/components/NotificationBell"
 
 // Borrower accounts get this instead of the full Navbar -- no dashboard,
 // loans list, or "+ New" transaction button, since none of those apply to
@@ -29,6 +30,7 @@ export default function BorrowerHeader() {
           Haru
         </button>
         <div className="flex items-center gap-4">
+          <NotificationBell />
           {!onHome && (
             <button onClick={() => router.push("/borrower")} className="text-sm font-mono text-ink-soft hover:text-ink">
               Your Loan
