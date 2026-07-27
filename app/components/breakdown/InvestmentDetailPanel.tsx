@@ -534,7 +534,6 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
             notes={distributeNotes}
             setNotes={setDistributeNotes}
             closeOnDistribute={closeOnDistribute}
-            setCloseOnDistribute={setCloseOnDistribute}
             suggestedAmount={suggestedAmount}
             distributing={distributing}
             message={distributeMessage}
@@ -620,7 +619,6 @@ function DistributeForm({
   notes,
   setNotes,
   closeOnDistribute,
-  setCloseOnDistribute,
   suggestedAmount,
   distributing,
   message,
@@ -635,7 +633,6 @@ function DistributeForm({
   notes: string
   setNotes: (v: string) => void
   closeOnDistribute: boolean
-  setCloseOnDistribute: (v: boolean) => void
   suggestedAmount: number | null
   distributing: boolean
   message: string
@@ -650,10 +647,13 @@ function DistributeForm({
     <div className={`bg-paper-2 border border-hairline rounded-md relative overflow-hidden ${className}`}>
       <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
       <div className="pl-6 pr-5 py-6 space-y-4">
-        <p className="font-display text-lg font-medium">Distribute Gain/Loss</p>
+        <p className="font-display text-lg font-medium">
+          {closeOnDistribute ? "Close Investment" : "Distribute Gain/Loss"}
+        </p>
         <p className="text-[13px] text-ink-soft">
-          Splits a realized amount across eligible members, proportional to each member&apos;s current value as of
-          the date below. Positive for a gain, negative for a loss.
+          {closeOnDistribute
+            ? "Distributes whatever's left to settle, proportional to each member's current value as of the date below, and marks this investment closed. A zero amount is fine if there's nothing left to distribute."
+            : "Splits a realized amount across eligible members, proportional to each member's current value as of the date below. Positive for a gain, negative for a loss."}
         </p>
 
         <div>
@@ -698,19 +698,6 @@ function DistributeForm({
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
-
-        <label className="flex items-start gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            className="mt-0.5 shrink-0"
-            checked={closeOnDistribute}
-            onChange={(e) => setCloseOnDistribute(e.target.checked)}
-          />
-          <span className="text-[13px] text-ink-soft">
-            Close this investment after distributing -- marks it done and hides it from further distributions.
-            {closeOnDistribute && " A zero amount is fine here if there's nothing left to settle."}
-          </span>
-        </label>
 
         <div className="flex gap-3">
           <button
