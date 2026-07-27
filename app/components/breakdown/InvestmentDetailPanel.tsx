@@ -244,48 +244,31 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     setReopening(true)
     setReopenError("")
 
-    try {
-      // Only undo this investment's closing distribution, not its prior
-      // distribution history -- unlike a loan (which only ever distributes
-      // once, at close), an investment can already have regular ad hoc
-      // distributions on the books from before it closed.
-      const { error: allocError } = await supabase
-        .from("investment_allocations")
-        .delete()
-        .eq("investment_id", investmentId)
-        .eq("is_closing_distribution", true)
-      if (allocError) throw allocError
+    // Deleting the closing distribution's allocations/transactions and
+    // flipping the investment back to open used to be three separate
+    // client calls with no rollback between them -- a failure partway
+    // through could leave the investment stuck "closed" with its gain
+    // rows already gone, or vice versa. One atomic RPC now does all three;
+    // it only touches rows flagged is_closing_distribution, so an
+    // investment's earlier ad hoc distributions (made before it closed)
+    // are untouched -- unlike a loan, which only ever distributes once, at
+    // close.
+    const { data: orphanedReceipts, error } = await supabase.rpc("reopen_investment", {
+      p_investment_id: investmentId
+    })
 
-      // Gain Allocation rows are system-generated and never carry a
-      // receipt today, but select the deleted rows back and clean up
-      // defensively in case that ever changes -- otherwise a future
-      // receipt would silently orphan in the bucket. Mirrors loans'
-      // reopenLoan.
-      const { data: deletedGainTxns, error: txnError } = await supabase
-        .from("transactions")
-        .delete()
-        .eq("investment_id", investmentId)
-        .eq("classification", "Gain Allocation")
-        .eq("is_closing_distribution", true)
-        .select("receipt_url")
-      if (txnError) throw txnError
-
-      const orphanedReceipts = (deletedGainTxns ?? [])
-        .map((t) => t.receipt_url)
-        .filter((url): url is string => !!url)
-      if (orphanedReceipts.length > 0) {
-        await supabase.storage.from("Receipts").remove(orphanedReceipts)
-      }
-
-      const { error: investmentError } = await supabase
-        .from("investments")
-        .update({ status: "open", closed_date: null })
-        .eq("investment_id", investmentId)
-      if (investmentError) throw investmentError
-    } catch (err) {
-      setReopenError(err instanceof Error ? err.message : "Something went wrong.")
+    if (error) {
+      setReopenError(error.message)
       setReopening(false)
       return
+    }
+
+    // Gain Allocation rows are system-generated and never carry a receipt
+    // today, but clean up defensively in case that ever changes -- the DB
+    // state already committed by this point, so a failure here shouldn't
+    // block the reopen, just leave an orphaned file to clean up later.
+    if (orphanedReceipts && orphanedReceipts.length > 0) {
+      await supabase.storage.from("Receipts").remove(orphanedReceipts)
     }
 
     setReopening(false)
