@@ -29,7 +29,7 @@ const ENTRY_TYPES = [
   { key: "expense", label: "Expense", adminOnly: true },
   { key: "bank_transfer", label: "Bank Transfer", adminOnly: true },
   { key: "investment", label: "Investment", adminOnly: true },
-  { key: "investment_return", label: "Investment Return", adminOnly: true }
+  { key: "investment_return", label: "Investment Return", adminOnly: false }
 ]
 
 const MEMBER_LINKED_TYPES = ["contribution", "withdrawal", "loan_request", "loan_payment"]
@@ -230,14 +230,16 @@ function NewTransactionForm() {
           .order("name")
 
         setAllMembers(memberList ?? [])
-
-        const { data: investmentList } = await supabase
-          .from("investments")
-          .select("investment_id, name, affects_cash")
-          .order("name")
-
-        setInvestmentsList(investmentList ?? [])
       }
+
+      // Needed for the Investment Return picker, now open to every member --
+      // not just admins, who used to be the only ones who could see this.
+      const { data: investmentList } = await supabase
+        .from("investments")
+        .select("investment_id, name, affects_cash")
+        .order("name")
+
+      setInvestmentsList(investmentList ?? [])
 
       await loadLoansFor(member.member_id)
 
@@ -269,11 +271,18 @@ function NewTransactionForm() {
 
   const isBankTransfer = selectedType === "bank_transfer"
   const isInvestmentEntry = selectedType === "investment" || selectedType === "investment_return"
+  // Investment Return is open to every member now, but Investment (cash
+  // going out to fund a venture) stays admin-only -- a member picking
+  // Investment Return falls through to the same pending, self-attributed
+  // insert path as Contribution/Withdrawal below instead of this one, since
+  // the DB's insert policy for non-admins requires member_id = self and
+  // status = "pending" (see transactions_insert RLS policy).
   const isAdminEntry =
     selectedType === "bank_interest" ||
     selectedType === "expense" ||
     selectedType === "bank_transfer" ||
-    isInvestmentEntry
+    selectedType === "investment" ||
+    (selectedType === "investment_return" && isAdmin)
   // Every type requires a receipt except the two "request" types --
   // withdrawal and loan_request -- where nothing has actually moved yet at
   // the moment the entry is created. Everything else, admin-entered types
@@ -314,7 +323,9 @@ function NewTransactionForm() {
     expense: "Recording money spent out of the fund. Attach a receipt or proof of payment. Goes straight in as approved.",
     bank_transfer: "Moving money between two of the fund's own banks. Attach a screenshot of the transfer confirmation. Doesn't affect total contributions or cash — it's just internal.",
     investment: "Moving fund cash into a venture. Pick which investment this funds, and attach proof it went out (wire confirmation, receipt, etc). Goes in as approved.",
-    investment_return: "Cash coming back from a venture -- a payout, sale, or exit. Attach proof of deposit. Goes in as approved."
+    investment_return: isAdmin
+      ? "Cash coming back from a venture -- a payout, sale, or exit. Attach proof of deposit. Goes in as approved."
+      : "Cash coming back from a venture -- a payout, sale, or exit. Attach proof of deposit. An admin reviews it before it's approved."
   }
 
   const previewTotalRepayable =
@@ -648,9 +659,19 @@ function NewTransactionForm() {
         ? "Loan Repayment"
         : selectedType === "withdrawal"
         ? "Member Withdrawal"
+        : selectedType === "investment_return"
+        ? "Investment Return"
         : "Member Contribution"
 
     const status = willAutoApproveOnBehalf ? "approved" : "pending"
+
+    // A member's own Investment Return needs the same investment link and
+    // affects_cash mirroring the admin-entered path already does -- see the
+    // comment above the isAdminEntry insert. It still goes in pending: the
+    // transactions_insert RLS policy requires status = "pending" for a
+    // non-admin's own row, so it lands in Admin's review queue rather than
+    // auto-approving the way an admin's own entry does.
+    const selectedInvestment = selectedType === "investment_return" ? investmentsList.find((inv) => inv.investment_id === investmentId) : null
 
     // Withdrawals are cash going out, so the ledger stores them negative.
     const { error } = await supabase
@@ -659,12 +680,14 @@ function NewTransactionForm() {
         member_id: effectiveMemberId,
         bank_account_id: bankId || null,
         loan_id: isLoanPayment ? selectedLoanId : null,
+        investment_id: selectedType === "investment_return" ? investmentId : null,
         classification,
         amount: selectedType === "withdrawal" ? -Number(amount) : Number(amount),
         description,
         receipt_url: receiptUrl,
         status,
-        submitted_by: submittedByForOnBehalf
+        submitted_by: submittedByForOnBehalf,
+        ...(selectedType === "investment_return" ? { affects_cash: selectedInvestment?.affects_cash ? 1 : 0 } : {})
       })
 
     if (error) {
@@ -718,7 +741,13 @@ function NewTransactionForm() {
     setSubmitting(false)
 
     const typeLabel =
-      selectedType === "loan_payment" ? "Loan repayment" : selectedType === "withdrawal" ? "Withdrawal" : "Contribution"
+      selectedType === "loan_payment"
+        ? "Loan repayment"
+        : selectedType === "withdrawal"
+        ? "Withdrawal"
+        : selectedType === "investment_return"
+        ? "Investment return"
+        : "Contribution"
     setConfirmation({
       amount: Number(amount),
       label: `${typeLabel} ${status === "pending" ? "submitted" : "recorded"}${defaultSaveWarning}`,

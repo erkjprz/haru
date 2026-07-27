@@ -23,7 +23,8 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
   "Member Contribution": { arrow: "↑", tone: "in" },
   "Member Withdrawal": { arrow: "↓", tone: "out" },
   "Loan Repayment": { arrow: "↑", tone: "in" },
-  "Loan Release": { arrow: "↓", tone: "out" }
+  "Loan Release": { arrow: "↓", tone: "out" },
+  "Investment Return": { arrow: "↑", tone: "in" }
 }
 
 // Contribution and Loan Repayment are both money coming in with nothing
@@ -1006,7 +1007,8 @@ export default function AdminPage() {
                     </div>
                     <p className="mt-1.5 text-xs text-ink-soft">
                       Money going out always needs a bank picked before it can move — Loan Release also activates
-                      the loan.
+                      the loan. A member-submitted Investment Return lands here too, since it credits the shared
+                      pool and is worth checking one at a time rather than batch-approving.
                     </p>
 
                     <div className="mt-3 space-y-3">
@@ -1028,6 +1030,7 @@ export default function AdminPage() {
                                   {typeLabels[t.classification] || t.classification}
                                   {needsLoanBank && " · requested"}
                                   {needsWithdrawalBank && " · pick the disbursing bank"}
+                                  {t.classification === "Investment Return" && t.investments?.name && ` · ${t.investments.name}`}
                                 </p>
                               </div>
                               <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-wide text-gold border border-gold rounded-full px-2.5 py-1">
