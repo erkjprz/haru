@@ -234,9 +234,13 @@ function NewTransactionForm() {
 
       // Needed for the Investment Return picker, now open to every member --
       // not just admins, who used to be the only ones who could see this.
+      // Closed investments are excluded -- closing settles the books, so no
+      // new capital or returns should get recorded against one afterward
+      // without reopening it first.
       const { data: investmentList } = await supabase
         .from("investments")
         .select("investment_id, name, affects_cash")
+        .eq("status", "open")
         .order("name")
 
       setInvestmentsList(investmentList ?? [])

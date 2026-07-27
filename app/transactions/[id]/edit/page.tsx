@@ -187,9 +187,14 @@ export default function EditTransactionPage() {
 
       setBanks(bankList ?? [])
 
+      // Includes closed investments too -- an existing transaction already
+      // linked to one (fixing an old amount/receipt) shouldn't have its
+      // investment silently disappear from the picker. The dropdown itself
+      // filters closed ones out except for whichever one this row already
+      // points to (see the render below).
       const { data: investmentList } = await supabase
         .from("investments")
-        .select("investment_id, name, affects_cash")
+        .select("investment_id, name, affects_cash, status")
         .order("name")
 
       setInvestmentsList(investmentList ?? [])
@@ -787,11 +792,13 @@ export default function EditTransactionPage() {
                           onChange={(e) => setInvestmentId(e.target.value)}
                         >
                           <option value="">Select an investment</option>
-                          {investmentsList.map((inv) => (
-                            <option key={inv.investment_id} value={inv.investment_id}>
-                              {inv.name}
-                            </option>
-                          ))}
+                          {investmentsList
+                            .filter((inv) => inv.status === "open" || inv.investment_id === investmentId)
+                            .map((inv) => (
+                              <option key={inv.investment_id} value={inv.investment_id}>
+                                {inv.name}
+                              </option>
+                            ))}
                         </select>
                       </div>
                     )}
