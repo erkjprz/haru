@@ -41,8 +41,6 @@ type RecentTransaction = {
   status: string
 }
 
-const ALLOCATION_TYPES = ["Investment Gain", "Investment Loss"]
-
 export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: string; onBack: () => void }) {
   const router = useRouter()
   const { member } = useAuth()
@@ -53,20 +51,8 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
   const [investment, setInvestment] = useState<Investment | null>(null)
   const [shares, setShares] = useState<Share[]>([])
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
-  const [allMembers, setAllMembers] = useState<any[]>([])
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
-
-  const [manageMode, setManageMode] = useState(false)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [editingShareId, setEditingShareId] = useState<string | null>(null)
-  const [formMemberId, setFormMemberId] = useState("")
-  const [formAllocationType, setFormAllocationType] = useState("Investment Gain")
-  const [formAmount, setFormAmount] = useState("")
-  const [formNotes, setFormNotes] = useState("")
-  const [saving, setSaving] = useState(false)
-  const [formMessage, setFormMessage] = useState("")
-  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [showDistributeForm, setShowDistributeForm] = useState(false)
   const [distributeDate, setDistributeDate] = useState(dateOnly(new Date()))
@@ -142,21 +128,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         .eq("investment_id", investmentId)
         .single()
 
-      const membersPromise =
-        member?.role === "admin"
-          ? supabase
-              .from("members")
-              .select("member_id, name")
-              .order("name")
-              .then(({ data }) => setAllMembers(data ?? []))
-          : Promise.resolve()
-
-      const [investmentResult] = await Promise.all([
-        investmentPromise,
-        loadShares(),
-        loadRecentTransactions(),
-        membersPromise
-      ])
+      const [investmentResult] = await Promise.all([investmentPromise, loadShares(), loadRecentTransactions()])
 
       if (cancelled) return
 
@@ -175,24 +147,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     }
   }, [investmentId, member, loadShares, loadRecentTransactions])
 
-  function clearForm() {
-    setShowAddForm(false)
-    setEditingShareId(null)
-    setFormMemberId("")
-    setFormAllocationType("Investment Gain")
-    setFormAmount("")
-    setFormNotes("")
-    setFormMessage("")
-  }
-
-  function startAdd() {
-    clearForm()
-    setShowAddForm(true)
-  }
-
   async function openDistribute() {
-    clearForm()
-    setShowAddForm(false)
     setShowDistributeForm(true)
     setDistributeDate(dateOnly(new Date()))
     setDistributeAmount("")
@@ -248,68 +203,6 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     } finally {
       setDistributing(false)
     }
-  }
-
-  function startEdit(share: Share) {
-    clearForm()
-    setEditingShareId(share.id)
-    setFormMemberId(share.member_id)
-    setFormAllocationType(share.allocation_type)
-    setFormAmount(String(share.amount))
-    setFormNotes(share.notes ?? "")
-  }
-
-  async function saveShare() {
-    if (!formMemberId) {
-      setFormMessage("Select a member.")
-      return
-    }
-
-    const amountNum = Number(formAmount)
-    if (!formAmount.trim() || Number.isNaN(amountNum) || amountNum <= 0) {
-      setFormMessage("Enter a valid amount greater than zero.")
-      return
-    }
-
-    setSaving(true)
-
-    const payload = {
-      investment_id: investmentId,
-      member_id: formMemberId,
-      allocation_type: formAllocationType,
-      amount: amountNum,
-      notes: formNotes || null
-    }
-
-    const { error } = editingShareId
-      ? await supabase.from("investment_allocations").update(payload).eq("id", editingShareId)
-      : await supabase.from("investment_allocations").insert(payload)
-
-    setSaving(false)
-
-    if (error) {
-      setFormMessage(error.message)
-      return
-    }
-
-    clearForm()
-    await loadShares()
-  }
-
-  async function deleteShare(id: string) {
-    if (!confirm("Remove this member's share? This can't be undone.")) return
-
-    setDeletingId(id)
-    const { error } = await supabase.from("investment_allocations").delete().eq("id", id)
-    setDeletingId(null)
-
-    if (error) {
-      setLoadError(error.message)
-      return
-    }
-
-    if (editingShareId === id) clearForm()
-    await loadShares()
   }
 
   const fmt = (n: number) =>
@@ -485,39 +378,12 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
 
           {isAdmin && (
             <div className="flex items-center gap-2 flex-wrap mb-3">
-              {manageMode ? (
-                <button
-                  className="bg-ink text-paper px-4 py-2 rounded-sm text-sm font-medium shrink-0"
-                  onClick={() => {
-                    setManageMode(false)
-                    clearForm()
-                  }}
-                >
-                  Done
-                </button>
-              ) : (
-                <button
-                  className="border border-hairline text-ink-soft px-4 py-2 rounded-sm text-sm font-medium shrink-0"
-                  onClick={() => {
-                    setManageMode(true)
-                    clearForm()
-                  }}
-                >
-                  Manage
-                </button>
-              )}
               <button
                 className="shrink-0 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
                 onClick={openDistribute}
               >
                 <span className="text-lg leading-none">+</span>
                 Distribute Gain/Loss
-              </button>
-              <button
-                className="shrink-0 border border-hairline text-ink-soft px-4 py-2 rounded-sm text-sm font-medium"
-                onClick={startAdd}
-              >
-                Add Share
               </button>
             </div>
           )}
@@ -549,27 +415,6 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
           />
         )}
 
-        {showAddForm && (
-          <ShareForm
-            title="Add Share"
-            members={allMembers}
-            memberId={formMemberId}
-            setMemberId={setFormMemberId}
-            allocationType={formAllocationType}
-            setAllocationType={setFormAllocationType}
-            amount={formAmount}
-            setAmount={setFormAmount}
-            notes={formNotes}
-            setNotes={setFormNotes}
-            saving={saving}
-            message={formMessage}
-            onSave={saveShare}
-            onCancel={clearForm}
-            saveLabel="Add Share"
-            className="mb-4"
-          />
-        )}
-
         {loadError && <p className="text-sm text-rust mb-3">{loadError}</p>}
 
         {shareGroups.map((group) => (
@@ -586,69 +431,27 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
             </div>
             <div className="px-5">
               {group.shares.map((s, i) => (
-                <div key={s.id}>
-                  <div
-                    className={`py-3 flex justify-between items-center gap-3 ${
-                      i !== group.shares.length - 1 || (isAdmin && manageMode) ? "border-b border-dashed border-hairline" : ""
+                <div
+                  key={s.id}
+                  className={`py-3 flex justify-between items-center gap-3 ${
+                    i !== group.shares.length - 1 ? "border-b border-dashed border-hairline" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-sm text-ink truncate">{s.member}</p>
+                    {s.member_id === myMemberId && (
+                      <span className="shrink-0 text-[9px] uppercase tracking-wide font-mono text-gold border border-gold/40 rounded px-1.5 py-0.5">
+                        You
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                      s.signed < 0 ? "text-rust" : "text-sage"
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <p className="text-sm text-ink truncate">{s.member}</p>
-                      {s.member_id === myMemberId && (
-                        <span className="shrink-0 text-[9px] uppercase tracking-wide font-mono text-gold border border-gold/40 rounded px-1.5 py-0.5">
-                          You
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <p
-                        className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
-                          s.signed < 0 ? "text-rust" : "text-sage"
-                        }`}
-                      >
-                        {s.signed < 0 ? "-" : "+"}₱{fmt(Math.abs(s.signed))}
-                      </p>
-                      {isAdmin && manageMode && (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => startEdit(s)}
-                            className="text-[11px] text-ink-soft border border-hairline rounded-sm px-2 py-1"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => deleteShare(s.id)}
-                            disabled={deletingId === s.id}
-                            className="text-[11px] text-rust border border-rust/40 rounded-sm px-2 py-1 disabled:opacity-50"
-                          >
-                            {deletingId === s.id ? "…" : "Remove"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {editingShareId === s.id && (
-                    <div className="pb-4">
-                      <ShareForm
-                        title="Edit Share"
-                        members={allMembers}
-                        memberId={formMemberId}
-                        setMemberId={setFormMemberId}
-                        allocationType={formAllocationType}
-                        setAllocationType={setFormAllocationType}
-                        amount={formAmount}
-                        setAmount={setFormAmount}
-                        notes={formNotes}
-                        setNotes={setFormNotes}
-                        saving={saving}
-                        message={formMessage}
-                        onSave={saveShare}
-                        onCancel={clearForm}
-                        saveLabel="Save Changes"
-                      />
-                    </div>
-                  )}
+                    {s.signed < 0 ? "-" : "+"}₱{fmt(Math.abs(s.signed))}
+                  </p>
                 </div>
               ))}
             </div>
@@ -670,7 +473,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
           </div>
         )}
 
-        {signedShares.length === 0 && !loadError && !showAddForm && !showDistributeForm && (
+        {signedShares.length === 0 && !loadError && !showDistributeForm && (
           <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
             No allocation on record for this investment.
           </p>
@@ -770,131 +573,6 @@ function DistributeForm({
             disabled={distributing}
           >
             {distributing ? "Distributing..." : "Distribute"}
-          </button>
-          <button className="border border-hairline rounded-sm px-4 py-3 text-sm" onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
-
-        {message && <p className="text-sm text-rust">{message}</p>}
-      </div>
-    </div>
-  )
-}
-
-function ShareForm({
-  title,
-  members,
-  memberId,
-  setMemberId,
-  allocationType,
-  setAllocationType,
-  amount,
-  setAmount,
-  notes,
-  setNotes,
-  saving,
-  message,
-  onSave,
-  onCancel,
-  saveLabel,
-  className = ""
-}: {
-  title: string
-  members: any[]
-  memberId: string
-  setMemberId: (v: string) => void
-  allocationType: string
-  setAllocationType: (v: string) => void
-  amount: string
-  setAmount: (v: string) => void
-  notes: string
-  setNotes: (v: string) => void
-  saving: boolean
-  message: string
-  onSave: () => void
-  onCancel: () => void
-  saveLabel: string
-  className?: string
-}) {
-  return (
-    <div className={`bg-paper-2 border border-hairline rounded-md relative overflow-hidden ${className}`}>
-      <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
-      <div className="pl-6 pr-5 py-6 space-y-4">
-        <p className="font-display text-lg font-medium">{title}</p>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-            Member
-          </label>
-          <select
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-            value={memberId}
-            onChange={(e) => setMemberId(e.target.value)}
-          >
-            <option value="">Select a member</option>
-            {members.map((m) => (
-              <option key={m.member_id} value={m.member_id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-            Type
-          </label>
-          <div className="flex border border-hairline rounded-sm overflow-hidden">
-            {ALLOCATION_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setAllocationType(type)}
-                className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                  allocationType === type ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                }`}
-              >
-                {type === "Investment Gain" ? "Gain" : "Loss"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-            Amount
-          </label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-            type="number"
-            min="0.01"
-            step="0.01"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-            Notes (optional)
-          </label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-            placeholder="Add a note"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            className="bg-ink text-paper px-4 py-3 rounded-sm text-sm font-medium flex-1 disabled:opacity-50"
-            onClick={onSave}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : saveLabel}
           </button>
           <button className="border border-hairline rounded-sm px-4 py-3 text-sm" onClick={onCancel}>
             Cancel
