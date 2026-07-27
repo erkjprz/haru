@@ -337,7 +337,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
           {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
         </span>
         {investment.status === "closed" && (
-          <span className="text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2 py-0.5">
+          <span className="text-[11px] font-mono font-bold uppercase tracking-wide text-gold border border-gold rounded-full px-2 py-0.5">
             Closed
           </span>
         )}
