@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/app/components/ThemeProvider";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { ScrollToTop } from "@/app/scroll-to-top";
 import { AuthProvider } from "@/app/auth-context";
+import { ServiceWorkerRegister } from "@/app/components/ServiceWorkerRegister";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -69,6 +70,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <ScrollToTop />
+        <ServiceWorkerRegister />
         <AuthProvider>
           <ThemeProvider>
             <PullToRefresh>{children}</PullToRefresh>

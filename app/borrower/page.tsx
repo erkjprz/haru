@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
+import { NotificationPrompt } from "@/app/components/NotificationPrompt"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
@@ -202,6 +203,8 @@ export default function BorrowerPage() {
               </button>
             )}
           </div>
+
+          {member && <NotificationPrompt memberId={member.member_id} />}
 
           {loadError && <p className="mb-4 text-sm text-rust">Couldn't load your loans: {loadError}</p>}
 

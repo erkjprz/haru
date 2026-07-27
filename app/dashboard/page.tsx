@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
+import { NotificationPrompt } from "@/app/components/NotificationPrompt"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
@@ -292,6 +293,8 @@ export default function DashboardPage() {
               Couldn't load some dashboard data: {loadError}
             </p>
           )}
+
+          {member && <NotificationPrompt memberId={member.member_id} />}
 
           {/* Admin-only: fund-wide items needing action -- the one thing on
               this page that isn't the signed-in member's own money, so it
