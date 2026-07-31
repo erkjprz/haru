@@ -14,12 +14,20 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Dump database
+        # Individual PG* vars instead of one URI: PGPASSWORD is read as a
+        # raw literal, so special characters in the password can't get
+        # mangled by URI parsing (e.g. a stray '#' silently truncating
+        # everything after it as a URI fragment).
         run: |
-          pg_dump "${SUPABASE_DB_URL}" \
+          pg_dump \
             --no-owner --no-privileges --format=custom \
             -f "backup-$(date +%Y-%m-%d).dump"
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGHOST: aws-1-ap-northeast-2.pooler.supabase.com
+          PGPORT: 5432
+          PGUSER: postgres.kepwsajtixlcjbabfxlk
+          PGDATABASE: postgres
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@v4
