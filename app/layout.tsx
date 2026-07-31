@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Manrope } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/ThemeProvider";
 import { PullToRefresh } from "@/app/components/PullToRefresh";
@@ -76,6 +77,7 @@ export default function RootLayout({
             <PullToRefresh>{children}</PullToRefresh>
           </ThemeProvider>
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
