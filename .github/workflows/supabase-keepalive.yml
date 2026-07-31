@@ -15,6 +15,7 @@ jobs:
         # already shipped client-side (NEXT_PUBLIC_SUPABASE_ANON_KEY), and
         # RLS -- not key secrecy -- is what protects the data.
         run: |
-          curl -sf "https://kepwsajtixlcjbabfxlk.supabase.co/rest/v1/" \
+          curl -sf "https://kepwsajtixlcjbabfxlk.supabase.co/rest/v1/bank_accounts?select=id&limit=1" \
             -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlcHdzYWp0aXhsY2piYWJmeGxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5Mjk2MjQsImV4cCI6MjA5OTUwNTYyNH0.5wjVQb1fiKuEdx0gxjgZgno7qbxE1JTLyzTR3hzhBcQ" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlcHdzYWp0aXhsY2piYWJmeGxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5Mjk2MjQsImV4cCI6MjA5OTUwNTYyNH0.5wjVQb1fiKuEdx0gxjgZgno7qbxE1JTLyzTR3hzhBcQ" \
             -o /dev/null
