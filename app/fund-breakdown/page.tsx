@@ -1410,28 +1410,28 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
 
       {!loadError && loans.length > 0 && (
         <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 mb-6">
-          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Total Interest Earned</p>
-          <p
-            className={`font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold ${
-              totalInterestEarned > 0 ? "text-sage" : totalInterestEarned < 0 ? "text-rust" : "text-ink"
-            }`}
-          >
-            {totalInterestEarned < 0 ? "-" : "+"}₱{fmt(Math.abs(totalInterestEarned))}
+          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Total Outstanding</p>
+          <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">
+            ₱{fmt(totalOutstanding)}
           </p>
           <p className="text-[11px] text-ink-soft mt-1">
-            across {closedLoans.length} closed loan{closedLoans.length === 1 ? "" : "s"}
+            across {openLoans.length} outstanding loan{openLoans.length === 1 ? "" : "s"}
           </p>
 
-          {openLoans.length > 0 && (
+          {closedLoans.length > 0 && (
             <div className="flex items-baseline justify-between mt-3.5 pt-3 border-t border-hairline">
               <div>
-                <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Outstanding</p>
+                <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Interest Earned</p>
                 <p className="text-[10px] text-ink-soft mt-0.5">
-                  across {openLoans.length} outstanding loan{openLoans.length === 1 ? "" : "s"}
+                  across {closedLoans.length} closed loan{closedLoans.length === 1 ? "" : "s"}
                 </p>
               </div>
-              <p className="font-mono [font-variant-numeric:tabular-nums] text-[15px] font-semibold text-ink">
-                ₱{fmt(totalOutstanding)}
+              <p
+                className={`font-mono [font-variant-numeric:tabular-nums] text-[15px] font-semibold ${
+                  totalInterestEarned > 0 ? "text-sage" : totalInterestEarned < 0 ? "text-rust" : "text-ink"
+                }`}
+              >
+                {totalInterestEarned < 0 ? "-" : "+"}₱{fmt(Math.abs(totalInterestEarned))}
               </p>
             </div>
           )}
