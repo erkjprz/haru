@@ -1734,7 +1734,7 @@ function BankCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-display text-[17px] font-semibold text-ink truncate">{bank.bank}</p>
-          <p className="text-[12px] text-ink-soft">₱{fmt(bank.balance)} current balance</p>
+          <p className="text-[15px] font-medium text-ink-soft">₱{fmt(bank.balance)} current balance</p>
         </div>
         {showEdit ? (
           <button
