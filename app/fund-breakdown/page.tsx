@@ -1401,10 +1401,42 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
 
   const openLoans = loans.filter((l) => l.status !== "closed")
   const closedLoans = loans.filter((l) => l.status === "closed")
+  const totalInterestEarned = closedLoans.reduce((sum, l) => sum + l.gain, 0)
+  const totalOutstanding = openLoans.reduce((sum, l) => sum + l.outstanding, 0)
 
   return (
     <div>
       <p className="text-[13px] text-ink-soft mb-6">Every loan the fund has released, and what came back.</p>
+
+      {!loadError && loans.length > 0 && (
+        <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 mb-6">
+          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Total Interest Earned</p>
+          <p
+            className={`font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold ${
+              totalInterestEarned > 0 ? "text-sage" : totalInterestEarned < 0 ? "text-rust" : "text-ink"
+            }`}
+          >
+            {totalInterestEarned < 0 ? "-" : "+"}₱{fmt(Math.abs(totalInterestEarned))}
+          </p>
+          <p className="text-[11px] text-ink-soft mt-1">
+            across {closedLoans.length} closed loan{closedLoans.length === 1 ? "" : "s"}
+          </p>
+
+          {openLoans.length > 0 && (
+            <div className="flex items-baseline justify-between mt-3.5 pt-3 border-t border-hairline">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Outstanding</p>
+                <p className="text-[10px] text-ink-soft mt-0.5">
+                  across {openLoans.length} outstanding loan{openLoans.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              <p className="font-mono [font-variant-numeric:tabular-nums] text-[15px] font-semibold text-ink">
+                ₱{fmt(totalOutstanding)}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {loadError && <p className="mb-4 text-sm text-rust">Couldn't load loans: {loadError}</p>}
 
