@@ -20,8 +20,8 @@ type TrendPoint = { value: number; date: string }
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "fund", label: "Fund" },
-  { id: "loans", label: "Loans" },
   { id: "banks", label: "Banks" },
+  { id: "loans", label: "Loans" },
   { id: "investments", label: "Investments" }
 ]
 
@@ -1401,10 +1401,42 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
 
   const openLoans = loans.filter((l) => l.status !== "closed")
   const closedLoans = loans.filter((l) => l.status === "closed")
+  const totalInterestEarned = closedLoans.reduce((sum, l) => sum + l.gain, 0)
+  const totalOutstanding = openLoans.reduce((sum, l) => sum + l.outstanding, 0)
 
   return (
     <div>
       <p className="text-[13px] text-ink-soft mb-6">Every loan the fund has released, and what came back.</p>
+
+      {!loadError && loans.length > 0 && (
+        <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 mb-6">
+          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Total Outstanding</p>
+          <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">
+            ₱{fmt(totalOutstanding)}
+          </p>
+          <p className="text-[11px] text-ink-soft mt-1">
+            across {openLoans.length} outstanding loan{openLoans.length === 1 ? "" : "s"}
+          </p>
+
+          {closedLoans.length > 0 && (
+            <div className="flex items-baseline justify-between mt-3.5 pt-3 border-t border-hairline">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Interest Earned</p>
+                <p className="text-[10px] text-ink-soft mt-0.5">
+                  across {closedLoans.length} closed loan{closedLoans.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              <p
+                className={`font-mono [font-variant-numeric:tabular-nums] text-[15px] font-semibold ${
+                  totalInterestEarned > 0 ? "text-sage" : totalInterestEarned < 0 ? "text-rust" : "text-ink"
+                }`}
+              >
+                {totalInterestEarned < 0 ? "-" : "+"}₱{fmt(Math.abs(totalInterestEarned))}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {loadError && <p className="mb-4 text-sm text-rust">Couldn't load loans: {loadError}</p>}
 
@@ -1761,6 +1793,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const totalBalance = banks.reduce((sum, b) => sum + b.balance, 0)
+  const totalNetInterest = banks.reduce((sum, b) => sum + (b.interest_earned - b.tax), 0)
 
   return (
     <div>
@@ -1822,6 +1855,22 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
           <p className="text-[11px] text-ink-soft mt-1">
             across {banks.length} account{banks.length === 1 ? "" : "s"}
           </p>
+
+          <div className="flex items-baseline justify-between mt-3.5 pt-3 border-t border-hairline">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Interest Earned</p>
+              <p className="text-[10px] text-ink-soft mt-0.5">
+                across {banks.length} account{banks.length === 1 ? "" : "s"}
+              </p>
+            </div>
+            <p
+              className={`font-mono [font-variant-numeric:tabular-nums] text-[15px] font-semibold ${
+                totalNetInterest > 0 ? "text-sage" : totalNetInterest < 0 ? "text-rust" : "text-ink"
+              }`}
+            >
+              {totalNetInterest < 0 ? "-" : "+"}₱{fmt(Math.abs(totalNetInterest))}
+            </p>
+          </div>
         </div>
       )}
 
