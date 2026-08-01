@@ -20,8 +20,8 @@ type TrendPoint = { value: number; date: string }
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "fund", label: "Fund" },
-  { id: "loans", label: "Loans" },
   { id: "banks", label: "Banks" },
+  { id: "loans", label: "Loans" },
   { id: "investments", label: "Investments" }
 ]
 
@@ -1793,6 +1793,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const totalBalance = banks.reduce((sum, b) => sum + b.balance, 0)
+  const totalNetInterest = banks.reduce((sum, b) => sum + (b.interest_earned - b.tax), 0)
 
   return (
     <div>
@@ -1854,6 +1855,22 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
           <p className="text-[11px] text-ink-soft mt-1">
             across {banks.length} account{banks.length === 1 ? "" : "s"}
           </p>
+
+          <div className="flex items-baseline justify-between mt-3.5 pt-3 border-t border-hairline">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Interest Earned</p>
+              <p className="text-[10px] text-ink-soft mt-0.5">
+                across {banks.length} account{banks.length === 1 ? "" : "s"}
+              </p>
+            </div>
+            <p
+              className={`font-mono [font-variant-numeric:tabular-nums] text-[15px] font-semibold ${
+                totalNetInterest > 0 ? "text-sage" : totalNetInterest < 0 ? "text-rust" : "text-ink"
+              }`}
+            >
+              {totalNetInterest < 0 ? "-" : "+"}₱{fmt(Math.abs(totalNetInterest))}
+            </p>
+          </div>
         </div>
       )}
 
