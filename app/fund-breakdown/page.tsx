@@ -1713,7 +1713,11 @@ function BankCard({
   onEdit?: () => void
 }) {
   const netInterest = bank.interest_earned - bank.tax
-  const undistributed = netInterest - bank.distributed
+  // Distributed totals are tracked gross (pre-tax) -- they exactly match the
+  // sum of transactions already marked distributed, tax was never part of
+  // that pool. Diffing against netInterest here would double-count tax as
+  // if it were still pending distribution, when it's withheld and gone.
+  const undistributed = bank.interest_earned - bank.distributed
   const distributedPct = netInterest > 0 ? Math.min(100, (bank.distributed / netInterest) * 100) : 0
 
   return (

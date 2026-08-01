@@ -176,7 +176,12 @@ export function BankDetailPanel({
 
   const netInterest = interestEarned - tax
   const totalDistributed = years.reduce((sum, y) => sum + y.amount, 0)
-  const undistributed = netInterest - totalDistributed
+  // totalDistributed is tracked gross (pre-tax) -- it exactly matches the
+  // sum of transactions already marked distributed, tax was never part of
+  // that pool. Diffing against netInterest here would double-count tax as
+  // if it were still pending distribution, when it's withheld and gone
+  // (matches the same fix in fund-breakdown/page.tsx's BankCard).
+  const undistributed = interestEarned - totalDistributed
 
   return (
     <div>
