@@ -102,7 +102,9 @@ const memberSections: FaqSection[] = [
             of your contributions, withdrawals, bank interest, and loan and investment gain share. Open it
             from the <strong>Capital/Performance</strong> card on the You tab, or{" "}
             <strong>My Breakdown</strong>{" "}
-            in the menu (☰). Tapping a member&apos;s card on Fund Breakdown opens the same page for them.
+            in the menu (☰). Tapping a member&apos;s card on Fund Breakdown opens the same page for them. If
+            you&apos;re the borrower on a loan, it also shows right there on your Breakdown, below the
+            year-by-year table.
           </p>
         )
       },
@@ -113,6 +115,17 @@ const memberSections: FaqSection[] = [
             It means you&apos;ve submitted something — a contribution, withdrawal, or loan payment — that an
             admin hasn&apos;t approved yet. Tap it to see exactly what&apos;s waiting in{" "}
             <strong>Transactions</strong>.
+          </p>
+        )
+      },
+      {
+        q: "What's the bell icon for?",
+        a: (
+          <p>
+            It opens <strong>Notifications</strong> — everything Haru has sent you, like a submission being
+            approved or rejected, or a gain/loss landing in your account. Tap one to jump straight to what
+            it&apos;s about. From there you can also turn on <strong>Push Notifications</strong>, so you get
+            notified on your device even when Haru isn&apos;t open.
           </p>
         )
       }
@@ -366,6 +379,17 @@ const borrowerSections: FaqSection[] = [
             here too.
           </p>
         )
+      },
+      {
+        q: "What's the bell icon for?",
+        a: (
+          <p>
+            It opens <strong>Notifications</strong> — things like your loan payment being approved or
+            rejected. Tap one to jump straight to what it&apos;s about. From there you can also turn on{" "}
+            <strong>Push Notifications</strong>, so you get notified on your device even when Haru isn&apos;t
+            open.
+          </p>
+        )
       }
     ]
   },
@@ -544,7 +568,11 @@ const adminSections: FaqSection[] = [
             Admin → <strong>Members</strong>{" "}
             quick link (or the &quot;Manage all members →&quot; link at the bottom of the Members tab)
             takes you to the full roster, where you can add a member directly, edit their
-            name/email/role, and deactivate or reactivate an account.
+            name/email/role, and deactivate or reactivate an account. The same edit form has an{" "}
+            <strong>Eligible for gain sharing</strong> checkbox — uncheck it to exclude someone from future
+            bank interest, loan, and investment distributions without deactivating them entirely.
+            Deactivating a member turns this off automatically, and reactivating restores it unless
+            they&apos;re a borrower (borrowers are never gain-sharing eligible).
           </p>
         )
       },
