@@ -350,6 +350,38 @@ function YouPanel({ memberId }: { memberId: string }) {
   const [yearIndex, setYearIndex] = useState(0)
   const yearTouchStartX = useRef<number | null>(null)
 
+  const [loansLoading, setLoansLoading] = useState(true)
+  const [myLoans, setMyLoans] = useState<Loan[]>([])
+  const [loansLoadError, setLoansLoadError] = useState("")
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadLoans() {
+      setLoansLoading(true)
+      const { data, error } = await supabase
+        .from("v_loan_summary")
+        .select("*")
+        .eq("borrower_member_id", memberId)
+        .order("start_date", { ascending: false })
+
+      if (cancelled) return
+
+      if (error) {
+        setLoansLoadError(error.message)
+      } else {
+        setMyLoans((data as Loan[]) ?? [])
+      }
+      setLoansLoading(false)
+    }
+
+    loadLoans()
+    return () => {
+      cancelled = true
+    }
+  }, [memberId])
+
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const signed = (n: number) => `${n < 0 ? "-" : "+"}₱${fmt(Math.abs(n))}`
@@ -381,6 +413,10 @@ function YouPanel({ memberId }: { memberId: string }) {
   }
 
   const clampedYearIndex = Math.min(yearIndex, Math.max(0, years.length - 1))
+
+  if (selectedLoanId) {
+    return <LoanDetailPanel loanId={selectedLoanId} onBack={() => setSelectedLoanId(null)} />
+  }
 
   return (
     <div>
@@ -551,6 +587,28 @@ function YouPanel({ memberId }: { memberId: string }) {
           </>
         )}
       </section>
+
+      {!loansLoading && myLoans.length > 0 && (
+        <section className="mt-8">
+          <h2 className="font-display text-lg font-medium text-ink mb-1">
+            Your Loan{myLoans.length > 1 ? "s" : ""}
+          </h2>
+          <p className="text-[13px] text-ink-soft mb-3">Loans you&apos;re the borrower on, past and present.</p>
+          {loansLoadError && <p className="mb-3 text-sm text-rust">Couldn&apos;t load loans: {loansLoadError}</p>}
+          <div className="flex flex-col gap-3">
+            {myLoans.map((loan) => (
+              <LoanCard
+                key={loan.loan_id}
+                loan={loan}
+                meta={loanStatusMeta(loan)}
+                fmt={fmt}
+                isMine
+                onClick={() => setSelectedLoanId(loan.loan_id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -981,6 +1039,13 @@ function MemberBreakdownSheet({
   onClose: () => void
 }) {
   const { dataLoading, performance, years, loadError } = useMemberBreakdown(memberId, false)
+  const [yearIndex, setYearIndex] = useState(0)
+  const yearTouchStartX = useRef<number | null>(null)
+
+  const [loansLoading, setLoansLoading] = useState(true)
+  const [memberLoans, setMemberLoans] = useState<Loan[]>([])
+  const [loansLoadError, setLoansLoadError] = useState("")
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
 
   // Opening this while the Group carousel is scrolled down would otherwise
   // leave the Breakdown header out of view -- jump back to top so it's
@@ -989,10 +1054,60 @@ function MemberBreakdownSheet({
     window.scrollTo(0, 0)
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadLoans() {
+      setLoansLoading(true)
+      const { data, error } = await supabase
+        .from("v_loan_summary")
+        .select("*")
+        .eq("borrower_member_id", memberId)
+        .order("start_date", { ascending: false })
+
+      if (cancelled) return
+
+      if (error) {
+        setLoansLoadError(error.message)
+      } else {
+        setMemberLoans((data as Loan[]) ?? [])
+      }
+      setLoansLoading(false)
+    }
+
+    loadLoans()
+    return () => {
+      cancelled = true
+    }
+  }, [memberId])
+
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const signed = (n: number) => `${n < 0 ? "-" : "+"}₱${fmt(Math.abs(n))}`
   const tone = (n: number) => (n > 0 ? "text-sage" : n < 0 ? "text-rust" : "text-ink-soft")
+
+  // Same touchend-only swipe detection as YouPanel's/the Group carousel --
+  // see YouPanel's handleYearTouchStart/End for why touch-action: pan-y on
+  // the wrapping div (set below) is what lets a vertical touch keep
+  // scrolling the page natively while a horizontal swipe never does.
+  function handleYearTouchStart(e: React.TouchEvent) {
+    yearTouchStartX.current = e.touches[0].clientX
+  }
+
+  function handleYearTouchEnd(e: React.TouchEvent) {
+    if (yearTouchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - yearTouchStartX.current
+    yearTouchStartX.current = null
+
+    if (Math.abs(dx) < 32) return
+    setYearIndex((i) => Math.max(0, Math.min(years.length - 1, dx < 0 ? i + 1 : i - 1)))
+  }
+
+  const clampedYearIndex = Math.min(yearIndex, Math.max(0, years.length - 1))
+
+  if (selectedLoanId) {
+    return <LoanDetailPanel loanId={selectedLoanId} onBack={() => setSelectedLoanId(null)} />
+  }
 
   return (
     <div>
@@ -1092,11 +1207,21 @@ function MemberBreakdownSheet({
                 </p>
               )}
 
-              <div className="space-y-4">
+              {years.length > 0 && (
+              <div
+                className="overflow-hidden"
+                style={{ touchAction: "pan-y" }}
+                onTouchStart={handleYearTouchStart}
+                onTouchEnd={handleYearTouchEnd}
+              >
+              <div
+                className="flex transition-transform duration-300 ease-out will-change-transform motion-reduce:transition-none"
+                style={{ transform: `translateX(-${clampedYearIndex * 100}%)` }}
+              >
                 {years.map((y) => {
                   const yearTotal = y.netContribution + y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
                   return (
-                    <div key={y.year} className="bg-paper-2 border border-hairline rounded-md p-5">
+                    <div key={y.year} className="w-full shrink-0 bg-paper-2 border border-hairline rounded-md p-5">
                       <div className="flex justify-between items-baseline mb-3">
                         <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
                         <span className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearTotal)}`}>
@@ -1140,7 +1265,54 @@ function MemberBreakdownSheet({
                   )
                 })}
               </div>
+              </div>
+              )}
+
+              {years.length > 1 && (
+                <div className="flex items-center justify-center gap-1.5 mt-4">
+                  {years.map((y, i) => (
+                    <button
+                      key={y.year}
+                      onClick={() => setYearIndex(i)}
+                      aria-label={`Go to ${y.year}`}
+                      className="w-6 h-6 flex items-center justify-center"
+                    >
+                      <span
+                        className={`block rounded-full transition-all ${
+                          i === clampedYearIndex ? "w-4 h-1.5 rounded-[3px] bg-gold" : "w-1.5 h-1.5 bg-hairline"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
+
+            {!loansLoading && memberLoans.length > 0 && (
+              <section className="mt-8">
+                <h2 className="font-display text-lg font-medium text-ink mb-1">
+                  {isSelf ? "Your Loan" : `${memberName}'s Loan`}
+                  {memberLoans.length > 1 ? "s" : ""}
+                </h2>
+                <p className="text-[13px] text-ink-soft mb-3">
+                  {isSelf ? "Loans you're the borrower on" : `Loans ${memberName} is the borrower on`}, past and
+                  present.
+                </p>
+                {loansLoadError && <p className="mb-3 text-sm text-rust">Couldn&apos;t load loans: {loansLoadError}</p>}
+                <div className="flex flex-col gap-3">
+                  {memberLoans.map((loan) => (
+                    <LoanCard
+                      key={loan.loan_id}
+                      loan={loan}
+                      meta={loanStatusMeta(loan)}
+                      fmt={fmt}
+                      isMine={isSelf}
+                      onClick={() => setSelectedLoanId(loan.loan_id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
           </>
         )}
     </div>
