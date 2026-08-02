@@ -16,17 +16,6 @@ export function dateOnly(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-// Farm On's loss and Perfume Est 2020's gain are the fund's only two
-// investment events that predate investment_allocations.allocation_date --
-// they're dated 2019-07-15 and 2020-08-24 respectively via this hardcoded
-// fallback instead. Any investment_allocations row with allocation_date set
-// (i.e. everything going forward) uses that column directly.
-function legacyInvestmentDate(investmentName: string | undefined): string | null {
-  if (investmentName === "Farm On") return "2019-07-15"
-  if (investmentName === "Perfume Est 2020") return "2020-08-24"
-  return null
-}
-
 /**
  * Computes each eligible member's "current value" in the fund as of a given
  * date: net contribution + bank interest + prior loan gains + investment
@@ -73,7 +62,7 @@ export async function computeCurrentValueByMember(
 
   const { data: investmentRows, error: investmentError } = await supabase
     .from("investment_allocations")
-    .select("member_id, amount, allocation_type, allocation_date, investments(name)")
+    .select("member_id, amount, allocation_type, allocation_date")
   if (investmentError) throw new Error(investmentError.message)
 
   const currentValueByMember = new Map<string, number>()
@@ -94,12 +83,7 @@ export async function computeCurrentValueByMember(
       .reduce((sum, r) => sum + Number(r.amount), 0)
 
     const investmentGains = (investmentRows ?? [])
-      .filter((r) => {
-        if (r.member_id !== member.member_id) return false
-        const name = (r.investments as unknown as { name?: string } | null)?.name
-        const eventDate = r.allocation_date ?? legacyInvestmentDate(name)
-        return eventDate !== null && eventDate <= asOfDate
-      })
+      .filter((r) => r.member_id === member.member_id && isOnOrBefore(r))
       .reduce((sum, r) => sum + (r.allocation_type === "Investment Loss" ? -Number(r.amount) : Number(r.amount)), 0)
 
     const currentValue = netContribution + bankInterest + priorLoanGains + investmentGains
