@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState, isValidElement, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Navbar from "@/app/components/Navbar"
@@ -13,9 +13,23 @@ type Tab = "members" | "borrowers" | "admin"
 type FaqItem = { q: string; a: React.ReactNode }
 type FaqSection = { title: string; items: FaqItem[] }
 
-function Faq({ q, a }: FaqItem) {
+// Flattens an answer's JSX into plain text so search can match words that
+// only appear in the answer body, not the question -- e.g. "gain sharing"
+// only shows up inside an <InfoRow>-style answer, never in its own q.
+function nodeText(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return ""
+  if (typeof node === "string" || typeof node === "number") return String(node)
+  if (Array.isArray(node)) return node.map(nodeText).join(" ")
+  if (isValidElement(node)) return nodeText((node.props as { children?: ReactNode }).children)
+  return ""
+}
+
+function Faq({ q, a, forceOpen }: FaqItem & { forceOpen?: boolean }) {
   return (
-    <details className="group border-b border-hairline last:border-b-0">
+    <details
+      className="group border-b border-hairline last:border-b-0"
+      {...(forceOpen ? { open: true } : {})}
+    >
       <summary className="py-4 flex items-start justify-between gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
         <span className="text-sm font-medium text-ink">{q}</span>
         <span className="shrink-0 mt-0.5 text-ink-soft text-lg leading-none transition-transform group-open:rotate-45">
@@ -27,13 +41,13 @@ function Faq({ q, a }: FaqItem) {
   )
 }
 
-function FaqSectionCard({ title, items }: FaqSection) {
+function FaqSectionCard({ title, items, forceOpen }: FaqSection & { forceOpen?: boolean }) {
   return (
     <div className="mt-6">
       <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">{title}</p>
       <div className="bg-paper-2 border border-hairline rounded-md px-4">
         {items.map((item) => (
-          <Faq key={item.q} q={item.q} a={item.a} />
+          <Faq key={item.q} q={item.q} a={item.a} forceOpen={forceOpen} />
         ))}
       </div>
     </div>
@@ -102,7 +116,9 @@ const memberSections: FaqSection[] = [
             of your contributions, withdrawals, bank interest, and loan and investment gain share. Open it
             from the <strong>Capital/Performance</strong> card on the You tab, or{" "}
             <strong>My Breakdown</strong>{" "}
-            in the menu (☰). Tapping a member&apos;s card on Fund Breakdown opens the same page for them.
+            in the menu (☰). Tapping a member&apos;s card on Fund Breakdown opens the same page for them. If
+            you&apos;re the borrower on a loan, it also shows right there on your Breakdown, below the
+            year-by-year table.
           </p>
         )
       },
@@ -113,6 +129,17 @@ const memberSections: FaqSection[] = [
             It means you&apos;ve submitted something — a contribution, withdrawal, or loan payment — that an
             admin hasn&apos;t approved yet. Tap it to see exactly what&apos;s waiting in{" "}
             <strong>Transactions</strong>.
+          </p>
+        )
+      },
+      {
+        q: "What's the bell icon for?",
+        a: (
+          <p>
+            It opens <strong>Notifications</strong> — everything Haru has sent you, like a submission being
+            approved or rejected, or a gain/loss landing in your account. Tap one to jump straight to what
+            it&apos;s about. From there you can also turn on <strong>Push Notifications</strong>, so you get
+            notified on your device even when Haru isn&apos;t open.
           </p>
         )
       }
@@ -366,6 +393,17 @@ const borrowerSections: FaqSection[] = [
             here too.
           </p>
         )
+      },
+      {
+        q: "What's the bell icon for?",
+        a: (
+          <p>
+            It opens <strong>Notifications</strong> — things like your loan payment being approved or
+            rejected. Tap one to jump straight to what it&apos;s about. From there you can also turn on{" "}
+            <strong>Push Notifications</strong>, so you get notified on your device even when Haru isn&apos;t
+            open.
+          </p>
+        )
       }
     ]
   },
@@ -544,7 +582,11 @@ const adminSections: FaqSection[] = [
             Admin → <strong>Members</strong>{" "}
             quick link (or the &quot;Manage all members →&quot; link at the bottom of the Members tab)
             takes you to the full roster, where you can add a member directly, edit their
-            name/email/role, and deactivate or reactivate an account.
+            name/email/role, and deactivate or reactivate an account. The same edit form has an{" "}
+            <strong>Eligible for gain sharing</strong> checkbox — uncheck it to exclude someone from future
+            bank interest, loan, and investment distributions without deactivating them entirely.
+            Deactivating a member turns this off automatically, and reactivating restores it unless
+            they&apos;re a borrower (borrowers are never gain-sharing eligible).
           </p>
         )
       },
@@ -674,6 +716,7 @@ export default function HelpPage() {
 
   const [activeTab, setActiveTab] = useState<Tab>("members")
   const [tabInitialized, setTabInitialized] = useState(false)
+  const [query, setQuery] = useState("")
 
   useEffect(() => {
     if (authLoading) return
@@ -701,19 +744,6 @@ export default function HelpPage() {
   const checkingAccess = authLoading || !member || member.status !== "approved"
   const isBorrower = member?.role === "borrower"
 
-  if (checkingAccess) {
-    return (
-      <>
-        {isBorrower ? <BorrowerHeader /> : <Navbar />}
-        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-          <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
-            <SkeletonPanel />
-          </div>
-        </main>
-      </>
-    )
-  }
-
   // Borrower accounts can't do anything the Members/Admin sections
   // describe -- they can't see the fund dashboard, other members, or the
   // Admin panel at all -- so only the Borrowers tab is relevant, and there's
@@ -727,6 +757,36 @@ export default function HelpPage() {
       ]
 
   const active = tabs.find((t) => t.id === activeTab) ?? tabs[0]
+
+  // Computed unconditionally (before the checkingAccess early return below)
+  // so this hook call is never skipped on some renders -- tabs/active above
+  // are safe to compute this early since they only depend on isBorrower and
+  // activeTab, both already known regardless of auth-loading state.
+  const trimmedQuery = query.trim().toLowerCase()
+  const filteredSections = useMemo(() => {
+    if (!trimmedQuery) return active.sections
+    return active.sections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          `${item.q} ${nodeText(item.a)}`.toLowerCase().includes(trimmedQuery)
+        )
+      }))
+      .filter((section) => section.items.length > 0)
+  }, [active, trimmedQuery])
+
+  if (checkingAccess) {
+    return (
+      <>
+        {isBorrower ? <BorrowerHeader /> : <Navbar />}
+        <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
+          <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
+            <SkeletonPanel />
+          </div>
+        </main>
+      </>
+    )
+  }
 
   return (
     <>
@@ -756,6 +816,7 @@ export default function HelpPage() {
                   key={t.id}
                   onClick={() => {
                     setActiveTab(t.id)
+                    setQuery("")
                     window.scrollTo(0, 0)
                   }}
                   className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
@@ -768,8 +829,46 @@ export default function HelpPage() {
             </div>
           )}
 
-          {active.sections.map((section) => (
-            <FaqSectionCard key={section.title} title={section.title} items={section.items} />
+          <div className="relative mt-5">
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-soft pointer-events-none"
+            >
+              <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M17 17l-3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search ${active.label.toLowerCase()} help`}
+              className="w-full bg-paper-2 border border-hairline rounded-md pl-10 pr-9 py-2.5 text-sm text-ink placeholder:text-ink-soft outline-none focus:border-gold transition-colors"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-soft hover:text-ink text-lg leading-none"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {trimmedQuery && filteredSections.length === 0 && (
+            <p className="text-sm text-ink-soft text-center py-12">
+              No results for &quot;{query.trim()}&quot; in {active.label}.
+            </p>
+          )}
+
+          {filteredSections.map((section) => (
+            <FaqSectionCard
+              key={section.title}
+              title={section.title}
+              items={section.items}
+              forceOpen={!!trimmedQuery}
+            />
           ))}
         </div>
       </main>
