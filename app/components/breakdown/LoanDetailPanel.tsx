@@ -47,6 +47,12 @@ type GainShare = {
   pct_share: number
 }
 
+type HoldShare = {
+  member_id: string
+  member: string
+  share: number
+}
+
 type RecentTransaction = {
   transaction_id: string
   date: string
@@ -84,6 +90,8 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   const [dataLoading, setDataLoading] = useState(true)
   const [loan, setLoan] = useState<Loan | null>(null)
   const [shares, setShares] = useState<GainShare[]>([])
+  const [holds, setHolds] = useState<HoldShare[]>([])
+  const [principalOutstanding, setPrincipalOutstanding] = useState(0)
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
@@ -124,6 +132,33 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       .eq("loan_id", loanId)
       .order("amount", { ascending: false })
 
+    // Hold per member for an active loan -- the same loan_hold_allocations
+    // snapshot (taken once at release) that already powers the aggregate
+    // "money tied up in loans" figure on a member's Available Balance card,
+    // just scoped to this one loan. amount is derived at render time from
+    // share * principalOutstanding rather than stored, so it stays current
+    // as the loan gets repaid without needing to refetch this.
+    const holdsPromise = supabase
+      .from("loan_hold_allocations")
+      .select("member_id, share, members(name)")
+      .eq("loan_id", loanId)
+      .order("share", { ascending: false })
+
+    // v_loan_summary.outstanding (used for loan.outstanding elsewhere on
+    // this page) is principal + interest - repaid, i.e. what's still owed
+    // in total. The hold figure needs principal - repaid instead -- the
+    // capital of members' actual money still tied up, excluding interest
+    // that hasn't been earned/allocated yet -- which is what
+    // v_active_loan_outstanding (and therefore v_member_loan_hold, the
+    // source of the aggregate figure this needs to match) uses. Using
+    // loan.outstanding here previously overstated every member's hold by
+    // their share of the loan's interest.
+    const principalOutstandingPromise = supabase
+      .from("v_active_loan_outstanding")
+      .select("outstanding")
+      .eq("loan_id", loanId)
+      .maybeSingle()
+
     // Most recent 5 transactions tied to this loan, newest first -- a quick
     // "what's happened lately" glance, with a link to the full ledger
     // (pre-filtered to this loan) for anything older.
@@ -136,9 +171,11 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       .order("created_at", { ascending: false })
       .limit(5)
 
-    const [loanResult, sharesResult, recentTxnsResult] = await Promise.all([
+    const [loanResult, sharesResult, holdsResult, principalOutstandingResult, recentTxnsResult] = await Promise.all([
       loanPromise,
       sharesPromise,
+      holdsPromise,
+      principalOutstandingPromise,
       recentTxnsPromise
     ])
 
@@ -160,6 +197,24 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       )
     } else if (sharesResult.error) {
       setLoadError(sharesResult.error.message)
+    }
+
+    if (!holdsResult.error && holdsResult.data) {
+      setHolds(
+        holdsResult.data.map((r: any) => ({
+          member_id: r.member_id,
+          member: r.members?.name ?? "Unknown",
+          share: Number(r.share)
+        }))
+      )
+    } else if (holdsResult.error) {
+      setLoadError(holdsResult.error.message)
+    }
+
+    if (!principalOutstandingResult.error && principalOutstandingResult.data) {
+      setPrincipalOutstanding(Number(principalOutstandingResult.data.outstanding))
+    } else if (principalOutstandingResult.error) {
+      setLoadError(principalOutstandingResult.error.message)
     }
 
     if (!recentTxnsResult.error && recentTxnsResult.data) {
@@ -504,6 +559,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     : null
 
   const totalShared = shares.reduce((sum, s) => sum + s.amount, 0)
+  const totalHold = holds.reduce((sum, h) => sum + h.share * principalOutstanding, 0)
   const netResult = adminLoan ? adminLoan.repaidApproved - adminLoan.principal : 0
 
   return (
@@ -939,16 +995,66 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         )}
       </section>
 
-      {/* Gain share per member */}
+      {/* Gain share per member (closed) / hold per member (active) */}
       <section className="mt-8">
-        <h2 className="font-display text-lg font-medium text-ink mb-1">Gain Share per Member</h2>
+        <h2 className="font-display text-lg font-medium text-ink mb-1">
+          {loan.status === "active" ? "Hold per Member" : "Gain Share per Member"}
+        </h2>
         <p className="text-[13px] text-ink-soft mb-3">
           {loan.status === "closed"
             ? `${loan.borrower} doesn't share in this loan's own gain. The rest is split by each member's value in the fund on the day it closed.`
-            : "This loan hasn't closed yet — gain will be split among eligible members once it's fully repaid."}
+            : loan.status === "active"
+            ? `How much of each eligible member's fund value is currently tied up funding this loan, based on their share of the pool when it was released. Shrinks as ${loan.borrower} repays it.`
+            : "Once this loan is released, this will show how much of the fund is on hold for it, then its final gain split when it closes."}
         </p>
 
         {loadError && <p className="text-sm text-rust">{loadError}</p>}
+
+        {loan.status === "active" && holds.length > 0 && (
+          <div className="bg-paper-2 border border-hairline rounded-md">
+            <div className="px-5">
+              {holds.map((h, i) => (
+                <div
+                  key={h.member_id}
+                  className={`py-3 flex justify-between items-center gap-3 ${
+                    i !== holds.length - 1 ? "border-b border-dashed border-hairline" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-sm text-ink truncate">{h.member}</p>
+                    {h.member_id === myMemberId && (
+                      <span className="shrink-0 text-[9px] uppercase tracking-wide font-mono text-gold border border-gold/40 rounded px-1.5 py-0.5">
+                        You
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end shrink-0">
+                    <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-ink">
+                      ₱{fmt(h.share * principalOutstanding)}
+                    </p>
+                    <p className="text-[11px] text-ink-soft font-mono whitespace-nowrap">
+                      {(h.share * 100).toFixed(2)}% of loan
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-3 border-t border-hairline flex justify-between items-center">
+              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
+                On hold across {holds.length} member{holds.length === 1 ? "" : "s"}
+              </p>
+              <p className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
+                ₱{fmt(totalHold)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {loan.status === "active" && holds.length === 0 && !loadError && (
+          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+            No hold recorded for this loan.
+          </p>
+        )}
 
         {loan.status === "closed" && shares.length > 0 && (
           <div className="bg-paper-2 border border-hairline rounded-md">
