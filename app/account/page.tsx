@@ -12,6 +12,11 @@ export default function AccountPage() {
   const { loading: authLoading, user, member } = useAuth()
   const isBorrower = member?.role === "borrower"
 
+  const [newName, setNewName] = useState("")
+  const [nameInitialized, setNameInitialized] = useState(false)
+  const [nameMessage, setNameMessage] = useState("")
+  const [nameLoading, setNameLoading] = useState(false)
+
   const [newEmail, setNewEmail] = useState("")
   const [emailMessage, setEmailMessage] = useState("")
   const [emailLoading, setEmailLoading] = useState(false)
@@ -34,6 +39,44 @@ export default function AccountPage() {
       return
     }
   }, [authLoading, member, router])
+
+  // Pre-fill once member loads. Adjusting state during render (React's
+  // documented pattern for this) instead of in an Effect -- avoids an extra
+  // render pass, and the guard means this only ever fires the one time
+  // member goes from null to loaded, never clobbering an in-progress edit.
+  if (member && !nameInitialized) {
+    setNewName(member.name)
+    setNameInitialized(true)
+  }
+
+  async function changeName() {
+    if (nameLoading) return
+
+    const trimmed = newName.trim()
+    if (!trimmed) {
+      setNameMessage("Name can't be empty.")
+      return
+    }
+
+    setNameLoading(true)
+    setNameMessage("")
+
+    const { error } = await supabase.rpc("update_my_name", { p_name: trimmed })
+
+    setNameLoading(false)
+
+    if (error) {
+      setNameMessage(error.message)
+      return
+    }
+
+    // AuthProvider only refetches the member row on sign-in/out or token
+    // refresh, not on every navigation -- reload so the new name shows up
+    // everywhere it's used (Dashboard's greeting, Fund Breakdown, etc.)
+    // right away instead of looking stale until the next session refresh.
+    // Same pattern PullToRefresh already uses for this reason.
+    window.location.reload()
+  }
 
   async function changeEmail() {
     if (emailLoading) return
@@ -102,11 +145,52 @@ export default function AccountPage() {
           <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
             Settings
           </h1>
-          <p className="text-[13px] text-ink-soft mb-6">Manage your sign-in email and password.</p>
+          <p className="text-[13px] text-ink-soft mb-6">Manage your name, sign-in email, and password.</p>
+
+          {/* Change Name */}
+
+          <div className="bg-paper-2 border border-hairline rounded-md p-5">
+
+            <h2 className="font-display text-lg font-medium text-ink mb-1">
+              Name
+            </h2>
+
+            <p className="text-[13px] text-ink-soft">
+              Shown to other members throughout the app.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <input
+                type="text"
+                placeholder="Your name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") changeName()
+                }}
+                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full text-base"
+              />
+
+              {nameMessage && (
+                <p className="text-sm text-ink-soft">
+                  {nameMessage}
+                </p>
+              )}
+
+              <button
+                onClick={changeName}
+                disabled={nameLoading || !newName.trim() || newName.trim() === member.name}
+                className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-60"
+              >
+                {nameLoading ? "Saving..." : "Save Name"}
+              </button>
+            </div>
+
+          </div>
 
           {/* Change Email */}
 
-          <div className="bg-paper-2 border border-hairline rounded-md p-5">
+          <div className="mt-6 bg-paper-2 border border-hairline rounded-md p-5">
 
             <h2 className="font-display text-lg font-medium text-ink mb-1">
               Email
