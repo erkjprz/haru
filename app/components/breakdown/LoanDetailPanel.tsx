@@ -91,6 +91,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   const [loan, setLoan] = useState<Loan | null>(null)
   const [shares, setShares] = useState<GainShare[]>([])
   const [holds, setHolds] = useState<HoldShare[]>([])
+  const [principalOutstanding, setPrincipalOutstanding] = useState(0)
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
@@ -135,13 +136,28 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     // snapshot (taken once at release) that already powers the aggregate
     // "money tied up in loans" figure on a member's Available Balance card,
     // just scoped to this one loan. amount is derived at render time from
-    // share * loan.outstanding rather than stored, so it stays current as
-    // the loan gets repaid without needing to refetch this.
+    // share * principalOutstanding rather than stored, so it stays current
+    // as the loan gets repaid without needing to refetch this.
     const holdsPromise = supabase
       .from("loan_hold_allocations")
       .select("member_id, share, members(name)")
       .eq("loan_id", loanId)
       .order("share", { ascending: false })
+
+    // v_loan_summary.outstanding (used for loan.outstanding elsewhere on
+    // this page) is principal + interest - repaid, i.e. what's still owed
+    // in total. The hold figure needs principal - repaid instead -- the
+    // capital of members' actual money still tied up, excluding interest
+    // that hasn't been earned/allocated yet -- which is what
+    // v_active_loan_outstanding (and therefore v_member_loan_hold, the
+    // source of the aggregate figure this needs to match) uses. Using
+    // loan.outstanding here previously overstated every member's hold by
+    // their share of the loan's interest.
+    const principalOutstandingPromise = supabase
+      .from("v_active_loan_outstanding")
+      .select("outstanding")
+      .eq("loan_id", loanId)
+      .maybeSingle()
 
     // Most recent 5 transactions tied to this loan, newest first -- a quick
     // "what's happened lately" glance, with a link to the full ledger
@@ -155,10 +171,11 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       .order("created_at", { ascending: false })
       .limit(5)
 
-    const [loanResult, sharesResult, holdsResult, recentTxnsResult] = await Promise.all([
+    const [loanResult, sharesResult, holdsResult, principalOutstandingResult, recentTxnsResult] = await Promise.all([
       loanPromise,
       sharesPromise,
       holdsPromise,
+      principalOutstandingPromise,
       recentTxnsPromise
     ])
 
@@ -192,6 +209,12 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       )
     } else if (holdsResult.error) {
       setLoadError(holdsResult.error.message)
+    }
+
+    if (!principalOutstandingResult.error && principalOutstandingResult.data) {
+      setPrincipalOutstanding(Number(principalOutstandingResult.data.outstanding))
+    } else if (principalOutstandingResult.error) {
+      setLoadError(principalOutstandingResult.error.message)
     }
 
     if (!recentTxnsResult.error && recentTxnsResult.data) {
@@ -536,7 +559,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     : null
 
   const totalShared = shares.reduce((sum, s) => sum + s.amount, 0)
-  const totalHold = holds.reduce((sum, h) => sum + h.share * loan.outstanding, 0)
+  const totalHold = holds.reduce((sum, h) => sum + h.share * principalOutstanding, 0)
   const netResult = adminLoan ? adminLoan.repaidApproved - adminLoan.principal : 0
 
   return (
@@ -1007,7 +1030,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                   </div>
                   <div className="flex flex-col items-end shrink-0">
                     <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-ink">
-                      ₱{fmt(h.share * loan.outstanding)}
+                      ₱{fmt(h.share * principalOutstanding)}
                     </p>
                     <p className="text-[11px] text-ink-soft font-mono whitespace-nowrap">
                       {(h.share * 100).toFixed(2)}% of loan
