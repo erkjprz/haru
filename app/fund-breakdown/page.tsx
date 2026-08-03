@@ -845,12 +845,6 @@ function GroupPanel() {
           <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl sm:text-3xl font-bold text-ink">
             ₱{fund != null ? fmt(fund.total_cash) : "—"}
           </p>
-          {fund != null && fund.open_loans_outstanding > 0 && (
-            <p className="text-xs text-ink-soft -mt-1 mb-1">
-              +₱{fmt(fund.open_loans_outstanding)} more currently out on loan (
-              {fund.open_loans_count} active loan{fund.open_loans_count === 1 ? "" : "s"})
-            </p>
-          )}
           <Sparkline points={fundTrend} color="#B8912F" />
 
           <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono mb-1.5 mt-3.5">Ownership Share</p>
@@ -898,6 +892,16 @@ function GroupPanel() {
             <InfoRow label="Net Contribution" value={`₱${fmt(fund.net_contribution)}`} bold />
           </InfoBox>
 
+          {fund.open_loans_count > 0 && (
+            <InfoBox label="Loans">
+              <InfoRow
+                label={`Outstanding (${fund.open_loans_count} active)`}
+                value={`₱${fmt(fund.open_loans_outstanding)}`}
+                bold
+              />
+            </InfoBox>
+          )}
+
           <InfoBox label="Performance">
             <InfoRow
               label="Total Fund Gain/Loss"
@@ -919,16 +923,6 @@ function GroupPanel() {
               />
             </div>
           </InfoBox>
-
-          {fund.open_loans_count > 0 && (
-            <InfoBox label="Loans">
-              <InfoRow
-                label={`Outstanding (${fund.open_loans_count} active)`}
-                value={`₱${fmt(fund.open_loans_outstanding)}`}
-                bold
-              />
-            </InfoBox>
-          )}
         </div>
       )}
 
