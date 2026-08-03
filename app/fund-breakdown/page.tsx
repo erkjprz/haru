@@ -643,6 +643,8 @@ type FundTotals = {
   total_bank_interest: number
   net_investment_gain_loss: number
   total_loan_gain_distributed: number
+  open_loans_count: number
+  open_loans_outstanding: number
 }
 
 function GroupPanel() {
@@ -676,7 +678,7 @@ function GroupPanel() {
       const fundPromise = supabase
         .from("v_fund_summary")
         .select(
-          "total_cash, total_contribution, total_withdrawal, net_contribution, total_bank_interest, net_investment_gain_loss, total_loan_gain_distributed"
+          "total_cash, total_contribution, total_withdrawal, net_contribution, total_bank_interest, net_investment_gain_loss, total_loan_gain_distributed, open_loans_count, open_loans_outstanding"
         )
         .single()
 
@@ -710,7 +712,9 @@ function GroupPanel() {
           net_contribution: Number(fundResult.data.net_contribution),
           total_bank_interest: Number(fundResult.data.total_bank_interest),
           net_investment_gain_loss: Number(fundResult.data.net_investment_gain_loss),
-          total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed)
+          total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed),
+          open_loans_count: Number(fundResult.data.open_loans_count),
+          open_loans_outstanding: Number(fundResult.data.open_loans_outstanding)
         })
       }
 
@@ -841,6 +845,12 @@ function GroupPanel() {
           <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl sm:text-3xl font-bold text-ink">
             ₱{fund != null ? fmt(fund.total_cash) : "—"}
           </p>
+          {fund != null && fund.open_loans_outstanding > 0 && (
+            <p className="text-xs text-ink-soft -mt-1 mb-1">
+              +₱{fmt(fund.open_loans_outstanding)} more currently out on loan (
+              {fund.open_loans_count} active loan{fund.open_loans_count === 1 ? "" : "s"})
+            </p>
+          )}
           <Sparkline points={fundTrend} color="#B8912F" />
 
           <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono mb-1.5 mt-3.5">Ownership Share</p>
@@ -909,6 +919,16 @@ function GroupPanel() {
               />
             </div>
           </InfoBox>
+
+          {fund.open_loans_count > 0 && (
+            <InfoBox label="Loans">
+              <InfoRow
+                label={`Outstanding (${fund.open_loans_count} active)`}
+                value={`₱${fmt(fund.open_loans_outstanding)}`}
+                bold
+              />
+            </InfoBox>
+          )}
         </div>
       )}
 
