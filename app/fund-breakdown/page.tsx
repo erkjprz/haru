@@ -643,6 +643,8 @@ type FundTotals = {
   total_bank_interest: number
   net_investment_gain_loss: number
   total_loan_gain_distributed: number
+  open_loans_count: number
+  open_loans_outstanding: number
 }
 
 function GroupPanel() {
@@ -676,7 +678,7 @@ function GroupPanel() {
       const fundPromise = supabase
         .from("v_fund_summary")
         .select(
-          "total_cash, total_contribution, total_withdrawal, net_contribution, total_bank_interest, net_investment_gain_loss, total_loan_gain_distributed"
+          "total_cash, total_contribution, total_withdrawal, net_contribution, total_bank_interest, net_investment_gain_loss, total_loan_gain_distributed, open_loans_count, open_loans_outstanding"
         )
         .single()
 
@@ -710,7 +712,9 @@ function GroupPanel() {
           net_contribution: Number(fundResult.data.net_contribution),
           total_bank_interest: Number(fundResult.data.total_bank_interest),
           net_investment_gain_loss: Number(fundResult.data.net_investment_gain_loss),
-          total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed)
+          total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed),
+          open_loans_count: Number(fundResult.data.open_loans_count),
+          open_loans_outstanding: Number(fundResult.data.open_loans_outstanding)
         })
       }
 
@@ -887,6 +891,16 @@ function GroupPanel() {
             )}
             <InfoRow label="Net Contribution" value={`₱${fmt(fund.net_contribution)}`} bold />
           </InfoBox>
+
+          {fund.open_loans_count > 0 && (
+            <InfoBox label="Loans">
+              <InfoRow
+                label={`Outstanding (${fund.open_loans_count} active)`}
+                value={`₱${fmt(fund.open_loans_outstanding)}`}
+                bold
+              />
+            </InfoBox>
+          )}
 
           <InfoBox label="Performance">
             <InfoRow
