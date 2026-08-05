@@ -8,6 +8,7 @@ import { SkeletonCardList, SkeletonPanel } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import type { InterestType } from "@/lib/loanMath"
 import { formatInterestLabel, durationLabel, paymentOverdueLabel } from "@/lib/loanFormat"
+import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
 import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
 import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
@@ -1619,6 +1620,7 @@ type BankAccount = {
   id: string
   bank_name: string
   account_name: string | null
+  qr_code_url: string | null
 }
 
 function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
@@ -1931,6 +1933,11 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
                   onCancel={() => setEditingId(null)}
                   saveLabel="Save Changes"
                   fused
+                  bankAccountId={acct.id}
+                  qrCodeUrl={acct.qr_code_url}
+                  onQrUpdated={(path) =>
+                    setBankAccounts((prev) => prev.map((a) => (a.id === acct.id ? { ...a, qr_code_url: path } : a)))
+                  }
                 />
               )}
             </div>
@@ -2038,7 +2045,10 @@ function BankForm({
   onCancel,
   saveLabel,
   fused = false,
-  className = ""
+  className = "",
+  bankAccountId,
+  qrCodeUrl,
+  onQrUpdated
 }: {
   title: string
   bankName: string
@@ -2052,6 +2062,12 @@ function BankForm({
   saveLabel: string
   fused?: boolean
   className?: string
+  // Only known once the account already exists -- the QR upload needs a
+  // real bank_accounts.id to attach to, so it's hidden on the "Add Bank
+  // Account" form and only appears once editing an existing one.
+  bankAccountId?: string
+  qrCodeUrl?: string | null
+  onQrUpdated?: (path: string) => void
 }) {
   return (
     <div className={`bg-paper-2 border border-hairline relative overflow-hidden ${fused ? "rounded-b-md" : "rounded-md"} ${className}`}>
@@ -2079,6 +2095,10 @@ function BankForm({
           />
         </div>
 
+        {bankAccountId && (
+          <BankQrField bankAccountId={bankAccountId} qrCodeUrl={qrCodeUrl ?? null} onUpdated={onQrUpdated} />
+        )}
+
         <div className="flex gap-3">
           <button
             className="bg-ink text-paper px-4 py-3 rounded-sm text-sm font-medium flex-1 disabled:opacity-50"
@@ -2094,6 +2114,100 @@ function BankForm({
 
         {message && <p className="text-sm text-rust">{message}</p>}
       </div>
+    </div>
+  )
+}
+
+// Lets an admin upload/replace the "scan to pay" QR shown on Dashboard and
+// the Borrower hub for this bank account. Uploads straight away on file
+// select (no separate save step, independent of the bank name/account name
+// save button above it).
+function BankQrField({
+  bankAccountId,
+  qrCodeUrl,
+  onUpdated
+}: {
+  bankAccountId: string
+  qrCodeUrl: string | null
+  onUpdated?: (path: string) => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState("")
+  const fileInput = useRef<HTMLInputElement | null>(null)
+
+  async function handleFile(file: File) {
+    setError("")
+    setUploading(true)
+
+    const path = `${bankAccountId}-${Date.now()}-${file.name}`
+
+    const { error: uploadError } = await supabase.storage.from("BankQR").upload(path, file, { contentType: file.type })
+
+    if (uploadError) {
+      setError(uploadError.message)
+      setUploading(false)
+      return
+    }
+
+    const { error: updateError } = await supabase
+      .from("bank_accounts")
+      .update({ qr_code_url: path })
+      .eq("id", bankAccountId)
+
+    if (updateError) {
+      // The new file already uploaded -- if pointing the bank row at it
+      // failed, clean it up rather than leaving an orphaned object behind.
+      await supabase.storage.from("BankQR").remove([path])
+      setError(updateError.message)
+      setUploading(false)
+      return
+    }
+
+    if (qrCodeUrl) await supabase.storage.from("BankQR").remove([qrCodeUrl])
+
+    onUpdated?.(path)
+    setUploading(false)
+  }
+
+  return (
+    <div>
+      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+        Scan-to-pay QR code
+      </label>
+      <div className="flex items-center gap-3">
+        {qrCodeUrl ? (
+          <img
+            src={getBankQrPublicUrl(qrCodeUrl)}
+            alt="Bank QR code"
+            className="w-14 h-14 object-contain rounded-sm border border-hairline bg-paper shrink-0"
+          />
+        ) : (
+          <div className="w-14 h-14 rounded-sm border border-dashed border-hairline shrink-0 flex items-center justify-center text-ink-soft text-[10px]">
+            None
+          </div>
+        )}
+
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ""
+            if (file) handleFile(file)
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInput.current?.click()}
+          disabled={uploading}
+          className="text-xs font-medium text-ink-soft border border-hairline rounded-sm px-3 py-2 hover:bg-paper hover:text-ink transition-colors disabled:opacity-60"
+        >
+          {uploading ? "Uploading..." : qrCodeUrl ? "Replace" : "Upload"}
+        </button>
+      </div>
+      {error && <p className="text-sm text-rust mt-1.5">{error}</p>}
     </div>
   )
 }
