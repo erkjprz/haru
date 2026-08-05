@@ -341,11 +341,7 @@ export default function DashboardPage() {
             <p className="text-[12px] text-gold font-semibold mt-2.5">View fund breakdown →</p>
           </button>
 
-          <div className="mt-4">
-            <ScanToPayCard />
-          </div>
-
-          <h2 className="font-display text-[17px] font-medium text-ink mt-2 mb-2.5">Shortcuts</h2>
+          <h2 className="font-display text-[17px] font-medium text-ink mt-6 mb-2.5">Shortcuts</h2>
           <div className="grid grid-cols-4 gap-2">
             <Shortcut
               label="Add Contribution"
@@ -381,6 +377,10 @@ export default function DashboardPage() {
                 </>
               }
             />
+          </div>
+
+          <div className="mt-4">
+            <ScanToPayCard />
           </div>
 
           {/* At-a-glance activity for this member -- pending count mirrors
