@@ -7,7 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import { SkeletonCardList, SkeletonPanel } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import type { InterestType } from "@/lib/loanMath"
-import { formatInterestLabel, durationLabel } from "@/lib/loanFormat"
+import { formatInterestLabel, durationLabel, paymentOverdueLabel } from "@/lib/loanFormat"
 import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
 import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
@@ -1352,6 +1352,8 @@ type Loan = {
   interest_type: InterestType | null
   interest_rate: number | null
   interest_amount: number | null
+  repayment_frequency: string | null
+  last_repayment_date: string | null
 }
 
 function termLabel(loan: Loan): string | null {
@@ -1518,6 +1520,7 @@ function LoanCard({
   const fullyRepaid = loan.repayment >= loan.total_repayable
 
   const dateLabel = new Date(loan.start_date).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+  const overdueLabel = paymentOverdueLabel(loan.status, loan.repayment_frequency, loan.start_date, loan.last_repayment_date)
 
   return (
     <button
@@ -1541,6 +1544,9 @@ function LoanCard({
               durationLabel(loan.start_date, loan.closed_date) &&
               ` · paid off in ${durationLabel(loan.start_date, loan.closed_date)}`}
           </p>
+          {overdueLabel && (
+            <p className="text-[11px] font-mono uppercase tracking-wide text-rust mt-1">⚠ {overdueLabel}</p>
+          )}
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <div className="flex items-center gap-1.5">

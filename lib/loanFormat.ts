@@ -33,3 +33,25 @@ export function durationLabel(startDate: string, closedDate: string | null): str
   const remMonths = Math.round(months % 12)
   return remMonths > 0 ? `${years} yr ${remMonths} mo` : `${years} yr`
 }
+
+// Flags an active monthly loan that's gone quiet -- lump_sum loans have no
+// periodic cadence to miss, so only 'monthly' is checked. Grace of 45 days
+// (vs. a strict 30) absorbs normal payment-date drift between cycles
+// (e.g. paid the 29th one month, the 15th the next) without false-flagging.
+// Measured from the last approved "Loan Repayment" txn_date, or start_date
+// if the loan hasn't had one yet.
+export function paymentOverdueLabel(
+  status: "requested" | "active" | "closed",
+  repaymentFrequency: string | null | undefined,
+  startDate: string,
+  lastRepaymentDate: string | null
+): string | null {
+  if (status !== "active" || repaymentFrequency !== "monthly") return null
+
+  const since = lastRepaymentDate ?? startDate
+  const days = Math.round((Date.now() - new Date(since).getTime()) / 86400000)
+  if (days <= 45) return null
+
+  const monthsLate = Math.max(1, Math.floor(days / 30.44))
+  return monthsLate === 1 ? "Payment overdue" : `${monthsLate} mo overdue`
+}
