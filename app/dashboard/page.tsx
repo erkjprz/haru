@@ -28,9 +28,6 @@ export default function DashboardPage() {
   const [fundCash, setFundCash] = useState<number | null>(null)
   const [myBalance, setMyBalance] = useState<number | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
-  const [myPendingCount, setMyPendingCount] = useState(0)
-  const [myApprovedCount, setMyApprovedCount] = useState(0)
-  const [myGainLoss, setMyGainLoss] = useState(0)
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
   const [loadError, setLoadError] = useState("")
 
@@ -103,50 +100,6 @@ export default function DashboardPage() {
               .eq("role", "borrower")
           : Promise.resolve({ count: 0, error: null })
 
-      const myPendingPromise = supabase
-        .from("transactions")
-        .select("transaction_id", { count: "exact", head: true })
-        .eq("member_id", member.member_id)
-        .eq("status", "pending")
-
-      // Approved/Gain-Loss are all-time totals, not a recent window --
-      // this fund transacts every few months rather than daily, so a
-      // rolling 30-day (or even year-to-date) window reads as "broken zero"
-      // for most members most of the time. Pending stays unwindowed too,
-      // since a pending item is relevant for as long as it's pending.
-      const myApprovedPromise = supabase
-        .from("transactions")
-        .select("transaction_id", { count: "exact", head: true })
-        .eq("member_id", member.member_id)
-        .eq("status", "approved")
-
-      const bankInterestPromise = supabase
-        .from("bank_interest_allocations")
-        .select("amount")
-        .eq("member_id", member.member_id)
-
-      const loanGainPromise = supabase
-        .from("loan_gain_allocations")
-        .select("amount")
-        .eq("member_id", member.member_id)
-
-      const investmentAllocPromise = supabase
-        .from("investment_allocations")
-        .select("amount, allocation_type")
-        .eq("member_id", member.member_id)
-
-      // Bank write-offs aren't tracked in an allocations table like the
-      // other three -- they're a signed "Bank Write-off" transaction
-      // against the member directly. Has to be included here too, or this
-      // total silently disagrees with Breakdown's "Total Gain/Loss" (which
-      // does include it).
-      const bankWriteoffPromise = supabase
-        .from("transactions")
-        .select("amount")
-        .eq("member_id", member.member_id)
-        .eq("status", "approved")
-        .eq("classification", "Bank Write-off")
-
       const recentTransactionsPromise = supabase
         .from("transactions")
         .select("transaction_id, txn_date, created_at, classification, amount, status")
@@ -162,12 +115,6 @@ export default function DashboardPage() {
         pendingResult,
         pendingMembersResult,
         pendingBorrowersResult,
-        myPendingResult,
-        myApprovedResult,
-        bankInterestResult,
-        loanGainResult,
-        investmentAllocResult,
-        bankWriteoffResult,
         recentTransactionsResult
       ] = await Promise.all([
         fundPromise,
@@ -175,32 +122,15 @@ export default function DashboardPage() {
         pendingPromise,
         pendingMembersPromise,
         pendingBorrowersPromise,
-        myPendingPromise,
-        myApprovedPromise,
-        bankInterestPromise,
-        loanGainPromise,
-        investmentAllocPromise,
-        bankWriteoffPromise,
         recentTransactionsPromise
       ])
 
-      // Every query's error is checked -- gainLoss in particular is built
-      // to always agree with Breakdown's "Total Gain/Loss" (see comment
-      // below), so a silently-swallowed failure on any of its four sources
-      // would quietly understate it instead of showing an error, exactly
-      // the kind of mismatch this figure was written to avoid.
       const firstError =
         fundResult.error ||
         mineResult.error ||
         pendingResult.error ||
         pendingMembersResult.error ||
         pendingBorrowersResult.error ||
-        myPendingResult.error ||
-        myApprovedResult.error ||
-        bankInterestResult.error ||
-        loanGainResult.error ||
-        investmentAllocResult.error ||
-        bankWriteoffResult.error ||
         recentTransactionsResult.error
       if (firstError) setLoadError(firstError.message)
 
@@ -213,20 +143,6 @@ export default function DashboardPage() {
       }
 
       setPendingCount((pendingResult.count ?? 0) + (pendingMembersResult.count ?? 0) + (pendingBorrowersResult.count ?? 0))
-      setMyPendingCount(myPendingResult.count ?? 0)
-      setMyApprovedCount(myApprovedResult.count ?? 0)
-
-      // Matches Breakdown's "Total Gain/Loss" exactly: bank interest + loan
-      // gain share + investment gain/loss + bank write-off share, all-time.
-      const gainLoss =
-        (bankInterestResult.data ?? []).reduce((sum, r: any) => sum + Number(r.amount), 0) +
-        (loanGainResult.data ?? []).reduce((sum, r: any) => sum + Number(r.amount), 0) +
-        (investmentAllocResult.data ?? []).reduce(
-          (sum, r: any) => sum + (r.allocation_type === "Investment Loss" ? -Number(r.amount) : Number(r.amount)),
-          0
-        ) +
-        (bankWriteoffResult.data ?? []).reduce((sum, r: any) => sum + Number(r.amount), 0)
-      setMyGainLoss(gainLoss)
 
       if (!recentTransactionsResult.error && recentTransactionsResult.data) {
         setRecentTransactions(
@@ -341,7 +257,11 @@ export default function DashboardPage() {
             <p className="text-[12px] text-gold font-semibold mt-2.5">View fund breakdown →</p>
           </button>
 
-          <h2 className="font-display text-[17px] font-medium text-ink mt-6 mb-2.5">Shortcuts</h2>
+          <div className="mt-4">
+            <ScanToPayCard />
+          </div>
+
+          <h2 className="font-display text-[17px] font-medium text-ink mt-2 mb-2.5">Shortcuts</h2>
           <div className="grid grid-cols-4 gap-2">
             <Shortcut
               label="Add Contribution"
@@ -378,52 +298,6 @@ export default function DashboardPage() {
               }
             />
           </div>
-
-          <div className="mt-4">
-            <ScanToPayCard />
-          </div>
-
-          {/* At-a-glance activity for this member -- pending count mirrors
-              what used to be its own banner. Approved/Gain-Loss are
-              all-time totals rather than a recent window (see comment by
-              the queries above for why), so the labels say so -- otherwise
-              a quiet month reads as "broken zero" instead of "no activity."
-              Gain/Loss deliberately sums the same four figures as
-              Breakdown's "Total Gain/Loss" so the two numbers always
-              agree -- an earlier version called this "Distributed" and
-              left out Bank Write-off Share, which made it disagree with
-              Breakdown for no good reason. */}
-          <button
-            onClick={() => router.push("/transactions")}
-            className="w-full flex bg-paper-2 border border-hairline rounded-md overflow-hidden mt-5 hover:bg-paper transition-colors"
-          >
-            <div className="flex-1 px-2.5 py-3.5 text-center border-r border-hairline">
-              <p className="font-mono text-xl font-bold text-gold leading-none mb-1">{myPendingCount}</p>
-              <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Pending</p>
-            </div>
-            <div className="flex-1 px-2.5 py-3.5 text-center border-r border-hairline">
-              <p className="font-mono text-xl font-bold text-ink leading-none mb-1">{myApprovedCount}</p>
-              <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">
-                All-Time
-                <br />
-                Approved
-              </p>
-            </div>
-            <div className="flex-1 px-2.5 py-3.5 text-center">
-              <p
-                className={`font-mono text-xl font-bold leading-none mb-1 ${
-                  myGainLoss > 0 ? "text-sage" : myGainLoss < 0 ? "text-rust" : "text-ink"
-                }`}
-              >
-                {myGainLoss < 0 ? "-" : "+"}₱{fmt(Math.abs(myGainLoss))}
-              </p>
-              <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">
-                All-Time
-                <br />
-                Gain/Loss
-              </p>
-            </div>
-          </button>
 
           <div className="flex items-baseline justify-between gap-3 mt-6 mb-2.5">
             <h2 className="font-display text-[17px] font-medium text-ink">Recent Transactions</h2>

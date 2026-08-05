@@ -212,25 +212,21 @@ export function BankDetailPanel({
       </div>
 
       {qrAccounts.length > 0 && (
-        <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-4 mt-4">
-          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-3">Scan to Pay</p>
-          <div className="flex gap-3">
-            {qrAccounts.map((acct) => (
-              <button
-                key={acct.id}
-                onClick={() => setZoomedQr(acct)}
-                className="flex-1 flex flex-col items-center gap-1.5 bg-paper border border-hairline rounded-md py-3 hover:bg-paper-2 transition-colors"
-              >
-                <img
-                  src={getBankQrPublicUrl(acct.qr_code_url)}
-                  alt={`${bank} QR code`}
-                  className="w-20 h-20 object-contain rounded-sm"
-                />
-                <span className="text-[12px] font-semibold text-ink">{acct.account_name || bank}</span>
-              </button>
-            ))}
+        <button
+          onClick={() => setZoomedQr(qrAccounts[0])}
+          className="w-full flex items-center justify-between gap-3 bg-paper-2 border border-hairline rounded-md px-5 py-3.5 mt-4 hover:bg-paper transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-[18px] h-[18px] text-gold shrink-0">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <path d="M14 14h3v3h-3zM19 14v3M14 19h3M19 19h2v2h-2z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-sm font-semibold text-ink">Scan to Pay</span>
           </div>
-        </div>
+          <span className="text-ink-soft">›</span>
+        </button>
       )}
 
       {zoomedQr && (
