@@ -90,7 +90,6 @@ export default function Navbar() {
           </span>
           <div className="flex items-center gap-2">
             <NotificationBell />
-            <AccountMenu />
             {!onNewTransactionPage && (
               <button
                 onClick={() => router.push("/transactions/new")}
@@ -131,6 +130,7 @@ export default function Navbar() {
                 </button>
               )
             })}
+            <AccountMenu variant="dock" />
           </div>
         </nav>
       )}

@@ -14,13 +14,32 @@ function MenuIcon() {
   )
 }
 
+// Matches the other dock icons' size/weight convention (IconHome etc. in
+// Navbar) rather than the smaller standalone MenuIcon above.
+function DockMenuIcon({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className="w-[22px] h-[22px]">
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </svg>
+  )
+}
+
 // Shared by Navbar (members/admins) and BorrowerHeader (borrowers) -- one
 // dropdown instead of a dedicated "Menu" tab + full page for one role and
 // a bare 3-item dropdown for the other. Preferences is skipped for
 // borrowers -- it's entirely about defaults for Contribution/Loan Payment
 // transactions made through New Transaction, a flow borrowers don't have;
 // their own repayment form doesn't read those defaults.
-export function AccountMenu() {
+//
+// variant="dock" renders as a normal dock tab (icon + label, filling its
+// flex slot) with the dropdown opening upward from the bottom bar instead
+// of down from a small top-bar button -- used by Navbar's bottom dock.
+// variant="topbar" (default) is the standalone icon button BorrowerHeader
+// uses, which has no bottom dock to anchor to.
+export function AccountMenu({ variant = "topbar" }: { variant?: "topbar" | "dock" }) {
   const router = useRouter()
   const pathname = usePathname()
   const { member } = useAuth()
@@ -42,6 +61,7 @@ export function AccountMenu() {
   }, [open])
 
   const isBorrower = member?.role === "borrower"
+  const isDock = variant === "dock"
 
   async function logout() {
     await supabase.auth.signOut()
@@ -57,17 +77,32 @@ export function AccountMenu() {
     "w-full text-left px-4 py-2.5 text-sm text-ink-soft hover:text-ink hover:bg-paper-2 transition-colors border-b border-hairline"
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className={isDock ? "relative flex-1" : "relative"} ref={containerRef}>
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label="Menu"
-        className="w-9 h-9 flex items-center justify-center text-ink-soft hover:text-ink transition-colors"
+        className={
+          isDock
+            ? `w-full h-full flex flex-col items-center justify-center gap-1 transition-colors ${open ? "text-gold" : "text-ink-soft"}`
+            : "w-9 h-9 flex items-center justify-center text-ink-soft hover:text-ink transition-colors"
+        }
       >
-        <MenuIcon />
+        {isDock ? (
+          <>
+            <DockMenuIcon active={open} />
+            <span className={`text-[10px] font-mono ${open ? "font-semibold" : ""}`}>Menu</span>
+          </>
+        ) : (
+          <MenuIcon />
+        )}
       </button>
 
       {open && (
-        <div className="absolute z-50 right-0 mt-1.5 w-44 border border-hairline rounded-sm bg-paper shadow-lg overflow-hidden">
+        <div
+          className={`absolute z-50 right-0 w-44 border border-hairline rounded-sm bg-paper shadow-lg overflow-hidden ${
+            isDock ? "bottom-full mb-2" : "mt-1.5"
+          }`}
+        >
           {pathname !== "/account" && (
             <button onClick={() => go("/account")} className={itemClass}>
               Account
