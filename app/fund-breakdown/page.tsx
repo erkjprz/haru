@@ -7,7 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import { SkeletonCardList, SkeletonPanel } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import type { InterestType } from "@/lib/loanMath"
-import { formatInterestLabel } from "@/lib/loanFormat"
+import { formatInterestLabel, durationLabel } from "@/lib/loanFormat"
 import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
 import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
@@ -1537,6 +1537,9 @@ function LoanCard({
           <p className="text-[12px] text-ink-soft">
             {loan.borrower} · {dateLabel}
             {termLabel(loan) && ` · ${termLabel(loan)}`}
+            {loan.status === "closed" &&
+              durationLabel(loan.start_date, loan.closed_date) &&
+              ` · paid off in ${durationLabel(loan.start_date, loan.closed_date)}`}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">

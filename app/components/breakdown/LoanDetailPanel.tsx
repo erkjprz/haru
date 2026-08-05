@@ -13,7 +13,7 @@ import { closeLoanAndDistributeGain } from "@/lib/closeLoan"
 import { approveLoanRelease } from "@/lib/approveLoan"
 import { dateOnly } from "@/lib/currentValue"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
-import { formatInterestLabel } from "@/lib/loanFormat"
+import { formatInterestLabel, durationLabel } from "@/lib/loanFormat"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
@@ -630,6 +630,9 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
             bold
           />
           {closedLabel && <InfoRow label="Closed" value={closedLabel} />}
+          {durationLabel(loan.start_date, loan.closed_date) && (
+            <InfoRow label="Time to pay off" value={durationLabel(loan.start_date, loan.closed_date)!} />
+          )}
         </InfoBox>
       </div>
 
