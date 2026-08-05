@@ -13,7 +13,7 @@ import { closeLoanAndDistributeGain } from "@/lib/closeLoan"
 import { approveLoanRelease } from "@/lib/approveLoan"
 import { dateOnly } from "@/lib/currentValue"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
-import { formatInterestLabel, durationLabel } from "@/lib/loanFormat"
+import { formatInterestLabel, durationLabel, paymentOverdueLabel } from "@/lib/loanFormat"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
@@ -37,6 +37,8 @@ type Loan = {
   interest_amount: number | null
   term_months: number | null
   notes: string | null
+  repayment_frequency: string | null
+  last_repayment_date: string | null
 }
 
 type GainShare = {
@@ -557,6 +559,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         year: "numeric"
       })
     : null
+  const overdueLabel = paymentOverdueLabel(loan.status, loan.repayment_frequency, loan.start_date, loan.last_repayment_date)
 
   const totalShared = shares.reduce((sum, s) => sum + s.amount, 0)
   const totalHold = holds.reduce((sum, h) => sum + h.share * principalOutstanding, 0)
@@ -571,6 +574,12 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       <div className="flex items-center gap-2 mb-1">
         <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
         <span className={`text-[11px] font-mono uppercase tracking-wide ${meta.text}`}>{meta.label}</span>
+        {overdueLabel && (
+          <>
+            <span className="text-ink-soft">·</span>
+            <span className="text-[11px] font-mono uppercase tracking-wide text-rust">⚠ {overdueLabel}</span>
+          </>
+        )}
       </div>
       <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">{loan.loan}</h1>
       <p className="text-[13px] text-ink-soft mb-6">

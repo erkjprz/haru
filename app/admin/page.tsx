@@ -9,6 +9,7 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { getPendingBankInterestGroups, distributeBankInterestGroup, type PendingBankInterestGroup } from "@/lib/bankInterest"
 import { SupportPanel } from "@/app/components/admin/SupportPanel"
+import { BankQrPanel } from "@/app/components/admin/BankQrPanel"
 import { FlowBadge } from "@/app/components/TransactionFormUI"
 import { approveLoanRelease } from "@/lib/approveLoan"
 import { approveBorrowerMember } from "@/lib/approveBorrower"
@@ -1358,7 +1359,12 @@ export default function AdminPage() {
           )}
 
           {/* ---- Support ---- */}
-          {activeTab === "support" && <SupportPanel />}
+          {activeTab === "support" && (
+            <>
+              <SupportPanel />
+              <BankQrPanel />
+            </>
+          )}
 
         </div>
       </main>

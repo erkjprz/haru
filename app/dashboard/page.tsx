@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import { NotificationPrompt } from "@/app/components/NotificationPrompt"
+import ScanToPayCard from "@/app/components/ScanToPayCard"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
@@ -340,7 +341,11 @@ export default function DashboardPage() {
             <p className="text-[12px] text-gold font-semibold mt-2.5">View fund breakdown →</p>
           </button>
 
-          <h2 className="font-display text-[17px] font-medium text-ink mt-6 mb-2.5">Shortcuts</h2>
+          <div className="mt-4">
+            <ScanToPayCard />
+          </div>
+
+          <h2 className="font-display text-[17px] font-medium text-ink mt-2 mb-2.5">Shortcuts</h2>
           <div className="grid grid-cols-4 gap-2">
             <Shortcut
               label="Add Contribution"
