@@ -63,7 +63,9 @@ export default function ScanToPayCard() {
 
       {sheetOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/80 backdrop-blur-sm p-4"
+          // bg-black, not bg-ink -- ink is the light foreground color in
+          // dark mode, so bg-ink/80 dims the backdrop to near-white there.
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4"
           onClick={() => setSheetOpen(false)}
         >
           <div

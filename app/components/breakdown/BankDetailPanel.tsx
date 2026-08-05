@@ -15,6 +15,8 @@ import {
   distributeBankInterestGroup,
   type PendingBankInterestGroup
 } from "@/lib/bankInterest"
+import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
+import BankQrModal from "@/app/components/BankQrModal"
 
 type YearRow = { year: string; amount: number; memberCount: number }
 type InterestRow = {
@@ -23,6 +25,7 @@ type InterestRow = {
   bank: string | null
   bank_accounts: { bank_name: string }[] | null
 }
+type QrAccount = { id: string; account_name: string | null; qr_code_url: string }
 
 export function BankDetailPanel({
   bank,
@@ -46,6 +49,8 @@ export function BankDetailPanel({
   const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>([])
   const [distributingYear, setDistributingYear] = useState<number | null>(null)
   const [distributeError, setDistributeError] = useState("")
+  const [qrAccounts, setQrAccounts] = useState<QrAccount[]>([])
+  const [zoomedQr, setZoomedQr] = useState<QrAccount | null>(null)
 
   async function loadPending() {
     try {
@@ -92,11 +97,20 @@ export function BankDetailPanel({
       .select("allocation_date, amount, member_id")
       .eq("bank", bank)
 
-    const [balanceResult, interestResult, allocationsResult] = await Promise.all([
+    const qrPromise = supabase
+      .from("bank_accounts")
+      .select("id, account_name, qr_code_url")
+      .eq("bank_name", bank)
+      .not("qr_code_url", "is", null)
+
+    const [balanceResult, interestResult, allocationsResult, qrResult] = await Promise.all([
       balancePromise,
       interestPromise,
-      allocationsPromise
+      allocationsPromise,
+      qrPromise
     ])
+
+    if (!qrResult.error) setQrAccounts((qrResult.data as QrAccount[]) ?? [])
 
     if (balanceResult.error || !balanceResult.data) {
       setNotFound(true)
@@ -196,6 +210,36 @@ export function BankDetailPanel({
         <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Current Balance</p>
         <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">₱{fmt(balance)}</p>
       </div>
+
+      {qrAccounts.length > 0 && (
+        <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-4 mt-4">
+          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-3">Scan to Pay</p>
+          <div className="flex gap-3">
+            {qrAccounts.map((acct) => (
+              <button
+                key={acct.id}
+                onClick={() => setZoomedQr(acct)}
+                className="flex-1 flex flex-col items-center gap-1.5 bg-paper border border-hairline rounded-md py-3 hover:bg-paper-2 transition-colors"
+              >
+                <img
+                  src={getBankQrPublicUrl(acct.qr_code_url)}
+                  alt={`${bank} QR code`}
+                  className="w-20 h-20 object-contain rounded-sm"
+                />
+                <span className="text-[12px] font-semibold text-ink">{acct.account_name || bank}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {zoomedQr && (
+        <BankQrModal
+          title={zoomedQr.account_name || bank}
+          url={getBankQrPublicUrl(zoomedQr.qr_code_url)}
+          onClose={() => setZoomedQr(null)}
+        />
+      )}
 
       <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
         <InfoBox label="Interest">
