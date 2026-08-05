@@ -2249,6 +2249,14 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   const [affectsCash, setAffectsCash] = useState(true)
   const [saving, setSaving] = useState(false)
   const [formMessage, setFormMessage] = useState("")
+  const editFormRef = useRef<HTMLDivElement | null>(null)
+
+  // Same fix as BanksPanel: scroll the opened form into view the moment it
+  // mounts, once per editingId change (editFormRef is a stable object ref,
+  // only reassigned when the underlying DOM node itself mounts/unmounts).
+  useEffect(() => {
+    if (editingId) editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+  }, [editingId])
 
   async function load() {
     const { data, error } = await supabase.from("v_investment_summary").select("*").order("investment")
@@ -2371,7 +2379,7 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
     const isEditingThis = isAdmin && manageMode && editingId === inv.investment_id
 
     return (
-      <div key={inv.investment_id}>
+      <div key={inv.investment_id} ref={isEditingThis ? editFormRef : undefined}>
         <InvestmentCard
           inv={inv}
           fmt={fmt}
