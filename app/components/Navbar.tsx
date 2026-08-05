@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
 import { NotificationBell } from "@/app/components/NotificationBell"
+import { AccountMenu } from "@/app/components/AccountMenu"
 
 function IconHome({ active }: { active: boolean }) {
   return (
@@ -37,17 +38,6 @@ function IconAdmin({ active }: { active: boolean }) {
   )
 }
 
-function IconMenu({ active }: { active: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.25 : 1.75} className="w-[22px] h-[22px]">
-      <rect x="4" y="4" width="7" height="7" rx="1.5" />
-      <rect x="13" y="4" width="7" height="7" rx="1.5" />
-      <rect x="4" y="13" width="7" height="7" rx="1.5" />
-      <rect x="13" y="13" width="7" height="7" rx="1.5" />
-    </svg>
-  )
-}
-
 type DockItem = {
   label: string
   path: string
@@ -70,23 +60,11 @@ export default function Navbar() {
 
   const onNewTransactionPage = pathname.startsWith("/transactions/new")
 
-  // Everything that doesn't get its own docked tab still lives somewhere
-  // -- on the Menu page -- so Menu reads as "active" while browsing any of
-  // it, the same way Transactions stays active on a transaction's own
-  // pages even though there's no separate "Transactions" sub-route tab.
-  const MENU_OWNED_PREFIXES = ["/menu", "/account", "/help"]
-
   const dockItems: DockItem[] = [
     { label: "Dashboard", path: "/dashboard", icon: IconHome },
     { label: "Transactions", path: "/transactions", icon: IconTransactions },
     { label: "Breakdown", path: "/fund-breakdown", icon: IconBreakdown },
-    ...(isAdmin ? [{ label: "Admin", path: "/admin", icon: IconAdmin } as DockItem] : []),
-    {
-      label: "Menu",
-      path: "/menu",
-      icon: IconMenu,
-      activeWhen: (p) => MENU_OWNED_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix + "/"))
-    }
+    ...(isAdmin ? [{ label: "Admin", path: "/admin", icon: IconAdmin } as DockItem] : [])
   ]
 
   function isActive(item: DockItem) {
@@ -112,6 +90,7 @@ export default function Navbar() {
           </span>
           <div className="flex items-center gap-2">
             <NotificationBell />
+            <AccountMenu />
             {!onNewTransactionPage && (
               <button
                 onClick={() => router.push("/transactions/new")}
