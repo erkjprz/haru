@@ -1638,6 +1638,17 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   const [accountName, setAccountName] = useState("")
   const [saving, setSaving] = useState(false)
   const [formMessage, setFormMessage] = useState("")
+  const editFormRef = useRef<HTMLDivElement | null>(null)
+
+  // Tapping Edit on a bank further down the list reveals its form inline,
+  // below the fold -- with nothing to indicate the tap even registered.
+  // Scrolls the opened form into view the moment it mounts (once per
+  // editingId change, not on every keystroke -- editFormRef is a stable
+  // object ref, only reassigned when the underlying DOM node itself
+  // mounts/unmounts).
+  useEffect(() => {
+    if (editingId) editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+  }, [editingId])
 
   async function load() {
     const bankAccountsPromise = supabase.from("bank_accounts").select("*").order("bank_name")
@@ -1911,7 +1922,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
           const isEditingThis = isAdmin && manageMode && !!acct && editingId === acct.id
 
           return (
-            <div key={b.bank}>
+            <div key={b.bank} ref={isEditingThis ? editFormRef : undefined}>
               <BankCard
                 bank={b}
                 fmt={fmt}
@@ -2238,6 +2249,14 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   const [affectsCash, setAffectsCash] = useState(true)
   const [saving, setSaving] = useState(false)
   const [formMessage, setFormMessage] = useState("")
+  const editFormRef = useRef<HTMLDivElement | null>(null)
+
+  // Same fix as BanksPanel: scroll the opened form into view the moment it
+  // mounts, once per editingId change (editFormRef is a stable object ref,
+  // only reassigned when the underlying DOM node itself mounts/unmounts).
+  useEffect(() => {
+    if (editingId) editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+  }, [editingId])
 
   async function load() {
     const { data, error } = await supabase.from("v_investment_summary").select("*").order("investment")
@@ -2360,7 +2379,7 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
     const isEditingThis = isAdmin && manageMode && editingId === inv.investment_id
 
     return (
-      <div key={inv.investment_id}>
+      <div key={inv.investment_id} ref={isEditingThis ? editFormRef : undefined}>
         <InvestmentCard
           inv={inv}
           fmt={fmt}

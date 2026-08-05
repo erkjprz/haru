@@ -15,7 +15,7 @@
 // just create a new inconsistency -- they show up in search but can't be
 // opened for editing.
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 import { ReceiptField } from "@/app/components/TransactionFormUI"
@@ -56,6 +56,15 @@ export function SupportPanel() {
   const [loadError, setLoadError] = useState("")
   const [query, setQuery] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
+  const editFormRef = useRef<HTMLDivElement | null>(null)
+
+  // Same fix as BanksPanel/InvestmentsPanel: scroll the opened row's form
+  // into view the moment it mounts, once per editingId change (editFormRef
+  // is a stable object ref, only reassigned when the underlying DOM node
+  // itself mounts/unmounts).
+  useEffect(() => {
+    if (editingId) editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+  }, [editingId])
 
   // Loaded once, when this tab is actually opened (this component only
   // mounts then) -- not up front with the rest of Admin's data, since this
@@ -160,20 +169,21 @@ export function SupportPanel() {
 
           <div className="mt-3 flex flex-col gap-3">
             {results.map((t) => (
-              <SupportRow
-                key={t.transaction_id}
-                t={t}
-                banks={banks}
-                fmt={fmt}
-                isEditing={editingId === t.transaction_id}
-                onToggle={() => setEditingId(editingId === t.transaction_id ? null : t.transaction_id)}
-                onSaved={(updated) => {
-                  setTransactions((rows) =>
-                    rows.map((r) => (r.transaction_id === updated.transaction_id ? { ...r, ...updated } : r))
-                  )
-                  setEditingId(null)
-                }}
-              />
+              <div key={t.transaction_id} ref={editingId === t.transaction_id ? editFormRef : undefined}>
+                <SupportRow
+                  t={t}
+                  banks={banks}
+                  fmt={fmt}
+                  isEditing={editingId === t.transaction_id}
+                  onToggle={() => setEditingId(editingId === t.transaction_id ? null : t.transaction_id)}
+                  onSaved={(updated) => {
+                    setTransactions((rows) =>
+                      rows.map((r) => (r.transaction_id === updated.transaction_id ? { ...r, ...updated } : r))
+                    )
+                    setEditingId(null)
+                  }}
+                />
+              </div>
             ))}
           </div>
         </>

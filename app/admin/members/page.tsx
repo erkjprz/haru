@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Navbar from "@/app/components/Navbar"
 import { supabase } from "@/lib/supabase"
@@ -24,6 +24,17 @@ export default function AdminMembersPage() {
   const [editRole, setEditRole] = useState("member")
   const [editStatus, setEditStatus] = useState("approved")
   const [editGainSharingEligible, setEditGainSharingEligible] = useState(true)
+  const editFormRef = useRef<HTMLDivElement | null>(null)
+
+  // Tapping Edit on a member further down the list expands a tall form in
+  // place, easily below the fold with nothing to indicate the tap
+  // registered. Scrolls it into view the moment it mounts (once per
+  // editingId change, not on every keystroke -- editFormRef is a stable
+  // object ref, only reassigned when the underlying DOM node itself
+  // mounts/unmounts).
+  useEffect(() => {
+    if (editingId) editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+  }, [editingId])
 
   const [search, setSearch] = useState("")
 
@@ -332,6 +343,7 @@ export default function AdminMembersPage() {
             {filteredMembers.map((member) => (
               <div
                 key={member.member_id}
+                ref={editingId === member.member_id ? editFormRef : undefined}
                 className="bg-paper-2 border border-hairline rounded-md p-5"
               >
                 {editingId === member.member_id ? (
