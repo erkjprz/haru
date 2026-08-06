@@ -78,3 +78,71 @@ body {
     font-size: 16px !important;
   }
 }
+
+/* SproutMark load animation -- ground and stem draw in via stroke offset,
+   leaves and bud pop in via scale. Runs once; not a looping/ambient
+   animation, so no infinite/alternate here. */
+@keyframes sprout-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes sprout-pop {
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.sprout-ground {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+}
+
+.sprout-stem {
+  stroke-dasharray: 52;
+  stroke-dashoffset: 52;
+}
+
+.sprout-leaf,
+.sprout-bud {
+  transform-box: fill-box;
+  transform-origin: 0 0;
+  transform: scale(0);
+  opacity: 0;
+}
+
+.sprout-bud {
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sprout-ground {
+    animation: sprout-draw 0.25s ease-out forwards;
+  }
+  .sprout-stem {
+    animation: sprout-draw 0.4s ease-out 0.15s forwards;
+  }
+  .sprout-leaf-l {
+    animation: sprout-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) 0.5s forwards;
+  }
+  .sprout-leaf-r {
+    animation: sprout-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) 0.6s forwards;
+  }
+  .sprout-bud {
+    animation: sprout-pop 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) 0.78s forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sprout-ground,
+  .sprout-stem {
+    stroke-dashoffset: 0;
+  }
+  .sprout-leaf,
+  .sprout-bud {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
