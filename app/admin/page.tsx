@@ -91,6 +91,8 @@ export default function AdminPage() {
   const [uploadingReceiptId, setUploadingReceiptId] = useState<string | null>(null)
   const [selectedBulkIds, setSelectedBulkIds] = useState<Set<string>>(new Set())
   const [bulkApproving, setBulkApproving] = useState(false)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState("")
   const [editAmounts, setEditAmounts] = useState<Record<string, string>>({})
   const [editInterestRate, setEditInterestRate] = useState<Record<string, string>>({})
   const [editInterestAmount, setEditInterestAmount] = useState<Record<string, string>>({})
@@ -344,7 +346,7 @@ export default function AdminPage() {
     loadData()
   }
 
-  async function rejectTransaction(transactionId: string) {
+  async function rejectTransaction(transactionId: string, reason: string) {
     const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
     const isLoanRelease = txn?.classification === "Loan Release" && txn.loan_id
 
@@ -355,9 +357,14 @@ export default function AdminPage() {
       // the reference has to be cleared before the loan row can be deleted --
       // same fix already used by the member-facing "Cancel entry" flow on
       // /transactions/[id]/edit.
+      const trimmedReason = reason.trim() || null
       const { error: txnError } = await supabase
         .from("transactions")
-        .update(isLoanRelease ? { status: "rejected", loan_id: null } : { status: "rejected" })
+        .update(
+          isLoanRelease
+            ? { status: "rejected", loan_id: null, rejection_reason: trimmedReason }
+            : { status: "rejected", rejection_reason: trimmedReason }
+        )
         .eq("transaction_id", transactionId)
       if (txnError) throw txnError
 
@@ -389,6 +396,8 @@ export default function AdminPage() {
       return next
     })
 
+    setRejectingId(null)
+    setRejectReason("")
     loadData()
   }
 
@@ -925,45 +934,58 @@ export default function AdminPage() {
 
                     <div className="mt-3 border-t border-hairline">
                       {bulkTransactions.map((t) => (
-                        <div
-                          key={t.transaction_id}
-                          className="flex items-center gap-3 py-3 border-b border-hairline"
-                        >
-                          <input
-                            type="checkbox"
-                            className="w-[18px] h-[18px] accent-ink shrink-0"
-                            checked={selectedBulkIds.has(t.transaction_id)}
-                            onChange={() => toggleBulkSelected(t.transaction_id)}
-                          />
-                          <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "in" })} small />
-                          <div className="min-w-0 flex-1">
-                            <p className="font-display font-medium truncate">{t.members?.name || "Fund"}</p>
-                            <p className="text-xs text-ink-soft">
-                              {typeLabels[t.classification] || t.classification}
-                              {t.bank_accounts && ` · ${t.bank_accounts.account_name || t.bank_accounts.bank_name}`}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
-                            <div className="flex items-center justify-end gap-2 mt-0.5">
-                              {t.receipt_url && (
+                        <div key={t.transaction_id} className="border-b border-hairline">
+                          <div className="flex items-center gap-3 py-3">
+                            <input
+                              type="checkbox"
+                              className="w-[18px] h-[18px] accent-ink shrink-0"
+                              checked={selectedBulkIds.has(t.transaction_id)}
+                              onChange={() => toggleBulkSelected(t.transaction_id)}
+                            />
+                            <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "in" })} small />
+                            <div className="min-w-0 flex-1">
+                              <p className="font-display font-medium truncate">{t.members?.name || "Fund"}</p>
+                              <p className="text-xs text-ink-soft">
+                                {typeLabels[t.classification] || t.classification}
+                                {t.bank_accounts && ` · ${t.bank_accounts.account_name || t.bank_accounts.bank_name}`}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
+                              <div className="flex items-center justify-end gap-2 mt-0.5">
+                                {t.receipt_url && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenReceiptUrl(t.receipt_url)}
+                                    className="text-[11px] text-gold hover:underline"
+                                  >
+                                    🧾 Receipt
+                                  </button>
+                                )}
                                 <button
                                   type="button"
-                                  onClick={() => setOpenReceiptUrl(t.receipt_url)}
-                                  className="text-[11px] text-gold hover:underline"
+                                  onClick={() => {
+                                    setRejectingId(t.transaction_id)
+                                    setRejectReason("")
+                                  }}
+                                  className="text-[11px] text-ink-soft hover:text-rust hover:underline"
                                 >
-                                  🧾 Receipt
+                                  Reject
                                 </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => rejectTransaction(t.transaction_id)}
-                                className="text-[11px] text-ink-soft hover:text-rust hover:underline"
-                              >
-                                Reject
-                              </button>
+                              </div>
                             </div>
                           </div>
+                          {rejectingId === t.transaction_id && (
+                            <RejectReasonPrompt
+                              reason={rejectReason}
+                              onChangeReason={setRejectReason}
+                              onCancel={() => {
+                                setRejectingId(null)
+                                setRejectReason("")
+                              }}
+                              onConfirm={() => rejectTransaction(t.transaction_id, rejectReason)}
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1200,11 +1222,26 @@ export default function AdminPage() {
                                 </button>
                                 <button
                                   className="border border-hairline px-4 py-2 rounded-md text-sm"
-                                  onClick={() => rejectTransaction(t.transaction_id)}
+                                  onClick={() => {
+                                    setRejectingId(t.transaction_id)
+                                    setRejectReason("")
+                                  }}
                                 >
                                   Reject
                                 </button>
                               </div>
+
+                              {rejectingId === t.transaction_id && (
+                                <RejectReasonPrompt
+                                  reason={rejectReason}
+                                  onChangeReason={setRejectReason}
+                                  onCancel={() => {
+                                    setRejectingId(null)
+                                    setRejectReason("")
+                                  }}
+                                  onConfirm={() => rejectTransaction(t.transaction_id, rejectReason)}
+                                />
+                              )}
 
                               {(t.description || !needsLoanBank || t.receipt_url) && (
                                 <div className="mt-4 pt-3 border-t border-hairline space-y-2">
@@ -1365,5 +1402,53 @@ export default function AdminPage() {
 
       {openReceiptUrl && <ReceiptModal path={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
+  )
+}
+
+// Inline reason box shown under a row once its Reject button is clicked.
+// The reason is saved on the transaction and pushed to the submitter as
+// part of their "not approved" notification, so it's optional but
+// encouraged -- rejecting with nothing typed still goes through.
+function RejectReasonPrompt({
+  reason,
+  onChangeReason,
+  onCancel,
+  onConfirm
+}: {
+  reason: string
+  onChangeReason: (value: string) => void
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="pb-3 -mt-1">
+      <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+        Reason (shown to the submitter)
+      </label>
+      <textarea
+        autoFocus
+        rows={2}
+        value={reason}
+        onChange={(e) => onChangeReason(e.target.value)}
+        placeholder="e.g. Receipt doesn't match the amount"
+        className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper"
+      />
+      <div className="flex gap-2 mt-2">
+        <button
+          type="button"
+          className="bg-rust text-paper px-3 py-1.5 rounded-md text-sm"
+          onClick={onConfirm}
+        >
+          Confirm reject
+        </button>
+        <button
+          type="button"
+          className="border border-hairline px-3 py-1.5 rounded-md text-sm"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   )
 }

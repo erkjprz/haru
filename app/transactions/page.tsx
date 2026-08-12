@@ -918,6 +918,9 @@ function TransactionsPageInner() {
                         )}
                       </div>
                     )}
+                    {transaction.status === "rejected" && transaction.rejection_reason && (
+                      <p className="col-span-2 text-xs text-rust">{transaction.rejection_reason}</p>
+                    )}
                   </div>
                 </div>
               )
