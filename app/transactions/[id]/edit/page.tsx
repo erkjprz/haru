@@ -109,6 +109,7 @@ export default function EditTransactionPage() {
 
   const [classification, setClassification] = useState("")
   const [status, setStatus] = useState("")
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null)
   const [bankId, setBankId] = useState("")
   const [toBankId, setToBankId] = useState("")
   const [loanId, setLoanId] = useState("")
@@ -227,10 +228,18 @@ export default function EditTransactionPage() {
       // Transactions list.
       const isOwnAdminEntry = txn ? txn.submitted_by == null || txn.submitted_by === member.member_id : false
 
+      // A member-owned row stays editable through a rejection too -- saving
+      // it then resubmits it (see handleSave), so a member can fix whatever
+      // the reason called out instead of starting a new entry from scratch.
+      // Loan Release doesn't get this: rejecting one deletes its loan record
+      // entirely (see rejectTransaction in /admin), so a rejected Loan
+      // Release has nothing left to resubmit and stays admin-only/pending.
       const editable =
         txn &&
         !error &&
-        ((isMemberType && txn.member_id === member.member_id && txn.status === "pending") ||
+        ((isMemberType &&
+          txn.member_id === member.member_id &&
+          (txn.status === "pending" || txn.status === "rejected")) ||
           (isAdminSimpleType && isAdmin && txn.status !== "cancelled" && isOwnAdminEntry) ||
           (isLoanReleaseType && isAdmin && txn.status === "pending" && loanRecord?.status === "requested"))
 
@@ -242,6 +251,7 @@ export default function EditTransactionPage() {
 
       setClassification(txn.classification)
       setStatus(txn.status)
+      setRejectionReason(txn.rejection_reason ?? null)
       setBankId(txn.bank_account_id ?? "")
       setToBankId(txn.to_bank_account_id ?? "")
       setInvestmentId(txn.investment_id ?? "")
@@ -525,9 +535,11 @@ export default function EditTransactionPage() {
 
     // The `editable` check on load only confirmed this row's status at that
     // moment -- re-checking it here too guards against a stale page: a
-    // member-owned row must still be pending (an admin approving/rejecting
-    // it elsewhere shouldn't have this save silently overwrite that), and
-    // an admin-entered row must still not be cancelled.
+    // member-owned row must still be pending or rejected (an admin approving
+    // it elsewhere shouldn't have this save silently overwrite that), and an
+    // admin-entered row must still not be cancelled.
+    const isMemberOwnedType = MEMBER_EDITABLE.includes(classification) || isMemberOwned
+
     let updateQuery = supabase
       .from("transactions")
       .update({
@@ -538,12 +550,16 @@ export default function EditTransactionPage() {
         investment_id: isInvestmentEntry ? investmentId : null,
         description,
         receipt_url: receiptUrl,
-        ...(isInvestmentEntry ? { affects_cash: selectedInvestment?.affects_cash ? 1 : 0 } : {})
+        ...(isInvestmentEntry ? { affects_cash: selectedInvestment?.affects_cash ? 1 : 0 } : {}),
+        // Saving a rejected row resubmits it -- flip it back to pending and
+        // clear the stale reason so it re-enters the review queue clean.
+        // A no-op write when it was already pending.
+        ...(isMemberOwnedType ? { status: "pending", rejection_reason: null } : {})
       })
       .eq("transaction_id", transactionId)
 
-    updateQuery = MEMBER_EDITABLE.includes(classification) || isMemberOwned
-      ? updateQuery.eq("status", "pending")
+    updateQuery = isMemberOwnedType
+      ? updateQuery.in("status", ["pending", "rejected"])
       : updateQuery.neq("status", "cancelled")
 
     const { data: txnRows, error } = await updateQuery.select("transaction_id")
@@ -733,6 +749,19 @@ export default function EditTransactionPage() {
               </span>
             </div>
           </div>
+
+          {status === "rejected" && (
+            <p className="text-[11px] text-rust bg-rust/10 border border-rust rounded-md px-3 py-2 mt-4">
+              <span className="font-bold uppercase tracking-wide font-mono">Rejected</span>
+              {/* The rest of the sentence is built as one string inside the
+                  expression, not as adjacent JSX text -- JSX collapses a
+                  literal space sitting right after a {expression} on a line
+                  break, which silently ate the gap before "Fix" here. */}
+              {rejectionReason
+                ? `: ${rejectionReason} Fix what's wrong and save to send it back for review.`
+                : " -- no reason was given. Fix what's wrong and save to send it back for review."}
+            </p>
+          )}
 
           {classification === "Bank Interest" && interestDistributed && (
             <p className="text-[11px] text-gold bg-gold/10 border border-gold rounded-md px-3 py-2 mt-4">
@@ -1028,21 +1057,27 @@ export default function EditTransactionPage() {
               </>
             )}
 
-            <FieldGroup>
-              <p className="text-xs text-ink-soft mb-3">
-                {isLoanRelease
-                  ? "Changed your mind? This cancels the loan request and removes its pending disbursement entirely -- it can't be undone from the app."
-                  : "Changed your mind? This entry will be marked cancelled and removed from the transaction list -- it can't be undone from the app."}
-              </p>
-              <button
-                type="button"
-                onClick={handleCancelEntry}
-                disabled={cancelling}
-                className="w-full text-sm font-semibold text-rust border border-rust rounded-sm px-4 py-2.5 disabled:opacity-50"
-              >
-                {cancelling ? "Cancelling…" : "Cancel this entry"}
-              </button>
-            </FieldGroup>
+            {/* handleCancelEntry's guard still requires status="pending" --
+                a rejected row is already out of the review queue, so there's
+                nothing left to cancel here; Save either resubmits it or the
+                member just navigates away and leaves it rejected. */}
+            {status !== "rejected" && (
+              <FieldGroup>
+                <p className="text-xs text-ink-soft mb-3">
+                  {isLoanRelease
+                    ? "Changed your mind? This cancels the loan request and removes its pending disbursement entirely -- it can't be undone from the app."
+                    : "Changed your mind? This entry will be marked cancelled and removed from the transaction list -- it can't be undone from the app."}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCancelEntry}
+                  disabled={cancelling}
+                  className="w-full text-sm font-semibold text-rust border border-rust rounded-sm px-4 py-2.5 disabled:opacity-50"
+                >
+                  {cancelling ? "Cancelling…" : "Cancel this entry"}
+                </button>
+              </FieldGroup>
+            )}
           </div>
         </div>
       </main>
@@ -1070,7 +1105,13 @@ export default function EditTransactionPage() {
             onClick={isLoanRelease && formStep === 1 ? handleContinueToReview : handleSave}
             disabled={saving}
           >
-            {saving ? "Saving…" : isLoanRelease && formStep === 1 ? "Continue" : "Save Changes"}
+            {saving
+              ? "Saving…"
+              : isLoanRelease && formStep === 1
+              ? "Continue"
+              : status === "rejected"
+              ? "Resubmit"
+              : "Save Changes"}
           </button>
         </div>
       </div>

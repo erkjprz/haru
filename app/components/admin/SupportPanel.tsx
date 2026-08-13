@@ -267,6 +267,7 @@ function SupportEditForm({
   const [bankAccountId, setBankAccountId] = useState(t.bank_account_id ?? legacyBankMatch?.id ?? "")
   const [txnDate, setTxnDate] = useState(t.txn_date ?? "")
   const [status, setStatus] = useState(t.status)
+  const [rejectionReason, setRejectionReason] = useState(t.rejection_reason ?? "")
   const [receipt, setReceipt] = useState<File | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -368,6 +369,10 @@ function SupportEditForm({
       bank: bankAccountId ? null : t.bank,
       txn_date: txnDate || null,
       status,
+      // Only meaningful while rejected -- clears itself the moment status
+      // moves elsewhere, same as the normal Reject button never leaving a
+      // stale reason behind on a transaction that's since been approved.
+      rejection_reason: status === "rejected" ? rejectionReason.trim() || null : null,
       receipt_url: receiptUrl
     }
     if (isUnapprovedLoanRelease) updates.loan_id = null
@@ -506,6 +511,21 @@ function SupportEditForm({
           ))}
         </select>
       </div>
+
+      {status === "rejected" && (
+        <div>
+          <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">
+            Rejection reason (shown to the submitter)
+          </label>
+          <textarea
+            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full"
+            rows={2}
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            placeholder="e.g. Receipt doesn't match the amount"
+          />
+        </div>
+      )}
 
       <div>
         <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">Description</label>

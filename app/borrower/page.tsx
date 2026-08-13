@@ -16,6 +16,7 @@ type Repayment = {
   amount: number
   status: "pending" | "approved" | "rejected" | "cancelled"
   date: string
+  rejection_reason: string | null
 }
 
 type Loan = {
@@ -87,7 +88,7 @@ export default function BorrowerPage() {
       const { data: allTxns, error: txnsError } = loanIds.length
         ? await supabase
             .from("transactions")
-            .select("transaction_id, loan_id, classification, amount, status, txn_date, created_at")
+            .select("transaction_id, loan_id, classification, amount, status, txn_date, created_at, rejection_reason")
             .in("loan_id", loanIds)
             .neq("status", "cancelled")
             .order("txn_date", { ascending: false })
@@ -132,7 +133,8 @@ export default function BorrowerPage() {
             transaction_id: t.transaction_id,
             amount: Number(t.amount),
             status: t.status,
-            date: t.txn_date ?? t.created_at
+            date: t.txn_date ?? t.created_at,
+            rejection_reason: t.rejection_reason ?? null
           }))
         }
       })
@@ -278,39 +280,44 @@ export default function BorrowerPage() {
                       </p>
                       <div className="space-y-2">
                         {loan.repayments.map((r) => (
-                          <div key={r.transaction_id} className="flex items-center justify-between gap-2">
-                            <span className="text-[12px] text-ink-soft">
-                              {new Date(r.date).toLocaleDateString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric"
-                              })}
-                            </span>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span
-                                className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
-                                  r.status === "approved"
-                                    ? "text-sage border-sage/40"
-                                    : r.status === "rejected"
-                                    ? "text-rust border-rust/40"
-                                    : "text-gold border-gold/40"
-                                }`}
-                              >
-                                {r.status}
+                          <div key={r.transaction_id}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[12px] text-ink-soft">
+                                {new Date(r.date).toLocaleDateString(undefined, {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric"
+                                })}
                               </span>
-                              <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
-                                ₱{fmt(r.amount)}
-                              </span>
-                              {r.status === "pending" && (
-                                <button
-                                  type="button"
-                                  onClick={() => router.push(`/transactions/${r.transaction_id}/edit`)}
-                                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gold font-mono"
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span
+                                  className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                                    r.status === "approved"
+                                      ? "text-sage border-sage/40"
+                                      : r.status === "rejected"
+                                      ? "text-rust border-rust/40"
+                                      : "text-gold border-gold/40"
+                                  }`}
                                 >
-                                  ✎ Edit
-                                </button>
-                              )}
+                                  {r.status}
+                                </span>
+                                <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
+                                  ₱{fmt(r.amount)}
+                                </span>
+                                {(r.status === "pending" || r.status === "rejected") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(`/transactions/${r.transaction_id}/edit`)}
+                                    className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gold font-mono"
+                                  >
+                                    {r.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
+                                  </button>
+                                )}
+                              </div>
                             </div>
+                            {r.status === "rejected" && r.rejection_reason && (
+                              <p className="mt-0.5 text-[11px] text-rust">{r.rejection_reason}</p>
+                            )}
                           </div>
                         ))}
                       </div>

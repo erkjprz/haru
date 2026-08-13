@@ -773,15 +773,20 @@ function TransactionsPageInner() {
               const showStatus = transaction.status !== "approved"
 
               // Member-submitted entries: editable by their owner while
-              // still pending. Loan Release is excluded from self-service
+              // still pending, or after a rejection -- editing a rejected row
+              // resubmits it (flips it back to pending, see the edit page's
+              // handleSave). Loan Release is excluded from self-service
               // editing -- it's paired with a loans row a member has no
-              // rights to touch -- but an admin can edit/cancel it while
-              // it's still pending (the loan itself is still "requested";
-              // once approved, transaction.status flips to "approved" too,
-              // so this stays a reliable proxy without a separate query).
-              // This first branch already covers a member's own pending
-              // Investment Return too (see /transactions/new), since it's a
-              // generic "pending row I own" check, not classification-gated.
+              // rights to touch, and a rejected Loan Release has already had
+              // its loan record deleted (see rejectTransaction in
+              // /admin), so there's nothing left to resubmit -- but an admin
+              // can edit/cancel it while it's still pending (the loan itself
+              // is still "requested"; once approved, transaction.status flips
+              // to "approved" too, so this stays a reliable proxy without a
+              // separate query). This first branch already covers a member's
+              // own pending/rejected Investment Return too (see
+              // /transactions/new), since it's a generic "row I own" check,
+              // not classification-gated.
               // Admin entries (Bank Interest/Expense/Bank Transfer/
               // Investment) are always inserted already-approved with no
               // owning member, so editing is restricted to whichever admin
@@ -794,7 +799,7 @@ function TransactionsPageInner() {
               // guard, this branch would let any admin edit a member's still
               // -pending submission directly, bypassing the review queue.
               const canEdit =
-                (transaction.status === "pending" &&
+                ((transaction.status === "pending" || transaction.status === "rejected") &&
                   transaction.member_id === member?.member_id &&
                   transaction.classification !== "Loan Release") ||
                 (isAdmin &&
@@ -913,10 +918,13 @@ function TransactionsPageInner() {
                             onClick={() => router.push(`/transactions/${transaction.transaction_id}/edit`)}
                             className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gold font-mono"
                           >
-                            ✎ Edit
+                            {transaction.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
                           </button>
                         )}
                       </div>
+                    )}
+                    {transaction.status === "rejected" && transaction.rejection_reason && (
+                      <p className="col-span-2 text-xs text-rust">{transaction.rejection_reason}</p>
                     )}
                   </div>
                 </div>
