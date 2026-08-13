@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
-import { ReceiptField } from "@/app/components/TransactionFormUI"
+import { ReceiptField, DateField } from "@/app/components/TransactionFormUI"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 
 const STATUS_OPTIONS = ["pending", "approved", "rejected", "cancelled"]
@@ -466,12 +466,7 @@ function SupportEditForm({
 
       <div>
         <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">Date</label>
-        <input
-          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full font-mono"
-          type="date"
-          value={txnDate ?? ""}
-          onChange={(e) => setTxnDate(e.target.value)}
-        />
+        <DateField value={txnDate ?? ""} onChange={setTxnDate} placeholder="Date" />
       </div>
 
       <div>

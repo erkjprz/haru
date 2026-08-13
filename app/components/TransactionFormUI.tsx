@@ -312,3 +312,61 @@ export function RequiredMark() {
     </span>
   )
 }
+
+function formatFull(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  })
+}
+
+// Transparent native date input layered over a styled div -- the native
+// input still handles the actual tap-to-open-picker interaction (including
+// iOS's wheel picker) and stays reachable everywhere in the box, but the
+// visible text is entirely ours: a real calendar icon, a formatted date
+// once one's picked, and an actual visible placeholder when empty. A bare
+// `<input type="date">` styled directly (border/padding classes like every
+// other field) looks fine on desktop but renders taller than its siblings
+// on iOS Safari -- the native date control there ignores the same padding
+// a text input respects, so the box grows to fit its own UA chrome instead
+// of the one we asked for. Layering it under a div we fully control sidesteps
+// that entirely instead of fighting WebKit's internal layout for it.
+export function DateField({
+  value,
+  onChange,
+  placeholder
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+}) {
+  return (
+    <div className="relative h-11">
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={placeholder}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [color-scheme:dark]"
+      />
+      <div
+        className={`pointer-events-none h-full flex items-center gap-2 border rounded-md px-3 text-sm font-mono ${
+          value ? "border-gold text-ink" : "border-hairline text-ink-soft"
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          className="w-[15px] h-[15px] shrink-0 text-ink-soft"
+        >
+          <rect x="3.5" y="5" width="17" height="16" rx="2" />
+          <path d="M8 3v4M16 3v4M3.5 10h17" strokeLinecap="round" />
+        </svg>
+        <span className="truncate">{value ? formatFull(value) : placeholder}</span>
+      </div>
+    </div>
+  )
+}

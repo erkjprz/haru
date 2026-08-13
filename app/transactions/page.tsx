@@ -9,6 +9,7 @@ import { SkeletonCardList } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
+import { DateField } from "@/app/components/TransactionFormUI"
 
 const typeColor: Record<string, string> = {
   "Member Contribution": "text-sage border-sage",
@@ -66,17 +67,6 @@ function formatShort(isoDate: string): string {
   })
 }
 
-// Same as formatShort but with the year -- used in the filter sheet's date
-// fields themselves, where there's room and the year matters (unlike the
-// compact chip label above the list, which already has less space).
-function formatFull(isoDate: string): string {
-  return new Date(`${isoDate}T00:00:00`).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  })
-}
-
 type DatePreset = { key: string; label: string; from: string; to: string }
 
 // Computed fresh each render off the current date rather than memoized --
@@ -108,52 +98,6 @@ function buildDatePresets(): DatePreset[] {
     },
     { key: "all_time", label: "All Time", from: "", to: "" }
   ]
-}
-
-// Transparent native date input layered over a styled div -- the native
-// input still handles the actual tap-to-open-picker interaction (including
-// iOS's wheel picker) and stays reachable everywhere in the box, but the
-// visible text is entirely ours: a real calendar icon, a formatted date
-// once one's picked, and an actual visible placeholder when empty (an
-// empty native date input's own placeholder rendered invisible against
-// this dark theme).
-function DateField({
-  value,
-  onChange,
-  placeholder
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder: string
-}) {
-  return (
-    <div className="relative h-11">
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={placeholder}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [color-scheme:dark]"
-      />
-      <div
-        className={`pointer-events-none h-full flex items-center gap-2 border rounded-md px-3 text-sm font-mono ${
-          value ? "border-gold text-ink" : "border-hairline text-ink-soft"
-        }`}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.8}
-          className="w-[15px] h-[15px] shrink-0 text-ink-soft"
-        >
-          <rect x="3.5" y="5" width="17" height="16" rx="2" />
-          <path d="M8 3v4M16 3v4M3.5 10h17" strokeLinecap="round" />
-        </svg>
-        <span className="truncate">{value ? formatFull(value) : placeholder}</span>
-      </div>
-    </div>
-  )
 }
 
 // ~75% of rows have a description that's just the member's name typed back
