@@ -866,19 +866,19 @@ function NewTransactionForm() {
             />
           </div>
 
-          <div className="mt-4">
-            <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">
-              Date
-              <RequiredMark />
-            </label>
-            <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" />
-          </div>
-
           <div className="space-y-4 mt-4">
             {!isStepped && (
               <>
                 <FieldGroup label="Details">
                   <div className="space-y-4">
+                  <div>
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                      Date
+                      <RequiredMark />
+                    </label>
+                    <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" />
+                  </div>
+
                   {onBehalfOfField}
 
                   {isLoanPayment && (
@@ -1027,6 +1027,14 @@ function NewTransactionForm() {
                   <>
                     <FieldGroup>
                       <div className="space-y-4">
+                      <div>
+                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                          Date
+                          <RequiredMark />
+                        </label>
+                        <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" />
+                      </div>
+
                       {onBehalfOfField}
 
                       {isInvestmentEntry && (
