@@ -753,8 +753,13 @@ export default function EditTransactionPage() {
           {status === "rejected" && (
             <p className="text-[11px] text-rust bg-rust/10 border border-rust rounded-md px-3 py-2 mt-4">
               <span className="font-bold uppercase tracking-wide font-mono">Rejected</span>
-              {rejectionReason ? `: ${rejectionReason}` : " -- no reason was given."} Fix what&apos;s wrong and save
-              to send it back for review.
+              {/* The rest of the sentence is built as one string inside the
+                  expression, not as adjacent JSX text -- JSX collapses a
+                  literal space sitting right after a {expression} on a line
+                  break, which silently ate the gap before "Fix" here. */}
+              {rejectionReason
+                ? `: ${rejectionReason} Fix what's wrong and save to send it back for review.`
+                : " -- no reason was given. Fix what's wrong and save to send it back for review."}
             </p>
           )}
 
