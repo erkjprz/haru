@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { NotificationPrompt } from "@/app/components/NotificationPrompt"
 import ScanToPayCard from "@/app/components/ScanToPayCard"
+import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
@@ -17,6 +18,7 @@ type Repayment = {
   status: "pending" | "approved" | "rejected" | "cancelled"
   date: string
   rejection_reason: string | null
+  receipt_url: string | null
 }
 
 type Loan = {
@@ -42,6 +44,7 @@ export default function BorrowerPage() {
   const checkingAccess = authLoading || dataLoading
   const [loans, setLoans] = useState<Loan[]>([])
   const [loadError, setLoadError] = useState("")
+  const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (authLoading) return
@@ -88,7 +91,9 @@ export default function BorrowerPage() {
       const { data: allTxns, error: txnsError } = loanIds.length
         ? await supabase
             .from("transactions")
-            .select("transaction_id, loan_id, classification, amount, status, txn_date, created_at, rejection_reason")
+            .select(
+              "transaction_id, loan_id, classification, amount, status, txn_date, created_at, rejection_reason, receipt_url"
+            )
             .in("loan_id", loanIds)
             .neq("status", "cancelled")
             .order("txn_date", { ascending: false })
@@ -134,7 +139,8 @@ export default function BorrowerPage() {
             amount: Number(t.amount),
             status: t.status,
             date: t.txn_date ?? t.created_at,
-            rejection_reason: t.rejection_reason ?? null
+            rejection_reason: t.rejection_reason ?? null,
+            receipt_url: t.receipt_url ?? null
           }))
         }
       })
@@ -281,7 +287,13 @@ export default function BorrowerPage() {
                       <div className="space-y-2">
                         {loan.repayments.map((r) => (
                           <div key={r.transaction_id}>
-                            <div className="flex items-center justify-between gap-2">
+                            {/* flex-wrap: a rejected repayment can carry a
+                                receipt button, a status badge, the amount,
+                                and "Fix & resend" all at once -- on a narrow
+                                phone that's too much for one line, so the
+                                whole right-hand group drops to its own line
+                                rather than squeezing the date. */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
                               <span className="text-[12px] text-ink-soft">
                                 {new Date(r.date).toLocaleDateString(undefined, {
                                   month: "short",
@@ -304,6 +316,16 @@ export default function BorrowerPage() {
                                 <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
                                   ₱{fmt(r.amount)}
                                 </span>
+                                {r.receipt_url && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenReceiptUrl(r.receipt_url)}
+                                    aria-label="View receipt"
+                                    className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
+                                  >
+                                    🧾
+                                  </button>
+                                )}
                                 {(r.status === "pending" || r.status === "rejected") && (
                                   <button
                                     type="button"
@@ -329,6 +351,8 @@ export default function BorrowerPage() {
           </div>
         </div>
       </main>
+
+      {openReceiptUrl && <ReceiptModal path={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
   )
 }
