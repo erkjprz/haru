@@ -14,7 +14,8 @@ import {
   ReviewRow,
   ReceiptField,
   RequiredMark,
-  FieldGroup
+  FieldGroup,
+  DateField
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
@@ -101,6 +102,7 @@ function NewTransactionForm() {
   const [bankId, setBankId] = useState("")
   const [toBankId, setToBankId] = useState("")
   const [amount, setAmount] = useState("")
+  const [txnDate, setTxnDate] = useState(() => dateOnly(new Date()))
   const [description, setDescription] = useState("")
   const [receipt, setReceipt] = useState<File | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
@@ -449,6 +451,11 @@ function NewTransactionForm() {
       return
     }
 
+    if (!txnDate) {
+      setMessage("Select a date.")
+      return
+    }
+
     if (needsBank && !bankId) {
       setMessage(isBankTransfer ? "Select a source bank." : "Select a bank.")
       return
@@ -532,7 +539,7 @@ function NewTransactionForm() {
         p_interest_amount: interestType === "amount" ? Number(interestAmount) : null,
         p_term_months: Number(termMonths),
         p_repayment_frequency: repaymentFrequency,
-        p_start_date: new Date().toISOString().slice(0, 10),
+        p_start_date: txnDate,
         p_notes: description,
         p_description: description,
         p_submitted_by: submittedByForOnBehalf
@@ -564,6 +571,7 @@ function NewTransactionForm() {
           classification: "Internal Transfer",
           affects_cash: 0,
           amount: Number(amount),
+          txn_date: txnDate,
           description,
           receipt_url: receiptUrl,
           status: "approved",
@@ -621,6 +629,7 @@ function NewTransactionForm() {
           investment_id: isInvestmentEntry ? investmentId : null,
           classification,
           amount: selectedType === "expense" || selectedType === "investment" ? -Number(amount) : Number(amount),
+          txn_date: txnDate,
           description,
           receipt_url: receiptUrl,
           status: "approved",
@@ -687,6 +696,7 @@ function NewTransactionForm() {
         investment_id: selectedType === "investment_return" ? investmentId : null,
         classification,
         amount: selectedType === "withdrawal" ? -Number(amount) : Number(amount),
+        txn_date: txnDate,
         description,
         receipt_url: receiptUrl,
         status,
@@ -854,6 +864,14 @@ function NewTransactionForm() {
               value={selectedType}
               onChange={handleTypeChange}
             />
+          </div>
+
+          <div className="mt-4">
+            <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">
+              Date
+              <RequiredMark />
+            </label>
+            <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" />
           </div>
 
           <div className="space-y-4 mt-4">
@@ -1205,6 +1223,14 @@ function NewTransactionForm() {
                     <ReviewRow
                       label={isLoanRequest ? "Amount to borrow" : "Amount"}
                       value={`₱${fmt(isValidPositiveNumber(amount) ? Number(amount) : 0)}`}
+                    />
+                    <ReviewRow
+                      label="Date"
+                      value={new Date(`${txnDate}T00:00:00`).toLocaleDateString(undefined, {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric"
+                      })}
                     />
                     {onBehalfOfId && (
                       <ReviewRow
