@@ -7,6 +7,7 @@ import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
+import { AmountHero, FieldGroup, RequiredMark } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 
 function isValidPositiveNumber(value: string, allowZero = false): boolean {
@@ -61,6 +62,11 @@ export default function BorrowerRequestLoanPage() {
       : isValidPositiveNumber(interestAmount, true))
       ? totalRepayable(Number(amount), interestType, Number(interestRate || 0), Number(interestAmount || 0))
       : 0
+
+  const previewPerInstallment =
+    previewTotalRepayable && isValidPositiveNumber(termMonths) && repaymentFrequency === "monthly"
+      ? previewTotalRepayable / Number(termMonths)
+      : previewTotalRepayable
 
   async function handleSubmit() {
     setMessage("")
@@ -164,119 +170,120 @@ export default function BorrowerRequestLoanPage() {
           </button>
 
           <div className="text-xs tracking-[0.18em] uppercase text-gold font-mono mb-2">Request a Loan</div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-6">How much do you need?</h1>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-2">How much do you need?</h1>
 
-          <div className="bg-paper-2 border border-hairline rounded-md p-5 space-y-4">
-            <div>
-              <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
-                Amount to borrow
-              </label>
-              <input
-                className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </div>
+          <AmountHero value={amount} onChange={setAmount} label="Amount to borrow" />
 
-            <div>
-              <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">Interest</label>
-              <div className="flex border border-hairline rounded-md overflow-hidden mb-2">
-                <button
-                  type="button"
-                  onClick={() => setInterestType("rate")}
-                  className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                    interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                  }`}
-                >
-                  Rate (%)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInterestType("amount")}
-                  className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                    interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                  }`}
-                >
-                  Fixed amount (₱)
-                </button>
-              </div>
-              {interestType === "rate" ? (
-                <input
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="e.g. 5"
-                  value={interestRate}
-                  onChange={(e) => setInterestRate(e.target.value)}
-                />
-              ) : (
-                <input
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="e.g. 5000"
-                  value={interestAmount}
-                  onChange={(e) => setInterestAmount(e.target.value)}
-                />
-              )}
-            </div>
+          <div className="space-y-4 mt-4">
+            <FieldGroup label="Details">
+              <div className="space-y-4">
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    Interest
+                    <RequiredMark />
+                  </label>
+                  <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setInterestType("rate")}
+                      className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                        interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                      }`}
+                    >
+                      Rate (%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInterestType("amount")}
+                      className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                        interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                      }`}
+                    >
+                      Fixed amount (₱)
+                    </button>
+                  </div>
+                  {interestType === "rate" ? (
+                    <input
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 5"
+                      value={interestRate}
+                      onChange={(e) => setInterestRate(e.target.value)}
+                    />
+                  ) : (
+                    <input
+                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 5000"
+                      value={interestAmount}
+                      onChange={(e) => setInterestAmount(e.target.value)}
+                    />
+                  )}
+                </div>
 
-            <div>
-              <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
-                Term (months)
-              </label>
-              <input
-                className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                type="number"
-                min="1"
-                step="1"
-                placeholder="e.g. 6"
-                value={termMonths}
-                onChange={(e) => setTermMonths(e.target.value)}
-              />
-            </div>
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    Term (months)
+                    <RequiredMark />
+                  </label>
+                  <input
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="e.g. 6"
+                    value={termMonths}
+                    onChange={(e) => setTermMonths(e.target.value)}
+                  />
+                </div>
 
-            <div>
-              <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
-                Repayment mode
-              </label>
-              <select
-                className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
-                value={repaymentFrequency}
-                onChange={(e) => setRepaymentFrequency(e.target.value)}
-              >
-                <option value="monthly">Monthly installments</option>
-                <option value="lump_sum">One lump sum at end of term</option>
-              </select>
-            </div>
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    Repayment mode
+                  </label>
+                  <select
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    value={repaymentFrequency}
+                    onChange={(e) => setRepaymentFrequency(e.target.value)}
+                  >
+                    <option value="monthly">Monthly installments</option>
+                    <option value="lump_sum">One lump sum at end of term</option>
+                  </select>
+                </div>
 
-            {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-              <div className="border border-hairline rounded-md p-4 bg-paper">
-                <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
-                <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
-                  <span className="text-ink-soft">Total repayable</span>
-                  <span>₱{fmt(previewTotalRepayable)}</span>
+                {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
+                  <div className="border border-hairline rounded-md p-4 bg-paper">
+                    <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
+                    <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
+                      <span className="text-ink-soft">Total repayable</span>
+                      <span>₱{fmt(previewTotalRepayable)}</span>
+                    </div>
+                    <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
+                      <span className="text-ink-soft">
+                        {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
+                      </span>
+                      <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                    What's it for?
+                  </label>
+                  <input
+                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    placeholder="Add a note"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
                 </div>
               </div>
-            )}
-
-            <div>
-              <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
-                What's it for?
-              </label>
-              <input
-                className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
-                placeholder="Add a note"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
+            </FieldGroup>
 
             {message && <p className="text-sm text-rust">{message}</p>}
 
