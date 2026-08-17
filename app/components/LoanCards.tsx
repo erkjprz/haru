@@ -104,8 +104,17 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                       // loan-linked entry can't be resubmitted by the
                       // borrower the way a repayment can -- rejecting a
                       // Loan Release already deletes the loan record, so
-                      // there's nothing left to fix here.
-                      const resubmittable = t.classification === "Loan Repayment"
+                      // there's nothing left to fix here. Also used to mute
+                      // its row below -- it's background context (how the
+                      // loan started), not the ongoing repayment activity
+                      // this list exists to surface.
+                      const isRepayment = t.classification === "Loan Repayment"
+
+                      // A run of "approved" rows is the common case once a
+                      // loan has any history, and repeating the badge on
+                      // every single one is just noise -- show it only when
+                      // there's something to flag (pending/rejected).
+                      const showBadge = t.status !== "approved"
 
                       return (
                         <div key={t.transaction_id}>
@@ -121,20 +130,24 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                               year: "numeric"
                             })}
                           </span>
-                          <div className="flex items-center justify-between gap-2 mt-1">
-                            <span
-                              className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
-                                t.status === "approved"
-                                  ? "text-sage border-sage/40"
-                                  : t.status === "rejected"
-                                  ? "text-rust border-rust/40"
-                                  : "text-gold border-gold/40"
-                              }`}
-                            >
-                              {t.status}
-                            </span>
+                          <div className={`flex items-center gap-2 mt-1 ${showBadge ? "justify-between" : "justify-end"}`}>
+                            {showBadge && (
+                              <span
+                                className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                                  t.status === "rejected"
+                                    ? "text-rust border-rust/40"
+                                    : "text-gold border-gold/40"
+                                }`}
+                              >
+                                {t.status}
+                              </span>
+                            )}
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
+                              <span
+                                className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] ${
+                                  isRepayment ? "font-semibold text-ink" : "text-ink-soft"
+                                }`}
+                              >
                                 ₱{fmt(Math.abs(t.amount))}
                               </span>
                               {t.receipt_url && (
@@ -147,7 +160,7 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                                   🧾
                                 </button>
                               )}
-                              {editable && resubmittable && (t.status === "pending" || t.status === "rejected") && (
+                              {editable && isRepayment && (t.status === "pending" || t.status === "rejected") && (
                                 <button
                                   type="button"
                                   onClick={() => router.push(`/transactions/${t.transaction_id}/edit`)}
