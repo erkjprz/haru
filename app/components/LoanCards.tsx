@@ -110,43 +110,38 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                       // this list exists to surface.
                       const isRepayment = t.classification === "Loan Repayment"
 
-                      // A run of "approved" rows is the common case once a
-                      // loan has any history, and repeating the badge on
-                      // every single one is just noise -- show it only when
-                      // there's something to flag (pending/rejected).
-                      const showBadge = t.status !== "approved"
+                      // A dot only earns its place when there's something to
+                      // flag -- an approved row (the common case once a loan
+                      // has any history) needs no marker at all.
+                      const statusDot =
+                        t.status === "pending" ? "bg-gold" : t.status === "rejected" ? "bg-rust" : null
+
+                      const canEdit = editable && isRepayment && (t.status === "pending" || t.status === "rejected")
 
                       return (
                         <div key={t.transaction_id}>
-                          {/* Always two lines (label/date, then status/amount/actions) rather
-                              than one row that only wraps once it overflows -- a mixed list of
-                              short rows (no receipt/edit) and long ones otherwise left some
-                              right-aligned and others wrapped left, reading as misaligned. */}
-                          <span className="text-[12px] text-ink-soft">
-                            {TRANSACTION_TYPE_LABELS[t.classification] ?? t.classification} ·{" "}
-                            {new Date(t.date).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric"
-                            })}
-                          </span>
-                          <div className={`flex items-center gap-2 mt-1 ${showBadge ? "justify-between" : "justify-end"}`}>
-                            {showBadge && (
-                              <span
-                                className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
-                                  t.status === "rejected"
-                                    ? "text-rust border-rust/40"
-                                    : "text-gold border-gold/40"
-                                }`}
-                              >
-                                {t.status}
-                              </span>
-                            )}
+                          {/* One line per transaction on most phones: label/date on the left,
+                              status dot + actions + amount clustered on the right with the
+                              amount last, landing in the same column on every row regardless of
+                              which accessories that row has. On the narrowest supported widths
+                              the label wraps to its own second line rather than truncating --
+                              never hiding the date -- while the right-hand cluster stays put. */}
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-[12px] text-ink-soft min-w-0">
+                              {TRANSACTION_TYPE_LABELS[t.classification] ?? t.classification} ·{" "}
+                              {new Date(t.date).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric"
+                              })}
+                            </span>
                             <div className="flex items-center gap-2 shrink-0">
-                              {/* Amount goes last (rightmost) so its right edge lands in the
-                                  same column on every row -- with the receipt/edit accessories
-                                  before it instead of after, a row without them doesn't push
-                                  its amount further right than a row that has them. */}
+                              {statusDot && (
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${statusDot}`}
+                                  aria-label={t.status}
+                                />
+                              )}
                               {t.receipt_url && (
                                 <button
                                   type="button"
@@ -157,13 +152,14 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                                   🧾
                                 </button>
                               )}
-                              {editable && isRepayment && (t.status === "pending" || t.status === "rejected") && (
+                              {canEdit && (
                                 <button
                                   type="button"
                                   onClick={() => router.push(`/transactions/${t.transaction_id}/edit`)}
-                                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gold font-mono"
+                                  aria-label={t.status === "rejected" ? "Fix and resend" : "Edit"}
+                                  className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
                                 >
-                                  {t.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
+                                  ✎
                                 </button>
                               )}
                               <span
