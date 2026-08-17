@@ -107,9 +107,12 @@ export default function Navbar() {
           content instead of above it. */}
       <nav className="border-b border-hairline bg-paper sticky top-0 z-40" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="flex items-center justify-between px-5 py-4 max-w-3xl mx-auto">
-          <span className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono">
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono"
+          >
             Est. 2017
-          </span>
+          </button>
           <div className="flex items-center gap-2">
             <NotificationBell />
             {!onNewTransactionPage && (
