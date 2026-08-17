@@ -108,84 +108,96 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                     Transactions
                   </p>
                   <div className="space-y-2">
-                    {loan.transactions.map((t) => {
-                      // Loan Release (the disbursement) and any other
-                      // loan-linked entry can't be resubmitted by the
-                      // borrower the way a repayment can -- rejecting a
-                      // Loan Release already deletes the loan record, so
-                      // there's nothing left to fix here. Also used to mute
-                      // its row below -- it's background context (how the
-                      // loan started), not the ongoing repayment activity
-                      // this list exists to surface.
-                      const isRepayment = t.classification === "Loan Repayment"
-
-                      // A dot only earns its place when there's something to
-                      // flag -- an approved row (the common case once a loan
-                      // has any history) needs no marker at all.
-                      const statusDot =
-                        t.status === "pending" ? "bg-gold" : t.status === "rejected" ? "bg-rust" : null
-
-                      const canEdit = editable && isRepayment && (t.status === "pending" || t.status === "rejected")
-
-                      return (
-                        <div key={t.transaction_id}>
-                          {/* One line per transaction on most phones: label/date on the left,
-                              status dot + actions + amount clustered on the right with the
-                              amount last, landing in the same column on every row regardless of
-                              which accessories that row has. On the narrowest supported widths
-                              the label wraps to its own second line rather than truncating --
-                              never hiding the date -- while the right-hand cluster stays put. */}
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="text-[12px] text-ink-soft min-w-0">
-                              {TRANSACTION_TYPE_LABELS[t.classification] ?? t.classification} ·{" "}
-                              {new Date(t.date).toLocaleDateString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric"
-                              })}
-                            </span>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {statusDot && (
-                                <span
-                                  className={`w-1.5 h-1.5 rounded-full ${statusDot}`}
-                                  aria-label={t.status}
-                                />
-                              )}
-                              {t.receipt_url && (
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenReceiptUrl(t.receipt_url)}
-                                  aria-label="View receipt"
-                                  className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
-                                >
-                                  🧾
-                                </button>
-                              )}
-                              {canEdit && (
-                                <button
-                                  type="button"
-                                  onClick={() => router.push(`/transactions/${t.transaction_id}/edit`)}
-                                  aria-label={t.status === "rejected" ? "Fix and resend" : "Edit"}
-                                  className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
-                                >
-                                  ✎
-                                </button>
-                              )}
-                              <span
-                                className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] text-right ${
-                                  isRepayment ? "font-semibold text-ink" : "text-ink-soft"
-                                }`}
-                              >
-                                ₱{fmt(Math.abs(t.amount))}
-                              </span>
-                            </div>
-                          </div>
-                          {t.status === "rejected" && t.rejection_reason && (
-                            <p className="mt-0.5 text-[11px] text-rust">{t.rejection_reason}</p>
-                          )}
-                        </div>
+                    {(() => {
+                      // First entry that isn't a repayment -- i.e. where the
+                      // origin (Loan Release) group starts, chronologically
+                      // last since the list is newest-first. Gets extra
+                      // breathing room below so it reads as a different kind
+                      // of entry from the repayment activity above it, not
+                      // just another row in the same flow.
+                      const firstOriginIndex = loan.transactions.findIndex(
+                        (t) => t.classification !== "Loan Repayment"
                       )
-                    })}
+
+                      return loan.transactions.map((t, idx) => {
+                        // Loan Release (the disbursement) and any other
+                        // loan-linked entry can't be resubmitted by the
+                        // borrower the way a repayment can -- rejecting a
+                        // Loan Release already deletes the loan record, so
+                        // there's nothing left to fix here. Also used to mute
+                        // its row below -- it's background context (how the
+                        // loan started), not the ongoing repayment activity
+                        // this list exists to surface.
+                        const isRepayment = t.classification === "Loan Repayment"
+
+                        // A dot only earns its place when there's something to
+                        // flag -- an approved row (the common case once a loan
+                        // has any history) needs no marker at all.
+                        const statusDot =
+                          t.status === "pending" ? "bg-gold" : t.status === "rejected" ? "bg-rust" : null
+
+                        const canEdit = editable && isRepayment && (t.status === "pending" || t.status === "rejected")
+
+                        return (
+                          <div key={t.transaction_id} className={idx === firstOriginIndex && idx > 0 ? "!mt-4" : ""}>
+                            {/* One line per transaction on most phones: label/date on the left,
+                                status dot + actions + amount clustered on the right with the
+                                amount last, landing in the same column on every row regardless of
+                                which accessories that row has. On the narrowest supported widths
+                                the label wraps to its own second line rather than truncating --
+                                never hiding the date -- while the right-hand cluster stays put. */}
+                            <div className="flex items-start justify-between gap-2 min-h-6">
+                              <span className="text-[12px] text-ink-soft min-w-0">
+                                {TRANSACTION_TYPE_LABELS[t.classification] ?? t.classification} ·{" "}
+                                {new Date(t.date).toLocaleDateString(undefined, {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric"
+                                })}
+                              </span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {statusDot && (
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${statusDot}`}
+                                    aria-label={t.status}
+                                  />
+                                )}
+                                {t.receipt_url && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenReceiptUrl(t.receipt_url)}
+                                    aria-label="View receipt"
+                                    className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
+                                  >
+                                    🧾
+                                  </button>
+                                )}
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(`/transactions/${t.transaction_id}/edit`)}
+                                    aria-label={t.status === "rejected" ? "Fix and resend" : "Edit"}
+                                    className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
+                                  >
+                                    ✎
+                                  </button>
+                                )}
+                                <span
+                                  className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] text-right ${
+                                    isRepayment ? "font-semibold text-ink" : "text-ink-soft"
+                                  }`}
+                                >
+                                  ₱{fmt(Math.abs(t.amount))}
+                                </span>
+                              </div>
+                            </div>
+                            {t.status === "rejected" && t.rejection_reason && (
+                              <p className="mt-0.5 text-[11px] text-rust">{t.rejection_reason}</p>
+                            )}
+                          </div>
+                        )
+                      })
+                    })()}
                   </div>
                 </div>
               )}
