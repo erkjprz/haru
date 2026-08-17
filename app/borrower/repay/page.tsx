@@ -7,6 +7,7 @@ import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
+import { AmountHero, FieldGroup, ReceiptField, RequiredMark } from "@/app/components/TransactionFormUI"
 import { totalRepayable } from "@/lib/loanMath"
 
 function isValidPositiveNumber(value: string): boolean {
@@ -112,13 +113,6 @@ export default function BorrowerRepayPage() {
   function setReceiptFile(file: File | null) {
     setReceipt(file)
     setReceiptPreview(file ? URL.createObjectURL(file) : null)
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setDragActive(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) setReceiptFile(file)
   }
 
   async function handleSubmit() {
@@ -231,156 +225,119 @@ export default function BorrowerRepayPage() {
           </button>
 
           <div className="text-xs tracking-[0.18em] uppercase text-gold font-mono mb-2">Make a Repayment</div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-6">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-2">
             You've already sent this money
           </h1>
 
           {loadError && <p className="mb-4 text-sm text-rust">Couldn&apos;t load your loans: {loadError}</p>}
 
           {!loadError && myLoans.length === 0 ? (
-            <p className="text-sm text-ink-soft text-center py-12 bg-paper-2 border border-hairline rounded-md">
+            <p className="mt-4 text-sm text-ink-soft text-center py-12 bg-paper-2 border border-hairline rounded-md">
               You don't have an active loan to repay right now.
             </p>
           ) : !loadError && (
-            <div className="bg-paper-2 border border-hairline rounded-md p-5 space-y-4">
-              <div>
-                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
-                  Which loan
-                </label>
-                <select
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
-                  value={selectedLoanId}
-                  onChange={(e) => setSelectedLoanId(e.target.value)}
-                >
-                  <option value="">Select a loan</option>
-                  {myLoans.map((loan) => (
-                    <option key={loan.loan_id} value={loan.loan_id}>
-                      {loan.name || "Loan"} — ₱{fmt(loan.principal)} from {loan.start_date}
-                    </option>
-                  ))}
-                </select>
-                {selectedLoanId &&
-                  (() => {
-                    const loan = myLoans.find((l) => l.loan_id === selectedLoanId)
-                    if (!loan) return null
-                    const remaining =
-                      totalRepayable(
-                        Number(loan.principal),
-                        loan.interest_type,
-                        Number(loan.interest_rate || 0),
-                        Number(loan.interest_amount || 0)
-                      ) - (loanRepaidTotals[loan.loan_id] || 0)
-                    return (
-                      <p className="mt-2 text-sm text-ink-soft">
-                        ₱{fmt(Math.max(0, remaining))} left to pay
-                      </p>
-                    )
-                  })()}
-              </div>
+            <>
+              <AmountHero value={amount} onChange={setAmount} label="Amount" />
 
-              <div>
-                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">Amount</label>
-                <input
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">Bank</label>
-                <select
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
-                  value={bankId}
-                  onChange={(e) => setBankId(e.target.value)}
-                >
-                  <option value="">Select a bank</option>
-                  {banks.map((bank) => (
-                    <option key={bank.id} value={bank.id}>
-                      {bank.account_name || bank.bank_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">
-                  Description
-                </label>
-                <input
-                  className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-3 w-full"
-                  placeholder="Add a note"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block mb-2 text-sm uppercase tracking-wide text-ink-soft font-mono">Receipt</label>
-
-                {!receiptPreview ? (
-                  <label
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      setDragActive(true)
-                    }}
-                    onDragLeave={() => setDragActive(false)}
-                    onDrop={handleDrop}
-                    className={`
-                      flex flex-col items-center justify-center gap-2
-                      border-2 border-dashed rounded-md
-                      py-10 px-4 cursor-pointer text-center transition-colors
-                      ${dragActive ? "border-gold bg-gold/5" : "border-hairline"}
-                    `}
-                  >
-                    <span className="text-2xl">📎</span>
-                    <span className="text-base text-ink">Tap to upload, or drag a photo here</span>
-                    <span className="text-sm text-ink-soft">Screenshot or photo of your deposit slip</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-                    />
-                  </label>
-                ) : (
-                  <div className="relative border border-hairline rounded-md p-3 flex items-center gap-3">
-                    <img
-                      src={receiptPreview}
-                      alt="Receipt preview"
-                      className="w-16 h-16 object-cover rounded-md border border-hairline"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-base text-ink truncate">{receipt?.name}</p>
-                      <p className="text-sm text-ink-soft">
-                        {receipt ? `${(receipt.size / 1024).toFixed(0)} KB` : ""}
-                      </p>
+              <div className="space-y-4 mt-4">
+                <FieldGroup label="Details">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        Which loan
+                        <RequiredMark />
+                      </label>
+                      <select
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                        value={selectedLoanId}
+                        onChange={(e) => setSelectedLoanId(e.target.value)}
+                      >
+                        <option value="">Select a loan</option>
+                        {myLoans.map((loan) => (
+                          <option key={loan.loan_id} value={loan.loan_id}>
+                            {loan.name || "Loan"} — ₱{fmt(loan.principal)} from {loan.start_date}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedLoanId &&
+                        (() => {
+                          const loan = myLoans.find((l) => l.loan_id === selectedLoanId)
+                          if (!loan) return null
+                          const remaining =
+                            totalRepayable(
+                              Number(loan.principal),
+                              loan.interest_type,
+                              Number(loan.interest_rate || 0),
+                              Number(loan.interest_amount || 0)
+                            ) - (loanRepaidTotals[loan.loan_id] || 0)
+                          return (
+                            <p className="mt-2 text-sm text-ink-soft">
+                              ₱{fmt(Math.max(0, remaining))} left to pay
+                            </p>
+                          )
+                        })()}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setReceiptFile(null)}
-                      className="text-sm text-rust border border-rust rounded-full px-2.5 py-1 shrink-0"
-                    >
-                      Remove
-                    </button>
+
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        Bank
+                        <RequiredMark />
+                      </label>
+                      <select
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                        value={bankId}
+                        onChange={(e) => setBankId(e.target.value)}
+                      >
+                        <option value="">Select a bank</option>
+                        {banks.map((bank) => (
+                          <option key={bank.id} value={bank.id}>
+                            {bank.account_name || bank.bank_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        Description
+                      </label>
+                      <input
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                        placeholder="Add a note"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                      />
+                    </div>
                   </div>
-                )}
+                </FieldGroup>
+
+                <FieldGroup label="Proof">
+                  <div>
+                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                      Receipt
+                      <RequiredMark />
+                    </label>
+                    <ReceiptField
+                      receipt={receipt}
+                      receiptPreview={receiptPreview}
+                      dragActive={dragActive}
+                      setDragActive={setDragActive}
+                      onFileChange={setReceiptFile}
+                    />
+                  </div>
+                </FieldGroup>
+
+                {message && <p className="text-sm text-rust">{message}</p>}
+
+                <button
+                  className="w-full bg-ink text-paper px-4 py-3.5 rounded-md text-sm font-bold disabled:opacity-50"
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                >
+                  {submitting ? "Submitting..." : "Submit Repayment"}
+                </button>
               </div>
-
-              {message && <p className="text-sm text-rust">{message}</p>}
-
-              <button
-                className="w-full bg-ink text-paper px-4 py-3.5 rounded-md text-sm font-bold disabled:opacity-50"
-                onClick={handleSubmit}
-                disabled={submitting}
-              >
-                {submitting ? "Submitting..." : "Submit Repayment"}
-              </button>
-            </div>
+            </>
           )}
         </div>
       </main>
