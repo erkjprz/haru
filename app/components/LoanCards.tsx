@@ -109,29 +109,33 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
 
                       return (
                         <div key={t.transaction_id}>
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span className="text-[12px] text-ink-soft">
-                              {TRANSACTION_TYPE_LABELS[t.classification] ?? t.classification} ·{" "}
-                              {new Date(t.date).toLocaleDateString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric"
-                              })}
+                          {/* Always two lines (label/date, then status/amount/actions) rather
+                              than one row that only wraps once it overflows -- a mixed list of
+                              short rows (no receipt/edit) and long ones otherwise left some
+                              right-aligned and others wrapped left, reading as misaligned. */}
+                          <span className="text-[12px] text-ink-soft">
+                            {TRANSACTION_TYPE_LABELS[t.classification] ?? t.classification} ·{" "}
+                            {new Date(t.date).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric"
+                            })}
+                          </span>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span
+                              className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                                t.status === "approved"
+                                  ? "text-sage border-sage/40"
+                                  : t.status === "rejected"
+                                  ? "text-rust border-rust/40"
+                                  : "text-gold border-gold/40"
+                              }`}
+                            >
+                              {t.status}
                             </span>
                             <div className="flex items-center gap-2 shrink-0">
-                              <span
-                                className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
-                                  t.status === "approved"
-                                    ? "text-sage border-sage/40"
-                                    : t.status === "rejected"
-                                    ? "text-rust border-rust/40"
-                                    : "text-gold border-gold/40"
-                                }`}
-                              >
-                                {t.status}
-                              </span>
                               <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
-                                ₱{fmt(t.amount)}
+                                ₱{fmt(Math.abs(t.amount))}
                               </span>
                               {t.receipt_url && (
                                 <button
