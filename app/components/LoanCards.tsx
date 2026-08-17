@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { formatInterestLabel } from "@/lib/loanFormat"
+import { TRANSACTION_TYPE_LABELS } from "@/lib/transactionLabels"
 import type { Loan } from "@/lib/useLoansSummary"
 
 // A closed loan isn't always a full repayment -- an admin can close one
@@ -92,63 +93,73 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                 />
               </div>
 
-              {loan.repayments.length > 0 && (
+              {loan.transactions.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-hairline">
                   <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono mb-2">
-                    Repayments
+                    Transactions
                   </p>
                   <div className="space-y-2">
-                    {loan.repayments.map((r) => (
-                      <div key={r.transaction_id}>
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <span className="text-[12px] text-ink-soft">
-                            {new Date(r.date).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric"
-                            })}
-                          </span>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span
-                              className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
-                                r.status === "approved"
-                                  ? "text-sage border-sage/40"
-                                  : r.status === "rejected"
-                                  ? "text-rust border-rust/40"
-                                  : "text-gold border-gold/40"
-                              }`}
-                            >
-                              {r.status}
+                    {loan.transactions.map((t) => {
+                      // Loan Release (the disbursement) and any other
+                      // loan-linked entry can't be resubmitted by the
+                      // borrower the way a repayment can -- rejecting a
+                      // Loan Release already deletes the loan record, so
+                      // there's nothing left to fix here.
+                      const resubmittable = t.classification === "Loan Repayment"
+
+                      return (
+                        <div key={t.transaction_id}>
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="text-[12px] text-ink-soft">
+                              {TRANSACTION_TYPE_LABELS[t.classification] ?? t.classification} ·{" "}
+                              {new Date(t.date).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric"
+                              })}
                             </span>
-                            <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
-                              ₱{fmt(r.amount)}
-                            </span>
-                            {r.receipt_url && (
-                              <button
-                                type="button"
-                                onClick={() => setOpenReceiptUrl(r.receipt_url)}
-                                aria-label="View receipt"
-                                className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span
+                                className={`text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded-full border ${
+                                  t.status === "approved"
+                                    ? "text-sage border-sage/40"
+                                    : t.status === "rejected"
+                                    ? "text-rust border-rust/40"
+                                    : "text-gold border-gold/40"
+                                }`}
                               >
-                                🧾
-                              </button>
-                            )}
-                            {editable && (r.status === "pending" || r.status === "rejected") && (
-                              <button
-                                type="button"
-                                onClick={() => router.push(`/transactions/${r.transaction_id}/edit`)}
-                                className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gold font-mono"
-                              >
-                                {r.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
-                              </button>
-                            )}
+                                {t.status}
+                              </span>
+                              <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
+                                ₱{fmt(t.amount)}
+                              </span>
+                              {t.receipt_url && (
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenReceiptUrl(t.receipt_url)}
+                                  aria-label="View receipt"
+                                  className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
+                                >
+                                  🧾
+                                </button>
+                              )}
+                              {editable && resubmittable && (t.status === "pending" || t.status === "rejected") && (
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/transactions/${t.transaction_id}/edit`)}
+                                  className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gold font-mono"
+                                >
+                                  {t.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
+                                </button>
+                              )}
+                            </div>
                           </div>
+                          {t.status === "rejected" && t.rejection_reason && (
+                            <p className="mt-0.5 text-[11px] text-rust">{t.rejection_reason}</p>
+                          )}
                         </div>
-                        {r.status === "rejected" && r.rejection_reason && (
-                          <p className="mt-0.5 text-[11px] text-rust">{r.rejection_reason}</p>
-                        )}
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}

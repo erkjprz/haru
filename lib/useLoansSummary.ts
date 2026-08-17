@@ -2,8 +2,9 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 
-export type Repayment = {
+export type LoanTransaction = {
   transaction_id: string
+  classification: string
   amount: number
   status: "pending" | "approved" | "rejected" | "cancelled"
   date: string
@@ -24,11 +25,11 @@ export type Loan = {
   repaid: number
   totalRepayable: number
   outstanding: number
-  repayments: Repayment[]
+  transactions: LoanTransaction[]
 }
 
 // Shared between /borrower (the borrower's own view) and the admin "view
-// as" preview -- same loans-plus-repayments query for either, parameterized
+// as" preview -- same loans-plus-transactions query for either, parameterized
 // by whose member_id/borrower_id to fetch.
 export function useLoansSummary(memberId: string | undefined) {
   const [loading, setLoading] = useState(true)
@@ -90,10 +91,12 @@ export function useLoansSummary(memberId: string | undefined) {
 
       const withProgress: Loan[] = (myLoans ?? []).map((loan) => {
         const related = (allTxns ?? []).filter((t) => t.loan_id === loan.loan_id)
-        const repayments = related.filter((t) => t.classification === "Loan Repayment")
 
-        const repaid = repayments
-          .filter((t) => t.status === "approved")
+        // Only actual repayments count toward progress/outstanding -- the
+        // Loan Release (disbursement) and any other loan-linked entries are
+        // shown for context but never repayment amounts.
+        const repaid = related
+          .filter((t) => t.classification === "Loan Repayment" && t.status === "approved")
           .reduce((sum, t) => sum + Number(t.amount), 0)
 
         const interestType: InterestType = loan.interest_type === "amount" ? "amount" : "rate"
@@ -117,8 +120,9 @@ export function useLoansSummary(memberId: string | undefined) {
           repaid,
           totalRepayable: totalRepayableVal,
           outstanding: loan.status === "closed" ? 0 : Math.max(0, totalRepayableVal - repaid),
-          repayments: repayments.map((t) => ({
+          transactions: related.map((t) => ({
             transaction_id: t.transaction_id,
+            classification: t.classification,
             amount: Number(t.amount),
             status: t.status,
             date: t.txn_date ?? t.created_at,
