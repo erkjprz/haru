@@ -440,6 +440,14 @@ export default function AdminMembersPage() {
                       >
                         Edit
                       </button>
+                      {member.role === "borrower" && (
+                        <button
+                          className="border border-hairline px-4 py-2 rounded-md text-sm"
+                          onClick={() => router.push(`/admin/view-as/${member.member_id}`)}
+                        >
+                          View as
+                        </button>
+                      )}
                       {member.status === "inactive" ? (
                         <button
                           className="border border-sage text-sage px-4 py-2 rounded-md text-sm"
