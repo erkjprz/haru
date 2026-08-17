@@ -93,6 +93,11 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                 />
               </div>
 
+              <p className="text-[11px] text-ink-soft mt-1.5">
+                ₱{fmt(loan.repaid)} of ₱{fmt(loan.totalRepayable)} repaid
+                {loan.term_months ? ` · ${loan.term_months}mo term` : ""}
+              </p>
+
               {loan.transactions.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-hairline">
                   <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono mb-2">
