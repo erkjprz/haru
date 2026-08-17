@@ -143,13 +143,10 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                               </span>
                             )}
                             <div className="flex items-center gap-2 shrink-0">
-                              <span
-                                className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] ${
-                                  isRepayment ? "font-semibold text-ink" : "text-ink-soft"
-                                }`}
-                              >
-                                ₱{fmt(Math.abs(t.amount))}
-                              </span>
+                              {/* Amount goes last (rightmost) so its right edge lands in the
+                                  same column on every row -- with the receipt/edit accessories
+                                  before it instead of after, a row without them doesn't push
+                                  its amount further right than a row that has them. */}
                               {t.receipt_url && (
                                 <button
                                   type="button"
@@ -169,6 +166,13 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                                   {t.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
                                 </button>
                               )}
+                              <span
+                                className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] text-right ${
+                                  isRepayment ? "font-semibold text-ink" : "text-ink-soft"
+                                }`}
+                              >
+                                ₱{fmt(Math.abs(t.amount))}
+                              </span>
                             </div>
                           </div>
                           {t.status === "rejected" && t.rejection_reason && (
