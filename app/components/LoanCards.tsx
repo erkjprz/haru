@@ -46,6 +46,9 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
           const repaidPct = loan.totalRepayable > 0
             ? Math.min(100, (loan.repaid / loan.totalRepayable) * 100)
             : 0
+          const paidMonths = loan.transactions.filter(
+            (t) => t.classification === "Loan Repayment" && t.status === "approved"
+          ).length
 
           return (
             <div key={loan.loan_id} className="bg-paper-2 border border-hairline rounded-md px-5 py-4">
@@ -93,10 +96,11 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                 />
               </div>
 
-              <p className="text-[11px] text-ink-soft mt-1.5">
-                ₱{fmt(loan.repaid)} of ₱{fmt(loan.totalRepayable)} repaid
-                {loan.term_months ? ` · ${loan.term_months}mo term` : ""}
-              </p>
+              {loan.term_months && (
+                <p className="text-[11px] text-ink-soft mt-1.5">
+                  {paidMonths} / {loan.term_months} mo term
+                </p>
+              )}
 
               {loan.transactions.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-hairline">
