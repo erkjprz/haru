@@ -317,7 +317,6 @@ export default function AdminPage() {
 
         await approveLoanRelease({
           loanId: txn.loan_id,
-          borrowerMemberId: txn.member_id,
           bankAccountId,
           receiptUrl,
           releaseDate: dateOnly(new Date())

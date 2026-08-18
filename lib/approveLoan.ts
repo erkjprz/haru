@@ -3,7 +3,6 @@ import { computeCurrentValueByMember } from "@/lib/currentValue"
 
 interface ApproveLoanReleaseParams {
   loanId: string
-  borrowerMemberId: string | null
   bankAccountId: string
   receiptUrl: string
   releaseDate: string
@@ -19,6 +18,12 @@ interface ApproveLoanReleaseParams {
  * so a failure partway through can't leave the loan active with its
  * disbursement still pending, or approved with no hold ever snapshotted.
  *
+ * The borrower shares in their own loan's hold like any other member,
+ * provided they're linked to a member account with a net contribution
+ * above 0 as of the release date -- same eligibility rule as the loan's
+ * eventual gain split in closeLoan.ts, so a member's hold and gain-share
+ * standing on their own loan stay consistent with each other.
+ *
  * Replaces two near-duplicate client-side implementations (the Txns review
  * card in admin/page.tsx and the loan's own "Approve & Activate" in
  * LoanDetailPanel) that each did the same three writes separately with no
@@ -27,7 +32,7 @@ interface ApproveLoanReleaseParams {
  * identical to a successful one.
  */
 export async function approveLoanRelease(params: ApproveLoanReleaseParams) {
-  const currentValueByMember = await computeCurrentValueByMember(params.releaseDate, params.borrowerMemberId)
+  const currentValueByMember = await computeCurrentValueByMember(params.releaseDate)
   const totalValue = Array.from(currentValueByMember.values()).reduce((sum, v) => sum + v, 0)
 
   const holds =
