@@ -608,9 +608,6 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
               style={{ width: `${repaidPct}%` }}
             />
           </div>
-          <p className="text-[11px] text-ink-soft mt-1.5">
-            ₱{fmt(loan.repayment)} repaid of ₱{fmt(loan.total_repayable)} total repayable
-          </p>
         </div>
       </div>
 
@@ -619,7 +616,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         <InfoBox label="Loan">
           <InfoRow label="Principal" value={`₱${fmt(loan.principal)}`} />
           <InfoRow label="Total repayable" value={`₱${fmt(loan.total_repayable)}`} />
-          <InfoRow label="Repaid so far" value={`₱${fmt(loan.repayment)}`} />
+          {loan.status !== "closed" && <InfoRow label="Repaid so far" value={`₱${fmt(loan.repayment)}`} />}
           <InfoRow
             label="Outstanding"
             value={`₱${fmt(loan.outstanding)}`}
