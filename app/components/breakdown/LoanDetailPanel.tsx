@@ -608,9 +608,6 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
               style={{ width: `${repaidPct}%` }}
             />
           </div>
-          <p className="text-[11px] text-ink-soft mt-1.5">
-            ₱{fmt(loan.repayment)} repaid of ₱{fmt(loan.total_repayable)} total repayable
-          </p>
         </div>
       </div>
 
