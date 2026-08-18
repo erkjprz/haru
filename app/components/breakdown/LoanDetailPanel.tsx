@@ -948,63 +948,6 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         </div>
       )}
 
-      {/* Recent transactions */}
-      <section className="mt-8">
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <h2 className="font-display text-lg font-medium text-ink">Recent Transactions</h2>
-          <button
-            onClick={() => router.push(`/transactions?loan=${loanId}`)}
-            className="shrink-0 text-[13px] font-medium text-gold"
-          >
-            View all →
-          </button>
-        </div>
-
-        {recentTransactions.length > 0 ? (
-          <div className="bg-paper-2 border border-hairline rounded-md px-5">
-            {recentTransactions.map((t, i) => (
-              <div
-                key={t.transaction_id}
-                className={`py-3 flex justify-between items-center gap-3 ${
-                  i !== recentTransactions.length - 1 ? "border-b border-dashed border-hairline" : ""
-                }`}
-              >
-                <div className="min-w-0">
-                  <p className="text-sm text-ink truncate">
-                    {TXN_TYPE_LABELS[t.classification] ?? t.classification}
-                  </p>
-                  <p className="text-[11px] text-ink-soft font-mono">
-                    {/* t.date is a plain "YYYY-MM-DD" when txn_date is
-                        set (the common case) -- append a local midnight
-                        time so parsing doesn't roll it back a day in
-                        timezones behind UTC. Falls back to the full
-                        created_at timestamp as-is when txn_date is
-                        null, which needs no such adjustment. */}
-                    {new Date(t.date.length === 10 ? `${t.date}T00:00:00` : t.date).toLocaleDateString(undefined, {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric"
-                    })}
-                    {t.status === "pending" ? " · pending" : ""}
-                  </p>
-                </div>
-                <p
-                  className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
-                    t.amount < 0 ? "text-rust" : "text-sage"
-                  }`}
-                >
-                  {t.amount < 0 ? "-" : "+"}₱{fmt(Math.abs(t.amount))}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
-            No transactions recorded for this loan yet.
-          </p>
-        )}
-      </section>
-
       {/* Gain share per member (closed) / hold per member (active) */}
       <section className="mt-8">
         <h2 className="font-display text-lg font-medium text-ink mb-1">
@@ -1113,6 +1056,63 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         {loan.status === "closed" && shares.length === 0 && !loadError && (
           <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
             No gain was distributed for this loan.
+          </p>
+        )}
+      </section>
+
+      {/* Recent transactions */}
+      <section className="mt-8">
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h2 className="font-display text-lg font-medium text-ink">Recent Transactions</h2>
+          <button
+            onClick={() => router.push(`/transactions?loan=${loanId}`)}
+            className="shrink-0 text-[13px] font-medium text-gold"
+          >
+            View all →
+          </button>
+        </div>
+
+        {recentTransactions.length > 0 ? (
+          <div className="bg-paper-2 border border-hairline rounded-md px-5">
+            {recentTransactions.map((t, i) => (
+              <div
+                key={t.transaction_id}
+                className={`py-3 flex justify-between items-center gap-3 ${
+                  i !== recentTransactions.length - 1 ? "border-b border-dashed border-hairline" : ""
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-ink truncate">
+                    {TXN_TYPE_LABELS[t.classification] ?? t.classification}
+                  </p>
+                  <p className="text-[11px] text-ink-soft font-mono">
+                    {/* t.date is a plain "YYYY-MM-DD" when txn_date is
+                        set (the common case) -- append a local midnight
+                        time so parsing doesn't roll it back a day in
+                        timezones behind UTC. Falls back to the full
+                        created_at timestamp as-is when txn_date is
+                        null, which needs no such adjustment. */}
+                    {new Date(t.date.length === 10 ? `${t.date}T00:00:00` : t.date).toLocaleDateString(undefined, {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric"
+                    })}
+                    {t.status === "pending" ? " · pending" : ""}
+                  </p>
+                </div>
+                <p
+                  className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                    t.amount < 0 ? "text-rust" : "text-sage"
+                  }`}
+                >
+                  {t.amount < 0 ? "-" : "+"}₱{fmt(Math.abs(t.amount))}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+            No transactions recorded for this loan yet.
           </p>
         )}
       </section>
