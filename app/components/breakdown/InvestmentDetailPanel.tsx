@@ -387,56 +387,6 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         </InfoBox>
       </div>
 
-      {/* Recent transactions */}
-      <section className="mt-8">
-        <div className="flex items-baseline justify-between gap-3 mb-3">
-          <h2 className="font-display text-lg font-medium text-ink">Recent Transactions</h2>
-          <button
-            onClick={() => router.push(`/transactions?investment=${investmentId}`)}
-            className="shrink-0 text-[13px] font-medium text-gold"
-          >
-            View all →
-          </button>
-        </div>
-
-        {recentTransactions.length > 0 ? (
-          <div className="bg-paper-2 border border-hairline rounded-md px-5">
-            {recentTransactions.map((t, i) => (
-              <div
-                key={t.transaction_id}
-                className={`py-3 flex justify-between items-center gap-3 ${
-                  i !== recentTransactions.length - 1 ? "border-b border-dashed border-hairline" : ""
-                }`}
-              >
-                <div className="min-w-0">
-                  <p className="text-sm text-ink truncate">
-                    {TXN_TYPE_LABELS[t.classification] ?? t.classification}
-                  </p>
-                  <p className="text-[11px] text-ink-soft font-mono">
-                    {new Date(t.date.length === 10 ? `${t.date}T00:00:00` : t.date).toLocaleDateString(
-                      undefined,
-                      { day: "numeric", month: "short", year: "numeric" }
-                    )}
-                    {t.status === "pending" ? " · pending" : ""}
-                  </p>
-                </div>
-                <p
-                  className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
-                    t.amount < 0 ? "text-rust" : "text-sage"
-                  }`}
-                >
-                  {t.amount < 0 ? "-" : "+"}₱{fmt(Math.abs(t.amount))}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
-            No transactions recorded for this investment yet.
-          </p>
-        )}
-      </section>
-
       {/* Gain/loss share per member */}
       <section className="mt-8">
         <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -563,6 +513,56 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         {memberShares.length === 0 && !loadError && !showDistributeForm && (
           <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
             No allocation on record for this investment.
+          </p>
+        )}
+      </section>
+
+      {/* Recent transactions */}
+      <section className="mt-8">
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h2 className="font-display text-lg font-medium text-ink">Recent Transactions</h2>
+          <button
+            onClick={() => router.push(`/transactions?investment=${investmentId}`)}
+            className="shrink-0 text-[13px] font-medium text-gold"
+          >
+            View all →
+          </button>
+        </div>
+
+        {recentTransactions.length > 0 ? (
+          <div className="bg-paper-2 border border-hairline rounded-md px-5">
+            {recentTransactions.map((t, i) => (
+              <div
+                key={t.transaction_id}
+                className={`py-3 flex justify-between items-center gap-3 ${
+                  i !== recentTransactions.length - 1 ? "border-b border-dashed border-hairline" : ""
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm text-ink truncate">
+                    {TXN_TYPE_LABELS[t.classification] ?? t.classification}
+                  </p>
+                  <p className="text-[11px] text-ink-soft font-mono">
+                    {new Date(t.date.length === 10 ? `${t.date}T00:00:00` : t.date).toLocaleDateString(
+                      undefined,
+                      { day: "numeric", month: "short", year: "numeric" }
+                    )}
+                    {t.status === "pending" ? " · pending" : ""}
+                  </p>
+                </div>
+                <p
+                  className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                    t.amount < 0 ? "text-rust" : "text-sage"
+                  }`}
+                >
+                  {t.amount < 0 ? "-" : "+"}₱{fmt(Math.abs(t.amount))}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+            No transactions recorded for this investment yet.
           </p>
         )}
       </section>
