@@ -278,6 +278,16 @@ function TransactionsPageInner() {
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
+  // Cards render lazily, 15 at a time, rather than all of
+  // filteredTransactions at once -- with a year+ of history that's the
+  // difference between mounting a handful of cards and mounting thousands.
+  // The full filtered/searched array itself stays intact in memory (see
+  // filteredTransactions above); this only limits how much of it gets
+  // rendered into the DOM at once.
+  const PAGE_SIZE = 15
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
+
   // Set once from the ?loan= / ?investment= query param (e.g. "View all"
   // from a loan's or investment's detail page) -- cleared locally like any
   // other filter, doesn't try to keep syncing back to the URL after that.
@@ -520,6 +530,49 @@ function TransactionsPageInner() {
     debouncedSearchQuery
   ])
 
+  // Whenever the filtered set changes shape (a filter/search edit, or a
+  // fresh load), snap back to showing just the first page -- otherwise a
+  // narrower filter could leave visibleCount pointing past the new, shorter
+  // list, or a search could suddenly reveal hundreds of already-"visible"
+  // cards that were never actually scrolled to. Adjusted here during render
+  // (React's documented pattern for resetting state when a derived value
+  // changes) by comparing filteredTransactions' identity, rather than in a
+  // useEffect, which would cost an extra committed render showing the stale
+  // page size before snapping back.
+  const [lastFilteredTransactions, setLastFilteredTransactions] = useState(filteredTransactions)
+  if (filteredTransactions !== lastFilteredTransactions) {
+    setLastFilteredTransactions(filteredTransactions)
+    setVisibleCount(PAGE_SIZE)
+  }
+
+  // Reveals the next page once the sentinel below the list scrolls near the
+  // viewport. Re-attaches whenever visibleCount or the filtered length
+  // changes, since the sentinel element only exists (and only needs
+  // observing) while there's still more to reveal.
+  useEffect(() => {
+    if (visibleCount >= filteredTransactions.length) return
+
+    const sentinel = loadMoreRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((count) => Math.min(count + PAGE_SIZE, filteredTransactions.length))
+        }
+      },
+      { rootMargin: "300px" }
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [visibleCount, filteredTransactions.length])
+
+  const visibleTransactions = useMemo(
+    () => filteredTransactions.slice(0, visibleCount),
+    [filteredTransactions, visibleCount]
+  )
+
   // For the loan/investment filter pills' labels -- neither name is known
   // until at least one matching transaction has loaded.
   const loanFilterLabel = loanFilter
@@ -668,7 +721,7 @@ function TransactionsPageInner() {
 
           <div className="mt-4">
             {dataLoading && <SkeletonCardList rows={5} />}
-            {!dataLoading && filteredTransactions.map((transaction, idx) => {
+            {!dataLoading && visibleTransactions.map((transaction, idx) => {
               const memberName = transaction.members?.name || null
               const isLoanTxn =
                 transaction.classification === "Loan Release" ||
@@ -757,7 +810,7 @@ function TransactionsPageInner() {
                     (transaction.classification === "Loan Release" && transaction.status === "pending")))
 
               const label = monthLabel(transaction)
-              const showMonthHeader = idx === 0 || label !== monthLabel(filteredTransactions[idx - 1])
+              const showMonthHeader = idx === 0 || label !== monthLabel(visibleTransactions[idx - 1])
 
               return (
                 <div key={transaction.transaction_id}>
@@ -874,6 +927,12 @@ function TransactionsPageInner() {
                 </div>
               )
             })}
+
+            {!dataLoading && visibleCount < filteredTransactions.length && (
+              <div ref={loadMoreRef} className="py-6 text-center text-xs text-ink-soft font-mono">
+                Loading more…
+              </div>
+            )}
 
             {!dataLoading && filteredTransactions.length === 0 && !loadError && (
               <p className="py-8 text-sm text-ink-soft text-center">No transactions found.</p>
