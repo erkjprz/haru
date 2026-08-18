@@ -166,7 +166,8 @@ const memberSections: FaqSection[] = [
           <p>
             Proportionally, based on each member&apos;s value in the fund at the time it&apos;s
             distributed — contribution plus anything they&apos;ve already earned (bank interest, loan
-            gains, investment gains/losses) — the more you had in, the bigger your share.
+            gains, investment gains/losses) — the more you had in, the bigger your share. Anyone with
+            nothing in the fund at that point doesn&apos;t get a share.
           </p>
         )
       },
