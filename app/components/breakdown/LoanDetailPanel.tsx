@@ -433,7 +433,6 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       // uses, so a failure partway through can't leave things half-done.
       await approveLoanRelease({
         loanId: adminLoan.loan_id,
-        borrowerMemberId: adminLoan.member_id,
         bankAccountId: approveBankChoice,
         receiptUrl: fileName,
         releaseDate: dateOnly(new Date())
