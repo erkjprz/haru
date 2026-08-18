@@ -3,7 +3,6 @@ import { computeCurrentValueByMember, dateOnly, splitProportionally } from "@/li
 
 interface CloseLoanParams {
   id: string
-  member_id: string | null
   principal: number
   repaidApproved: number
   borrowerName?: string
@@ -14,7 +13,10 @@ interface CloseLoanParams {
  * marks the loan closed.
  *
  * Follows the project's documented Section 14 methodology:
- * 1. The borrower never shares in their own loan's gain.
+ * 1. The borrower shares in their own loan's gain like any other member,
+ *    provided they're linked to a member account with a net contribution
+ *    above 0 as of the closing date -- no special-casing beyond the same
+ *    eligibility rule everyone else is held to.
  * 2. Gain is distributed once, at the moment the loan closes --
  *    allocation_date is set to the closing date (when the gain is booked
  *    and realized, per standard financial convention).
@@ -46,7 +48,7 @@ export async function closeLoanAndDistributeGain(params: CloseLoanParams) {
   const gainOrLoss = params.repaidApproved - Number(params.principal)
   const closingDate = dateOnly(new Date())
 
-  const currentValueByMember = await computeCurrentValueByMember(closingDate, params.member_id)
+  const currentValueByMember = await computeCurrentValueByMember(closingDate)
   const shares = splitProportionally(currentValueByMember, gainOrLoss)
 
   // splitProportionally returns [] both when gainOrLoss is exactly 0 (fine,

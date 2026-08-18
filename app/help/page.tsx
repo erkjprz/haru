@@ -174,8 +174,8 @@ const memberSections: FaqSection[] = [
         a: (
           <p>
             The same idea: proportional to how much each member had in the fund at that point. The member
-            who borrowed the money never shares in their own loan&apos;s interest, and anyone with nothing in
-            the fund at that point doesn&apos;t get a share either.
+            who borrowed the money shares in it too, as long as they had something in the fund at that
+            point — anyone with nothing in the fund at that point doesn&apos;t get a share.
           </p>
         )
       },
@@ -679,8 +679,9 @@ const adminSections: FaqSection[] = [
         a: (
           <p>
             Proportionally across members, based on how much each has in the fund at that moment — same
-            principle as a bank interest distribution. The borrower never shares in their own loan&apos;s
-            result, and anyone with nothing in the fund at that point doesn&apos;t get a share.
+            principle as a bank interest distribution. The borrower shares in their own loan&apos;s result
+            too, as long as they had something in the fund at that moment — anyone with nothing in the fund
+            at that point doesn&apos;t get a share.
           </p>
         )
       },

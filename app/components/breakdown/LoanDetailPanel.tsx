@@ -461,7 +461,6 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     try {
       await closeLoanAndDistributeGain({
         id: adminLoan.loan_id,
-        member_id: adminLoan.member_id,
         principal: adminLoan.principal,
         repaidApproved: adminLoan.repaidApproved,
         borrowerName: loan?.borrower
@@ -1014,7 +1013,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         </h2>
         <p className="text-[13px] text-ink-soft mb-3">
           {loan.status === "closed"
-            ? `${loan.borrower} doesn't share in this loan's own gain. The rest is split by each member's value in the fund on the day it closed.`
+            ? `Split by each eligible member's value in the fund on the day it closed -- including ${loan.borrower} if they're a contributing member.`
             : loan.status === "active"
             ? `How much of each eligible member's fund value is currently tied up funding this loan, based on their share of the pool when it was released. Shrinks as ${loan.borrower} repays it.`
             : "Once this loan is released, this will show how much of the fund is on hold for it, then its final gain split when it closes."}
