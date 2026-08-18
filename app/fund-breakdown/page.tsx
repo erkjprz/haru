@@ -462,21 +462,6 @@ function YouPanel({ memberId }: { memberId: string }) {
               bold
             />
             <div className="pt-1 space-y-1.5">
-              <InfoSubRow
-                label="Bank Interest"
-                value={signed(performance.bank_interest)}
-                valueClass={tone(performance.bank_interest)}
-              />
-              <InfoSubRow
-                label="Investment Gain/Loss"
-                value={signed(performance.investment_gain_loss)}
-                valueClass={tone(performance.investment_gain_loss)}
-              />
-              <InfoSubRow
-                label="Loan Gain Share"
-                value={signed(performance.loan_gain)}
-                valueClass={tone(performance.loan_gain)}
-              />
               {performance.bank_writeoff !== 0 && (
                 <InfoSubRow
                   label="Bank Write-off Share"
@@ -484,6 +469,21 @@ function YouPanel({ memberId }: { memberId: string }) {
                   valueClass={tone(performance.bank_writeoff)}
                 />
               )}
+              <InfoSubRow
+                label="Investment Gain/Loss"
+                value={signed(performance.investment_gain_loss)}
+                valueClass={tone(performance.investment_gain_loss)}
+              />
+              <InfoSubRow
+                label="Bank Interest"
+                value={signed(performance.bank_interest)}
+                valueClass={tone(performance.bank_interest)}
+              />
+              <InfoSubRow
+                label="Loan Gain Share"
+                value={signed(performance.loan_gain)}
+                valueClass={tone(performance.loan_gain)}
+              />
             </div>
           </InfoBox>
         </div>
@@ -539,8 +539,12 @@ function YouPanel({ memberId }: { memberId: string }) {
 
                       {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
                         <InfoBox label="Performance">
-                          {y.bankInterest !== 0 && (
-                            <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
+                          {y.bankWriteoff !== 0 && (
+                            <InfoRow
+                              label="Bank Write-off Share"
+                              value={signed(y.bankWriteoff)}
+                              valueClass={tone(y.bankWriteoff)}
+                            />
                           )}
                           {y.investmentGainLoss !== 0 && (
                             <InfoRow
@@ -549,15 +553,11 @@ function YouPanel({ memberId }: { memberId: string }) {
                               valueClass={tone(y.investmentGainLoss)}
                             />
                           )}
+                          {y.bankInterest !== 0 && (
+                            <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
+                          )}
                           {y.loanGain !== 0 && (
                             <InfoRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
-                          )}
-                          {y.bankWriteoff !== 0 && (
-                            <InfoRow
-                              label="Bank Write-off Share"
-                              value={signed(y.bankWriteoff)}
-                              valueClass={tone(y.bankWriteoff)}
-                            />
                           )}
                         </InfoBox>
                       )}
@@ -980,13 +980,6 @@ function GroupPanel() {
                   bold
                 />
                 <div className="pt-1 space-y-1.5">
-                  <InfoSubRow label="Bank Interest" value={signed(member.bank_interest)} valueClass={tone(member.bank_interest)} />
-                  <InfoSubRow
-                    label="Investment Gain/Loss"
-                    value={signed(member.investment_gain_loss)}
-                    valueClass={tone(member.investment_gain_loss)}
-                  />
-                  <InfoSubRow label="Loan Gain Share" value={signed(member.loan_gain)} valueClass={tone(member.loan_gain)} />
                   {member.bank_writeoff !== 0 && (
                     <InfoSubRow
                       label="Bank Write-off Share"
@@ -994,6 +987,13 @@ function GroupPanel() {
                       valueClass={tone(member.bank_writeoff)}
                     />
                   )}
+                  <InfoSubRow
+                    label="Investment Gain/Loss"
+                    value={signed(member.investment_gain_loss)}
+                    valueClass={tone(member.investment_gain_loss)}
+                  />
+                  <InfoSubRow label="Bank Interest" value={signed(member.bank_interest)} valueClass={tone(member.bank_interest)} />
+                  <InfoSubRow label="Loan Gain Share" value={signed(member.loan_gain)} valueClass={tone(member.loan_gain)} />
                 </div>
               </InfoBox>
 
@@ -1181,21 +1181,6 @@ function MemberBreakdownSheet({
                     bold
                   />
                   <div className="pt-1 space-y-1.5">
-                    <InfoSubRow
-                      label="Bank Interest"
-                      value={signed(performance.bank_interest)}
-                      valueClass={tone(performance.bank_interest)}
-                    />
-                    <InfoSubRow
-                      label="Investment Gain/Loss"
-                      value={signed(performance.investment_gain_loss)}
-                      valueClass={tone(performance.investment_gain_loss)}
-                    />
-                    <InfoSubRow
-                      label="Loan Gain Share"
-                      value={signed(performance.loan_gain)}
-                      valueClass={tone(performance.loan_gain)}
-                    />
                     {performance.bank_writeoff !== 0 && (
                       <InfoSubRow
                         label="Bank Write-off Share"
@@ -1203,6 +1188,21 @@ function MemberBreakdownSheet({
                         valueClass={tone(performance.bank_writeoff)}
                       />
                     )}
+                    <InfoSubRow
+                      label="Investment Gain/Loss"
+                      value={signed(performance.investment_gain_loss)}
+                      valueClass={tone(performance.investment_gain_loss)}
+                    />
+                    <InfoSubRow
+                      label="Bank Interest"
+                      value={signed(performance.bank_interest)}
+                      valueClass={tone(performance.bank_interest)}
+                    />
+                    <InfoSubRow
+                      label="Loan Gain Share"
+                      value={signed(performance.loan_gain)}
+                      valueClass={tone(performance.loan_gain)}
+                    />
                   </div>
                 </InfoBox>
               </div>
@@ -1254,8 +1254,12 @@ function MemberBreakdownSheet({
 
                       {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
                         <InfoBox label="Performance">
-                          {y.bankInterest !== 0 && (
-                            <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
+                          {y.bankWriteoff !== 0 && (
+                            <InfoRow
+                              label="Bank Write-off Share"
+                              value={signed(y.bankWriteoff)}
+                              valueClass={tone(y.bankWriteoff)}
+                            />
                           )}
                           {y.investmentGainLoss !== 0 && (
                             <InfoRow
@@ -1264,15 +1268,11 @@ function MemberBreakdownSheet({
                               valueClass={tone(y.investmentGainLoss)}
                             />
                           )}
+                          {y.bankInterest !== 0 && (
+                            <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
+                          )}
                           {y.loanGain !== 0 && (
                             <InfoRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
-                          )}
-                          {y.bankWriteoff !== 0 && (
-                            <InfoRow
-                              label="Bank Write-off Share"
-                              value={signed(y.bankWriteoff)}
-                              valueClass={tone(y.bankWriteoff)}
-                            />
                           )}
                         </InfoBox>
                       )}
