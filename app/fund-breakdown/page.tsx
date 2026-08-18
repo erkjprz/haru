@@ -447,7 +447,11 @@ function YouPanel({ memberId }: { memberId: string }) {
                 valueClass="text-rust"
               />
             )}
-            <InfoRow label="Net Contribution" value={`₱${fmt(performance.net_contribution)}`} bold />
+            <InfoRow
+              label="Net Contribution"
+              value={`${performance.net_contribution < 0 ? "-" : ""}₱${fmt(Math.abs(performance.net_contribution))}`}
+              bold
+            />
           </InfoBox>
 
           <InfoBox label="Performance (All-Time)">
@@ -516,17 +520,21 @@ function YouPanel({ memberId }: { memberId: string }) {
                 style={{ transform: `translateX(-${clampedYearIndex * 100}%)` }}
               >
                 {years.map((y) => {
-                  const yearTotal =
-                    y.netContribution + y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
+                  const yearPerformance = y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
                   return (
                     <div key={y.year} className="w-full shrink-0 bg-paper-2 border border-hairline rounded-md p-5">
                       <div className="flex justify-between items-baseline mb-3">
                         <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
-                        <span
-                          className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearTotal)}`}
-                        >
-                          {signed(yearTotal)}
-                        </span>
+                        <div className="text-right">
+                          <span
+                            className={`block font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearPerformance)}`}
+                          >
+                            {signed(yearPerformance)}
+                          </span>
+                          <span className="block text-[10px] uppercase tracking-wide text-ink-soft font-mono">
+                            Performance
+                          </span>
+                        </div>
                       </div>
 
                       <InfoBox label="Capital">
@@ -534,7 +542,11 @@ function YouPanel({ memberId }: { memberId: string }) {
                         {y.withdrawal !== 0 && (
                           <InfoRow label="Withdrawal" value={`-₱${fmt(Math.abs(y.withdrawal))}`} valueClass="text-rust" />
                         )}
-                        <InfoRow label="Net Contribution" value={`₱${fmt(y.netContribution)}`} bold />
+                        <InfoRow
+                          label="Net Contribution"
+                          value={`${y.netContribution < 0 ? "-" : ""}₱${fmt(Math.abs(y.netContribution))}`}
+                          bold
+                        />
                       </InfoBox>
 
                       {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
@@ -890,7 +902,11 @@ function GroupPanel() {
                 valueClass="text-rust"
               />
             )}
-            <InfoRow label="Net Contribution" value={`₱${fmt(fund.net_contribution)}`} bold />
+            <InfoRow
+              label="Net Contribution"
+              value={`${fund.net_contribution < 0 ? "-" : ""}₱${fmt(Math.abs(fund.net_contribution))}`}
+              bold
+            />
           </InfoBox>
 
           {fund.open_loans_count > 0 && (
@@ -969,7 +985,11 @@ function GroupPanel() {
                     valueClass="text-rust"
                   />
                 )}
-                <InfoRow label="Net Contribution" value={`₱${fmt(member.net_contribution)}`} bold />
+                <InfoRow
+                  label="Net Contribution"
+                  value={`${member.net_contribution < 0 ? "-" : ""}₱${fmt(Math.abs(member.net_contribution))}`}
+                  bold
+                />
               </InfoBox>
 
               <InfoBox label="Performance">
@@ -1166,7 +1186,11 @@ function MemberBreakdownSheet({
                       valueClass="text-rust"
                     />
                   )}
-                  <InfoRow label="Net Contribution" value={`₱${fmt(performance.net_contribution)}`} bold />
+                  <InfoRow
+                    label="Net Contribution"
+                    value={`${performance.net_contribution < 0 ? "-" : ""}₱${fmt(Math.abs(performance.net_contribution))}`}
+                    bold
+                  />
                 </InfoBox>
 
                 <InfoBox label="Performance (All-Time)">
@@ -1234,14 +1258,21 @@ function MemberBreakdownSheet({
                 style={{ transform: `translateX(-${clampedYearIndex * 100}%)` }}
               >
                 {years.map((y) => {
-                  const yearTotal = y.netContribution + y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
+                  const yearPerformance = y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
                   return (
                     <div key={y.year} className="w-full shrink-0 bg-paper-2 border border-hairline rounded-md p-5">
                       <div className="flex justify-between items-baseline mb-3">
                         <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
-                        <span className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearTotal)}`}>
-                          {signed(yearTotal)}
-                        </span>
+                        <div className="text-right">
+                          <span
+                            className={`block font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearPerformance)}`}
+                          >
+                            {signed(yearPerformance)}
+                          </span>
+                          <span className="block text-[10px] uppercase tracking-wide text-ink-soft font-mono">
+                            Performance
+                          </span>
+                        </div>
                       </div>
 
                       <InfoBox label="Capital">
@@ -1249,7 +1280,11 @@ function MemberBreakdownSheet({
                         {y.withdrawal !== 0 && (
                           <InfoRow label="Withdrawal" value={`-₱${fmt(Math.abs(y.withdrawal))}`} valueClass="text-rust" />
                         )}
-                        <InfoRow label="Net Contribution" value={`₱${fmt(y.netContribution)}`} bold />
+                        <InfoRow
+                          label="Net Contribution"
+                          value={`${y.netContribution < 0 ? "-" : ""}₱${fmt(Math.abs(y.netContribution))}`}
+                          bold
+                        />
                       </InfoBox>
 
                       {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
