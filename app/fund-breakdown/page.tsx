@@ -1423,14 +1423,22 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
         const loaded = (data as Loan[]) ?? []
         setLoans(loaded)
 
-        // Most recent year open by default, so there's always something to
-        // see without an extra tap -- older years collapse to keep the page
-        // short. Runs once, off the freshly loaded data.
-        const mostRecentClosedYear = loaded
-          .filter((l) => l.status === "closed")
-          .map((l) => new Date(l.closed_date ?? l.start_date).getFullYear().toString())
+        // Most recent multi-loan year open by default, so there's always
+        // something to see without an extra tap -- older years collapse to
+        // keep the page short. Single-loan years render as their own card
+        // and never go through this group at all. Runs once, off the
+        // freshly loaded data.
+        const closedYearCounts = new Map<string, number>()
+        for (const l of loaded) {
+          if (l.status !== "closed") continue
+          const year = new Date(l.closed_date ?? l.start_date).getFullYear().toString()
+          closedYearCounts.set(year, (closedYearCounts.get(year) ?? 0) + 1)
+        }
+        const mostRecentMultiLoanYear = [...closedYearCounts.entries()]
+          .filter(([, count]) => count > 1)
+          .map(([year]) => year)
           .sort((a, b) => Number(b) - Number(a))[0]
-        setExpandedYears(new Set(mostRecentClosedYear ? [mostRecentClosedYear] : []))
+        setExpandedYears(new Set(mostRecentMultiLoanYear ? [mostRecentMultiLoanYear] : []))
       }
 
       setLoading(false)
@@ -1540,17 +1548,26 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
         <section>
           <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Closed</h2>
           <div className="flex flex-col gap-3">
-            {closedLoansByYear.map(([year, yearLoans]) => (
-              <ClosedLoansYearGroup
-                key={year}
-                year={year}
-                loans={yearLoans}
-                fmt={fmt}
-                expanded={expandedYears?.has(year) ?? false}
-                onToggle={() => toggleYear(year)}
-                onSelectLoan={setSelectedLoanId}
-              />
-            ))}
+            {closedLoansByYear.map(([year, yearLoans]) =>
+              // A single loan in a year gets its own card directly --
+              // collapsing it behind a year header just to reveal the one
+              // loan back on tap would be a pointless extra step.
+              yearLoans.length === 1 ? (
+                <div key={year} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                  <CompactClosedLoanRow loan={yearLoans[0]} fmt={fmt} onClick={() => setSelectedLoanId(yearLoans[0].loan_id)} />
+                </div>
+              ) : (
+                <ClosedLoansYearGroup
+                  key={year}
+                  year={year}
+                  loans={yearLoans}
+                  fmt={fmt}
+                  expanded={expandedYears?.has(year) ?? false}
+                  onToggle={() => toggleYear(year)}
+                  onSelectLoan={setSelectedLoanId}
+                />
+              )
+            )}
           </div>
         </section>
       )}
