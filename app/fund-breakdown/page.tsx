@@ -1404,6 +1404,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
   const [loans, setLoans] = useState<Loan[]>([])
   const [loadError, setLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
+  const [expandedYears, setExpandedYears] = useState<Set<string> | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1419,7 +1420,17 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
       if (error) {
         setLoadError(error.message)
       } else {
-        setLoans((data as Loan[]) ?? [])
+        const loaded = (data as Loan[]) ?? []
+        setLoans(loaded)
+
+        // Most recent year open by default, so there's always something to
+        // see without an extra tap -- older years collapse to keep the page
+        // short. Runs once, off the freshly loaded data.
+        const mostRecentClosedYear = loaded
+          .filter((l) => l.status === "closed")
+          .map((l) => new Date(l.closed_date ?? l.start_date).getFullYear().toString())
+          .sort((a, b) => Number(b) - Number(a))[0]
+        setExpandedYears(new Set(mostRecentClosedYear ? [mostRecentClosedYear] : []))
       }
 
       setLoading(false)
@@ -1446,6 +1457,26 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
   const closedLoans = loans.filter((l) => l.status === "closed")
   const totalInterestEarned = closedLoans.reduce((sum, l) => sum + l.gain, 0)
   const totalOutstanding = openLoans.reduce((sum, l) => sum + l.outstanding, 0)
+
+  // Newest year first; a closed loan always has closed_date, start_date is
+  // just a defensive fallback for bad data.
+  const closedLoansByYear: [string, Loan[]][] = []
+  for (const loan of closedLoans) {
+    const year = new Date(loan.closed_date ?? loan.start_date).getFullYear().toString()
+    const group = closedLoansByYear.find(([y]) => y === year)
+    if (group) group[1].push(loan)
+    else closedLoansByYear.push([year, [loan]])
+  }
+  closedLoansByYear.sort((a, b) => Number(b[0]) - Number(a[0]))
+
+  function toggleYear(year: string) {
+    setExpandedYears((prev) => {
+      const next = new Set(prev)
+      if (next.has(year)) next.delete(year)
+      else next.add(year)
+      return next
+    })
+  }
 
   return (
     <div>
@@ -1505,18 +1536,19 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
         </section>
       )}
 
-      {closedLoans.length > 0 && (
+      {closedLoansByYear.length > 0 && (
         <section>
           <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Closed</h2>
           <div className="flex flex-col gap-3">
-            {closedLoans.map((loan) => (
-              <LoanCard
-                key={loan.loan_id}
-                loan={loan}
-                meta={loanStatusMeta(loan)}
+            {closedLoansByYear.map(([year, yearLoans]) => (
+              <ClosedLoansYearGroup
+                key={year}
+                year={year}
+                loans={yearLoans}
                 fmt={fmt}
-                isMine={loan.borrower_member_id === myMemberId}
-                onClick={() => setSelectedLoanId(loan.loan_id)}
+                expanded={expandedYears?.has(year) ?? false}
+                onToggle={() => toggleYear(year)}
+                onSelectLoan={setSelectedLoanId}
               />
             ))}
           </div>
@@ -1627,6 +1659,87 @@ function LoanCard({
           }`}
           style={{ width: `${repaidPct}%` }}
         />
+      </div>
+    </button>
+  )
+}
+
+function ClosedLoansYearGroup({
+  year,
+  loans,
+  fmt,
+  expanded,
+  onToggle,
+  onSelectLoan
+}: {
+  year: string
+  loans: Loan[]
+  fmt: (n: number) => string
+  expanded: boolean
+  onToggle: () => void
+  onSelectLoan: (loanId: string) => void
+}) {
+  const totalGain = loans.reduce((sum, l) => sum + l.gain, 0)
+
+  return (
+    <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+      <button
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left hover:bg-paper transition-colors"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className={`text-ink-soft text-[13px] transition-transform ${expanded ? "rotate-90" : ""}`}>›</span>
+          <span className="font-display text-[15px] font-semibold text-ink">{year}</span>
+          <span className="text-[11px] text-ink-soft font-mono">
+            {loans.length} loan{loans.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        <span
+          className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold ${
+            totalGain >= 0 ? "text-sage" : "text-rust"
+          }`}
+        >
+          {totalGain >= 0 ? "+" : "-"}₱{fmt(Math.abs(totalGain))}
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-hairline divide-y divide-hairline">
+          {loans.map((loan) => (
+            <CompactClosedLoanRow key={loan.loan_id} loan={loan} fmt={fmt} onClick={() => onSelectLoan(loan.loan_id)} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CompactClosedLoanRow({ loan, fmt, onClick }: { loan: Loan; fmt: (n: number) => string; onClick: () => void }) {
+  const dateLabel = new Date(loan.start_date).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+  const duration = durationLabel(loan.start_date, loan.closed_date)
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-between gap-3 px-5 py-3 text-left hover:bg-paper transition-colors"
+    >
+      <div className="min-w-0">
+        <p className="text-[14px] font-medium text-ink truncate">{loan.loan}</p>
+        <p className="text-[11px] text-ink-soft truncate">
+          {loan.borrower} · {dateLabel}
+          {duration && ` · paid off in ${duration}`}
+        </p>
+      </div>
+      <div className="shrink-0 flex items-center gap-2">
+        <span
+          className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold ${
+            loan.gain >= 0 ? "text-sage" : "text-rust"
+          }`}
+        >
+          {loan.gain >= 0 ? "+" : "-"}₱{fmt(Math.abs(loan.gain))}
+        </span>
+        <span className="text-ink-soft text-xs">→</span>
       </div>
     </button>
   )
