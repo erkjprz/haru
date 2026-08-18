@@ -176,6 +176,8 @@ type YearRow = {
   loanGain: number
   bankWriteoff: number
   investmentGainLoss: number
+  beginningBalance: number
+  endingBalance: number
 }
 
 // Shared by YouPanel and MemberBreakdownSheet -- both need the exact same
@@ -287,7 +289,9 @@ function useMemberBreakdown(memberId: string, includeTrend: boolean) {
             bankInterest: 0,
             loanGain: 0,
             bankWriteoff: 0,
-            investmentGainLoss: 0
+            investmentGainLoss: 0,
+            beginningBalance: 0,
+            endingBalance: 0
           }
         }
         return byYear[year]
@@ -333,7 +337,18 @@ function useMemberBreakdown(memberId: string, includeTrend: boolean) {
         ensure(year).investmentGainLoss += amount
       })
 
-      setYears(Object.values(byYear).sort((a, b) => b.year.localeCompare(a.year)))
+      // Walk years oldest-first to build each year's Beginning/Ending Balance --
+      // byYear only ever gets an entry for a year with real activity, so the
+      // earliest year truly starts from zero.
+      let runningBalance = 0
+      const ascendingYears = Object.values(byYear).sort((a, b) => a.year.localeCompare(b.year))
+      ascendingYears.forEach((row) => {
+        row.beginningBalance = runningBalance
+        runningBalance += row.netContribution + row.bankInterest + row.loanGain + row.bankWriteoff + row.investmentGainLoss
+        row.endingBalance = runningBalance
+      })
+
+      setYears(ascendingYears.slice().sort((a, b) => b.year.localeCompare(a.year)))
       setDataLoading(false)
     }
 
@@ -520,56 +535,44 @@ function YouPanel({ memberId }: { memberId: string }) {
                 style={{ transform: `translateX(-${clampedYearIndex * 100}%)` }}
               >
                 {years.map((y) => {
-                  const yearPerformance = y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
+                  const yearGainLoss = y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
                   return (
                     <div key={y.year} className="w-full shrink-0 bg-paper-2 border border-hairline rounded-md p-5">
-                      <div className="flex justify-between items-baseline mb-3">
+                      <div className="mb-3">
                         <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
-                        <div className="text-right">
-                          <span
-                            className={`block font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearPerformance)}`}
-                          >
-                            {signed(yearPerformance)}
-                          </span>
-                          <span className="block text-[10px] uppercase tracking-wide text-ink-soft font-mono">
-                            Performance
-                          </span>
-                        </div>
                       </div>
 
-                      <InfoBox label="Capital">
+                      <InfoBox label="Year Summary">
+                        <InfoRow label="Beginning Balance" value={`₱${fmt(y.beginningBalance)}`} />
                         <InfoRow label="Contribution" value={`₱${fmt(y.contribution)}`} />
                         {y.withdrawal !== 0 && (
                           <InfoRow label="Withdrawal" value={`-₱${fmt(Math.abs(y.withdrawal))}`} valueClass="text-rust" />
                         )}
-                        <InfoRow
-                          label="Net Contribution"
-                          value={`${y.netContribution < 0 ? "-" : ""}₱${fmt(Math.abs(y.netContribution))}`}
-                          bold
-                        />
+                        <InfoRow label="Gain/Loss" value={signed(yearGainLoss)} valueClass={tone(yearGainLoss)} />
+                        <InfoRow label="Ending Balance" value={`₱${fmt(y.endingBalance)}`} bold />
                       </InfoBox>
 
-                      {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
-                        <InfoBox label="Performance">
+                      {(y.bankWriteoff !== 0 || y.investmentGainLoss !== 0 || y.bankInterest !== 0 || y.loanGain !== 0) && (
+                        <InfoBox label="Gain/Loss Breakdown">
                           {y.bankWriteoff !== 0 && (
-                            <InfoRow
+                            <InfoSubRow
                               label="Bank Write-off Share"
                               value={signed(y.bankWriteoff)}
                               valueClass={tone(y.bankWriteoff)}
                             />
                           )}
                           {y.investmentGainLoss !== 0 && (
-                            <InfoRow
+                            <InfoSubRow
                               label="Investment Gain/Loss"
                               value={signed(y.investmentGainLoss)}
                               valueClass={tone(y.investmentGainLoss)}
                             />
                           )}
                           {y.bankInterest !== 0 && (
-                            <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
+                            <InfoSubRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
                           )}
                           {y.loanGain !== 0 && (
-                            <InfoRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
+                            <InfoSubRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
                           )}
                         </InfoBox>
                       )}
@@ -1258,56 +1261,44 @@ function MemberBreakdownSheet({
                 style={{ transform: `translateX(-${clampedYearIndex * 100}%)` }}
               >
                 {years.map((y) => {
-                  const yearPerformance = y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
+                  const yearGainLoss = y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
                   return (
                     <div key={y.year} className="w-full shrink-0 bg-paper-2 border border-hairline rounded-md p-5">
-                      <div className="flex justify-between items-baseline mb-3">
+                      <div className="mb-3">
                         <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
-                        <div className="text-right">
-                          <span
-                            className={`block font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${tone(yearPerformance)}`}
-                          >
-                            {signed(yearPerformance)}
-                          </span>
-                          <span className="block text-[10px] uppercase tracking-wide text-ink-soft font-mono">
-                            Performance
-                          </span>
-                        </div>
                       </div>
 
-                      <InfoBox label="Capital">
+                      <InfoBox label="Year Summary">
+                        <InfoRow label="Beginning Balance" value={`₱${fmt(y.beginningBalance)}`} />
                         <InfoRow label="Contribution" value={`₱${fmt(y.contribution)}`} />
                         {y.withdrawal !== 0 && (
                           <InfoRow label="Withdrawal" value={`-₱${fmt(Math.abs(y.withdrawal))}`} valueClass="text-rust" />
                         )}
-                        <InfoRow
-                          label="Net Contribution"
-                          value={`${y.netContribution < 0 ? "-" : ""}₱${fmt(Math.abs(y.netContribution))}`}
-                          bold
-                        />
+                        <InfoRow label="Gain/Loss" value={signed(yearGainLoss)} valueClass={tone(yearGainLoss)} />
+                        <InfoRow label="Ending Balance" value={`₱${fmt(y.endingBalance)}`} bold />
                       </InfoBox>
 
-                      {(y.bankInterest !== 0 || y.loanGain !== 0 || y.bankWriteoff !== 0 || y.investmentGainLoss !== 0) && (
-                        <InfoBox label="Performance">
+                      {(y.bankWriteoff !== 0 || y.investmentGainLoss !== 0 || y.bankInterest !== 0 || y.loanGain !== 0) && (
+                        <InfoBox label="Gain/Loss Breakdown">
                           {y.bankWriteoff !== 0 && (
-                            <InfoRow
+                            <InfoSubRow
                               label="Bank Write-off Share"
                               value={signed(y.bankWriteoff)}
                               valueClass={tone(y.bankWriteoff)}
                             />
                           )}
                           {y.investmentGainLoss !== 0 && (
-                            <InfoRow
+                            <InfoSubRow
                               label="Investment Gain/Loss"
                               value={signed(y.investmentGainLoss)}
                               valueClass={tone(y.investmentGainLoss)}
                             />
                           )}
                           {y.bankInterest !== 0 && (
-                            <InfoRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
+                            <InfoSubRow label="Bank Interest" value={signed(y.bankInterest)} valueClass={tone(y.bankInterest)} />
                           )}
                           {y.loanGain !== 0 && (
-                            <InfoRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
+                            <InfoSubRow label="Loan Gain Share" value={signed(y.loanGain)} valueClass={tone(y.loanGain)} />
                           )}
                         </InfoBox>
                       )}
