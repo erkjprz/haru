@@ -164,8 +164,9 @@ const memberSections: FaqSection[] = [
         q: "How does bank interest get split among members?",
         a: (
           <p>
-            Proportionally, based on how much each member had contributed to the fund at the time it&apos;s
-            distributed — the more you had in, the bigger your share.
+            Proportionally, based on each member&apos;s value in the fund at the time it&apos;s
+            distributed — contribution plus anything they&apos;ve already earned (bank interest, loan
+            gains, investment gains/losses) — the more you had in, the bigger your share.
           </p>
         )
       },
@@ -541,7 +542,7 @@ const adminSections: FaqSection[] = [
           <p>
             Bank interest that&apos;s been approved but not yet split across members. Tap{" "}
             <strong>Distribute</strong>{" "}
-            on a bank/year to divide it proportionally by each member&apos;s contribution balance at
+            on a bank/year to divide it proportionally by each member&apos;s value in the fund at
             that time.
           </p>
         )
