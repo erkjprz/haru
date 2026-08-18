@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -1404,7 +1404,6 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
   const [loans, setLoans] = useState<Loan[]>([])
   const [loadError, setLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
-  const [expandedYears, setExpandedYears] = useState<Set<string> | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1420,25 +1419,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
       if (error) {
         setLoadError(error.message)
       } else {
-        const loaded = (data as Loan[]) ?? []
-        setLoans(loaded)
-
-        // Most recent multi-loan year open by default, so there's always
-        // something to see without an extra tap -- older years collapse to
-        // keep the page short. Single-loan years render as their own card
-        // and never go through this group at all. Runs once, off the
-        // freshly loaded data.
-        const closedYearCounts = new Map<string, number>()
-        for (const l of loaded) {
-          if (l.status !== "closed") continue
-          const year = new Date(l.closed_date ?? l.start_date).getFullYear().toString()
-          closedYearCounts.set(year, (closedYearCounts.get(year) ?? 0) + 1)
-        }
-        const mostRecentMultiLoanYear = [...closedYearCounts.entries()]
-          .filter(([, count]) => count > 1)
-          .map(([year]) => year)
-          .sort((a, b) => Number(b) - Number(a))[0]
-        setExpandedYears(new Set(mostRecentMultiLoanYear ? [mostRecentMultiLoanYear] : []))
+        setLoans((data as Loan[]) ?? [])
       }
 
       setLoading(false)
@@ -1476,15 +1457,6 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
     else closedLoansByYear.push([year, [loan]])
   }
   closedLoansByYear.sort((a, b) => Number(b[0]) - Number(a[0]))
-
-  function toggleYear(year: string) {
-    setExpandedYears((prev) => {
-      const next = new Set(prev)
-      if (next.has(year)) next.delete(year)
-      else next.add(year)
-      return next
-    })
-  }
 
   return (
     <div>
@@ -1547,27 +1519,35 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
       {closedLoansByYear.length > 0 && (
         <section>
           <h2 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mb-3">Closed</h2>
-          <div className="flex flex-col gap-3">
-            {closedLoansByYear.map(([year, yearLoans]) =>
-              // A single loan in a year gets its own card directly --
-              // collapsing it behind a year header just to reveal the one
-              // loan back on tap would be a pointless extra step.
-              yearLoans.length === 1 ? (
-                <div key={year} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
-                  <CompactClosedLoanRow loan={yearLoans[0]} fmt={fmt} onClick={() => setSelectedLoanId(yearLoans[0].loan_id)} />
-                </div>
-              ) : (
-                <ClosedLoansYearGroup
-                  key={year}
-                  year={year}
-                  loans={yearLoans}
-                  fmt={fmt}
-                  expanded={expandedYears?.has(year) ?? false}
-                  onToggle={() => toggleYear(year)}
-                  onSelectLoan={setSelectedLoanId}
-                />
+          <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden divide-y divide-hairline">
+            {closedLoansByYear.map(([year, yearLoans]) => {
+              const yearGain = yearLoans.reduce((sum, l) => sum + l.gain, 0)
+
+              return (
+                <Fragment key={year}>
+                  <div className="flex items-baseline justify-between px-5 py-2.5">
+                    <span className="text-[12px] font-mono font-bold text-ink-soft tracking-wide">{year}</span>
+                    {yearLoans.length > 1 && (
+                      <span
+                        className={`font-mono [font-variant-numeric:tabular-nums] text-[11px] font-semibold ${
+                          yearGain >= 0 ? "text-sage" : "text-rust"
+                        }`}
+                      >
+                        {yearGain >= 0 ? "+" : "-"}₱{fmt(Math.abs(yearGain))}
+                      </span>
+                    )}
+                  </div>
+                  {yearLoans.map((loan) => (
+                    <CompactClosedLoanRow
+                      key={loan.loan_id}
+                      loan={loan}
+                      fmt={fmt}
+                      onClick={() => setSelectedLoanId(loan.loan_id)}
+                    />
+                  ))}
+                </Fragment>
               )
-            )}
+            })}
           </div>
         </section>
       )}
@@ -1678,57 +1658,6 @@ function LoanCard({
         />
       </div>
     </button>
-  )
-}
-
-function ClosedLoansYearGroup({
-  year,
-  loans,
-  fmt,
-  expanded,
-  onToggle,
-  onSelectLoan
-}: {
-  year: string
-  loans: Loan[]
-  fmt: (n: number) => string
-  expanded: boolean
-  onToggle: () => void
-  onSelectLoan: (loanId: string) => void
-}) {
-  const totalGain = loans.reduce((sum, l) => sum + l.gain, 0)
-
-  return (
-    <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
-      <button
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left hover:bg-paper transition-colors"
-      >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className={`text-ink-soft text-[13px] transition-transform ${expanded ? "rotate-90" : ""}`}>›</span>
-          <span className="font-display text-[15px] font-semibold text-ink">{year}</span>
-          <span className="text-[11px] text-ink-soft font-mono">
-            {loans.length} loan{loans.length === 1 ? "" : "s"}
-          </span>
-        </div>
-        <span
-          className={`shrink-0 font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold ${
-            totalGain >= 0 ? "text-sage" : "text-rust"
-          }`}
-        >
-          {totalGain >= 0 ? "+" : "-"}₱{fmt(Math.abs(totalGain))}
-        </span>
-      </button>
-
-      {expanded && (
-        <div className="border-t border-hairline divide-y divide-hairline">
-          {loans.map((loan) => (
-            <CompactClosedLoanRow key={loan.loan_id} loan={loan} fmt={fmt} onClick={() => onSelectLoan(loan.loan_id)} />
-          ))}
-        </div>
-      )}
-    </div>
   )
 }
 
