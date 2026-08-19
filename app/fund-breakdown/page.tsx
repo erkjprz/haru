@@ -885,8 +885,15 @@ function GroupPanel() {
   }
 
   const clampedIndex = Math.min(activeIndex, Math.max(0, members.length - 1))
-  const totalEquity = members.reduce((sum, m) => sum + m.total_value, 0)
   const totalMoneyOnHold = members.reduce((sum, m) => sum + m.money_on_hold, 0)
+  // total_cash + totalMoneyOnHold, not sum(total_value) -- total_value is
+  // built from each member's ledger of contributions/allocated gains, which
+  // doesn't always agree with actual bank cash (e.g. an Opening Balance
+  // transaction can fund the bank balance without being attributed to any
+  // member's equity). Deriving "total" from total_cash instead keeps the
+  // available + tied-up = total identity exactly true, the same way it's
+  // exactly true on the per-member card.
+  const fundTotalWithHold = fund != null ? fund.total_cash + totalMoneyOnHold : 0
 
   return (
     <div>
@@ -907,7 +914,7 @@ function GroupPanel() {
           </p>
           {fund != null && totalMoneyOnHold > 0 && (
             <p className="text-xs text-ink-soft mt-1">
-              of ₱{fmt(totalEquity)} total — ₱{fmt(totalMoneyOnHold)} currently tied up in loans/investments
+              of ₱{fmt(fundTotalWithHold)} total — ₱{fmt(totalMoneyOnHold)} currently tied up in loans/investments
             </p>
           )}
           <Sparkline points={fundTrend} color="#B8912F" />
