@@ -885,6 +885,8 @@ function GroupPanel() {
   }
 
   const clampedIndex = Math.min(activeIndex, Math.max(0, members.length - 1))
+  const totalEquity = members.reduce((sum, m) => sum + m.total_value, 0)
+  const totalMoneyOnHold = members.reduce((sum, m) => sum + m.money_on_hold, 0)
 
   return (
     <div>
@@ -903,6 +905,11 @@ function GroupPanel() {
           <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl sm:text-3xl font-bold text-ink">
             ₱{fund != null ? fmt(fund.total_cash) : "—"}
           </p>
+          {fund != null && totalMoneyOnHold > 0 && (
+            <p className="text-xs text-ink-soft mt-1">
+              of ₱{fmt(totalEquity)} total — ₱{fmt(totalMoneyOnHold)} currently tied up in loans/investments
+            </p>
+          )}
           <Sparkline points={fundTrend} color="#B8912F" />
 
           <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono mb-1.5 mt-3.5">Ownership Share</p>
