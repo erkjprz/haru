@@ -659,6 +659,7 @@ type FundTotals = {
   total_bank_interest: number
   net_investment_gain_loss: number
   total_loan_gain_distributed: number
+  total_bank_writeoff: number
   open_loans_count: number
   open_loans_outstanding: number
 }
@@ -703,12 +704,32 @@ function GroupPanel() {
         .select("month, running_balance")
         .order("month", { ascending: true })
 
-      const [memberResult, performanceResult, fundResult, fundTrendResult] = await Promise.all([
-        memberPromise,
-        performancePromise,
-        fundPromise,
-        fundTrendPromise
-      ])
+      // v_fund_summary's total_bank_interest is gross, before withholding tax --
+      // netted here against Tax so this matches the Banks tab's Interest Earned
+      // (same fix, same reasoning: tax is stored as a negative amount).
+      const taxPromise = supabase.from("transactions").select("amount").eq("classification", "Tax").eq("status", "approved")
+
+      // v_fund_summary's open_loans_outstanding is total_repayable minus
+      // repaid, i.e. principal plus interest still owed -- fetched
+      // separately here to show just the principal still out instead.
+      const activeLoansPromise = supabase.from("loans").select("loan_id, principal").eq("status", "active")
+
+      const loanRepaymentsPromise = supabase
+        .from("transactions")
+        .select("loan_id, amount")
+        .eq("classification", "Loan Repayment")
+        .eq("status", "approved")
+
+      const [memberResult, performanceResult, fundResult, fundTrendResult, taxResult, activeLoansResult, loanRepaymentsResult] =
+        await Promise.all([
+          memberPromise,
+          performancePromise,
+          fundPromise,
+          fundTrendPromise,
+          taxPromise,
+          activeLoansPromise,
+          loanRepaymentsPromise
+        ])
 
       if (cancelled) return
 
@@ -721,16 +742,37 @@ function GroupPanel() {
       }
 
       if (fundResult.data) {
+        const totalTax = (taxResult.data ?? []).reduce((sum: number, row: any) => sum + Number(row.amount), 0)
+
+        const repaidByLoan: Record<string, number> = {}
+        for (const row of loanRepaymentsResult.data ?? []) {
+          repaidByLoan[row.loan_id] = (repaidByLoan[row.loan_id] ?? 0) + Number(row.amount)
+        }
+        const open_loans_principal_outstanding = (activeLoansResult.data ?? []).reduce(
+          (sum: number, loan: any) => sum + Math.max(0, Number(loan.principal) - (repaidByLoan[loan.loan_id] ?? 0)),
+          0
+        )
+
+        // v_fund_summary has no write-off total of its own -- sum each
+        // approved member's Bank Write-off Share instead, same population
+        // the member breakdown below is built from.
+        const approvedMemberIds = new Set((memberResult.data ?? []).map((m: any) => m.member_id))
+        const total_bank_writeoff = (performanceResult.data ?? []).reduce(
+          (sum: number, row: any) => (approvedMemberIds.has(row.member_id) ? sum + Number(row.bank_writeoff ?? 0) : sum),
+          0
+        )
+
         setFund({
           total_cash: Number(fundResult.data.total_cash),
           total_contribution: Number(fundResult.data.total_contribution),
           total_withdrawal: Number(fundResult.data.total_withdrawal),
           net_contribution: Number(fundResult.data.net_contribution),
-          total_bank_interest: Number(fundResult.data.total_bank_interest),
+          total_bank_interest: Number(fundResult.data.total_bank_interest) + totalTax,
           net_investment_gain_loss: Number(fundResult.data.net_investment_gain_loss),
           total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed),
+          total_bank_writeoff,
           open_loans_count: Number(fundResult.data.open_loans_count),
-          open_loans_outstanding: Number(fundResult.data.open_loans_outstanding)
+          open_loans_outstanding: open_loans_principal_outstanding
         })
       }
 
@@ -915,27 +957,39 @@ function GroupPanel() {
           {fund.open_loans_count > 0 && (
             <InfoBox label="Loans">
               <InfoRow
-                label={`Outstanding (${fund.open_loans_count} active)`}
+                label={`Principal Outstanding (${fund.open_loans_count} active)`}
                 value={`₱${fmt(fund.open_loans_outstanding)}`}
                 bold
               />
+              <p className="text-[11px] text-ink-soft pt-1">Doesn't include interest owed.</p>
             </InfoBox>
           )}
 
           <InfoBox label="Performance">
             <InfoRow
               label="Total Fund Gain/Loss"
-              value={signed(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
-              valueClass={tone(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
+              value={signed(
+                fund.total_bank_writeoff + fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed
+              )}
+              valueClass={tone(
+                fund.total_bank_writeoff + fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed
+              )}
               bold
             />
             <div className="pt-1 space-y-1.5">
-              <InfoSubRow label="Bank Interest (all-time)" value={signed(fund.total_bank_interest)} valueClass="text-sage" />
               <InfoSubRow
-                label="Investment Position"
+                label="Investment Gain/Loss"
                 value={signed(fund.net_investment_gain_loss)}
                 valueClass={tone(fund.net_investment_gain_loss)}
               />
+              {fund.total_bank_writeoff !== 0 && (
+                <InfoSubRow
+                  label="Bank Write-off"
+                  value={signed(fund.total_bank_writeoff)}
+                  valueClass={tone(fund.total_bank_writeoff)}
+                />
+              )}
+              <InfoSubRow label="Bank Interest" value={signed(fund.total_bank_interest)} valueClass="text-sage" />
               <InfoSubRow
                 label="Loan Gains Distributed"
                 value={signed(fund.total_loan_gain_distributed)}
@@ -1855,7 +1909,9 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const totalBalance = banks.reduce((sum, b) => sum + b.balance, 0)
-  const totalNetInterest = banks.reduce((sum, b) => sum + (b.interest_earned - b.tax), 0)
+  // tax is stored as a negative amount, so adding it nets it out -- subtracting
+  // it would add the withheld amount back instead.
+  const totalNetInterest = banks.reduce((sum, b) => sum + (b.interest_earned + b.tax), 0)
 
   return (
     <div>
@@ -2000,7 +2056,9 @@ function BankCard({
   fused: boolean
   onEdit?: () => void
 }) {
-  const netInterest = bank.interest_earned - bank.tax
+  // tax is stored as a negative amount, so adding it nets it out --
+  // subtracting it would add the withheld amount back instead.
+  const netInterest = bank.interest_earned + bank.tax
   // Distributed totals are tracked gross (pre-tax) -- they exactly match the
   // sum of transactions already marked distributed, tax was never part of
   // that pool. Diffing against netInterest here would double-count tax as
