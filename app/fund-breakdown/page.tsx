@@ -708,13 +708,27 @@ function GroupPanel() {
       // (same fix, same reasoning: tax is stored as a negative amount).
       const taxPromise = supabase.from("transactions").select("amount").eq("classification", "Tax").eq("status", "approved")
 
-      const [memberResult, performanceResult, fundResult, fundTrendResult, taxResult] = await Promise.all([
-        memberPromise,
-        performancePromise,
-        fundPromise,
-        fundTrendPromise,
-        taxPromise
-      ])
+      // v_fund_summary's open_loans_outstanding is total_repayable minus
+      // repaid, i.e. principal plus interest still owed -- fetched
+      // separately here to show just the principal still out instead.
+      const activeLoansPromise = supabase.from("loans").select("loan_id, principal").eq("status", "active")
+
+      const loanRepaymentsPromise = supabase
+        .from("transactions")
+        .select("loan_id, amount")
+        .eq("classification", "Loan Repayment")
+        .eq("status", "approved")
+
+      const [memberResult, performanceResult, fundResult, fundTrendResult, taxResult, activeLoansResult, loanRepaymentsResult] =
+        await Promise.all([
+          memberPromise,
+          performancePromise,
+          fundPromise,
+          fundTrendPromise,
+          taxPromise,
+          activeLoansPromise,
+          loanRepaymentsPromise
+        ])
 
       if (cancelled) return
 
@@ -729,6 +743,15 @@ function GroupPanel() {
       if (fundResult.data) {
         const totalTax = (taxResult.data ?? []).reduce((sum: number, row: any) => sum + Number(row.amount), 0)
 
+        const repaidByLoan: Record<string, number> = {}
+        for (const row of loanRepaymentsResult.data ?? []) {
+          repaidByLoan[row.loan_id] = (repaidByLoan[row.loan_id] ?? 0) + Number(row.amount)
+        }
+        const open_loans_principal_outstanding = (activeLoansResult.data ?? []).reduce(
+          (sum: number, loan: any) => sum + Math.max(0, Number(loan.principal) - (repaidByLoan[loan.loan_id] ?? 0)),
+          0
+        )
+
         setFund({
           total_cash: Number(fundResult.data.total_cash),
           total_contribution: Number(fundResult.data.total_contribution),
@@ -738,7 +761,7 @@ function GroupPanel() {
           net_investment_gain_loss: Number(fundResult.data.net_investment_gain_loss),
           total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed),
           open_loans_count: Number(fundResult.data.open_loans_count),
-          open_loans_outstanding: Number(fundResult.data.open_loans_outstanding)
+          open_loans_outstanding: open_loans_principal_outstanding
         })
       }
 
@@ -927,6 +950,7 @@ function GroupPanel() {
                 value={`₱${fmt(fund.open_loans_outstanding)}`}
                 bold
               />
+              <p className="text-[11px] text-ink-soft pt-1">Principal only -- doesn't include interest owed.</p>
             </InfoBox>
           )}
 
