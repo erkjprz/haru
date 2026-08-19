@@ -80,7 +80,9 @@ export function BankDetailPanel({
     // already use.
     const interestPromise = supabase
       .from("transactions")
-      .select("classification, amount, bank, bank_accounts!transactions_bank_account_id_fkey ( bank_name )")
+      .select(
+        "classification, amount, bank, interest_distributed, bank_accounts!transactions_bank_account_id_fkey ( bank_name )"
+      )
       .eq("status", "approved")
       .in("classification", ["Bank Interest", "Tax"])
 
@@ -186,12 +188,13 @@ export function BankDetailPanel({
   // subtracting it would add the withheld amount back instead.
   const netInterest = interestEarned + tax
   const totalDistributed = years.reduce((sum, y) => sum + y.amount, 0)
-  // totalDistributed is tracked gross (pre-tax) -- it exactly matches the
-  // sum of transactions already marked distributed, tax was never part of
-  // that pool. Diffing against netInterest here would double-count tax as
-  // if it were still pending distribution, when it's withheld and gone
-  // (matches the same fix in fund-breakdown/page.tsx's BankCard).
-  const undistributed = interestEarned - totalDistributed
+  // Not computed independently from interestEarned/totalDistributed --
+  // reuses pendingGroups (the same getPendingBankInterestGroups result the
+  // "Pending Distribution" section below is built from) so this figure can
+  // never drift from what actually gets credited when Distribute is
+  // clicked. That function already nets tax out and excludes years whose
+  // interest was already fully distributed.
+  const undistributed = pendingGroups.reduce((sum, g) => sum + g.totalAmount, 0)
 
   return (
     <div>

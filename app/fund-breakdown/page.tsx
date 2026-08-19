@@ -9,6 +9,7 @@ import { useAuth } from "@/app/auth-context"
 import type { InterestType } from "@/lib/loanMath"
 import { formatInterestLabel, durationLabel, paymentOverdueLabel } from "@/lib/loanFormat"
 import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
+import { getPendingBankInterestGroups } from "@/lib/bankInterest"
 import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
 import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
@@ -1694,6 +1695,7 @@ type Bank = {
   interest_earned: number
   tax: number
   distributed: number
+  pending_interest: number
 }
 
 type BankAccount = {
@@ -1745,12 +1747,25 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       .eq("status", "approved")
       .in("classification", ["Bank Interest", "Tax"])
     const distributedPromise = supabase.from("bank_interest_allocations").select("bank, amount")
+    // Same source the admin Distrib. tab is built from -- reusing it here
+    // instead of tracking pending status from the raw transactions means
+    // this "not yet distributed" figure can never drift from what
+    // Distribute actually credits (tax netted out, orphaned already-
+    // distributed years excluded). Caught locally, unlike the other
+    // promises here -- getPendingBankInterestGroups throws instead of
+    // resolving to {error}, which would otherwise abort the whole
+    // Promise.all and leave every other result here unprocessed too.
+    const pendingGroupsPromise = getPendingBankInterestGroups().catch((err) => {
+      setLoadError(err instanceof Error ? err.message : "Couldn't load pending interest.")
+      return []
+    })
 
-    const [bankAccountsResult, balancesResult, interestResult, distributedResult] = await Promise.all([
+    const [bankAccountsResult, balancesResult, interestResult, distributedResult, pendingGroups] = await Promise.all([
       bankAccountsPromise,
       balancesPromise,
       interestPromise,
-      distributedPromise
+      distributedPromise,
+      pendingGroupsPromise
     ])
 
     if (bankAccountsResult.error) {
@@ -1763,12 +1778,12 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
 
     const byBank: Record<string, Bank> = {}
     for (const acct of bankAccountsResult.data ?? []) {
-      byBank[acct.bank_name] = { bank: acct.bank_name, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+      byBank[acct.bank_name] = { bank: acct.bank_name, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
     }
 
     if (!balancesResult.error) {
       for (const row of balancesResult.data ?? []) {
-        if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+        if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
         byBank[row.bank].balance = Number(row.balance)
       }
     } else {
@@ -1782,7 +1797,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
         // real bank one way or the other -- but skip rather than pool
         // unattributed interest/tax into a bogus "unknown bank" card.
         if (!bankName) continue
-        if (!byBank[bankName]) byBank[bankName] = { bank: bankName, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+        if (!byBank[bankName]) byBank[bankName] = { bank: bankName, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
         if (row.classification === "Bank Interest") byBank[bankName].interest_earned += Number(row.amount)
         if (row.classification === "Tax") byBank[bankName].tax += Number(row.amount)
       }
@@ -1792,11 +1807,18 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
 
     if (!distributedResult.error) {
       for (const row of distributedResult.data ?? []) {
-        if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+        if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
         byBank[row.bank].distributed += Number(row.amount)
       }
     } else {
       setLoadError(distributedResult.error.message)
+    }
+
+    for (const group of pendingGroups) {
+      if (!byBank[group.bank]) {
+        byBank[group.bank] = { bank: group.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
+      }
+      byBank[group.bank].pending_interest += group.totalAmount
     }
 
     setBanks(Object.values(byBank).sort((a, b) => b.balance - a.balance))
@@ -2059,11 +2081,12 @@ function BankCard({
   // tax is stored as a negative amount, so adding it nets it out --
   // subtracting it would add the withheld amount back instead.
   const netInterest = bank.interest_earned + bank.tax
-  // Distributed totals are tracked gross (pre-tax) -- they exactly match the
-  // sum of transactions already marked distributed, tax was never part of
-  // that pool. Diffing against netInterest here would double-count tax as
-  // if it were still pending distribution, when it's withheld and gone.
-  const undistributed = bank.interest_earned - bank.distributed
+  // Not derived as interest_earned - distributed -- pending_interest comes
+  // straight from getPendingBankInterestGroups (the same source the admin
+  // Distrib. tab uses), so it can never drift from what Distribute
+  // actually credits: tax netted out, and years whose interest was
+  // already fully distributed correctly excluded.
+  const undistributed = bank.pending_interest
   const distributedPct = netInterest > 0 ? Math.min(100, (bank.distributed / netInterest) * 100) : 0
 
   return (

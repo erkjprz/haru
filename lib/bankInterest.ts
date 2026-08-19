@@ -26,45 +26,85 @@ export interface PendingBankInterestGroup {
  * data uses: one lump-sum distribution per calendar year per bank (e.g.
  * 2025 has two separate events, BDO and Maya, each split across all 10
  * members), not one event per individual transaction.
+ *
+ * Also nets in not-yet-distributed Tax transactions for the same (year,
+ * bank) so their (negative) amount reduces the interest before it's split
+ * -- the bank withholds tax before the interest ever reaches the account,
+ * so distributing the gross amount would credit members for money that was
+ * never actually there. Tax rows ride along in transactionIds purely so
+ * distributeBankInterestGroup marks them interest_distributed too, once
+ * consumed -- interest_distributed has no meaning of its own for Tax, it's
+ * just reused as "already netted into a distribution."
+ *
+ * A (year, bank) only becomes a real group if it has at least one pending
+ * Bank Interest transaction. Every historical Tax row has
+ * interest_distributed = false -- the old distribution flow never touched
+ * Tax rows at all, so years whose interest was already fully distributed
+ * still have untouched, orphaned Tax rows sitting around. Surfacing those
+ * as a fresh "Distribute" target would silently perform an un-reviewed
+ * retroactive correction one year at a time; that needs a deliberate,
+ * reviewed fix instead, so orphaned tax-only years are left alone here.
  */
 export async function getPendingBankInterestGroups(): Promise<PendingBankInterestGroup[]> {
   const { data: pendingTxns, error } = await supabase
     .from("transactions")
     .select(
       `
-      transaction_id, amount, txn_date, created_at, bank, bank_account_id,
+      transaction_id, amount, txn_date, created_at, bank, bank_account_id, classification,
       bank_accounts!transactions_bank_account_id_fkey ( bank_name )
     `
     )
-    .eq("classification", "Bank Interest")
+    .in("classification", ["Bank Interest", "Tax"])
     .eq("interest_distributed", false)
 
   if (error) throw new Error(error.message)
 
-  const groups = new Map<string, PendingBankInterestGroup>()
+  type RawGroup = {
+    year: number
+    bank: string
+    interestIds: string[]
+    interestTotal: number
+    taxIds: string[]
+    taxTotal: number
+  }
+
+  const raw = new Map<string, RawGroup>()
 
   for (const t of pendingTxns ?? []) {
     const bank = t.bank || (t as any).bank_accounts?.bank_name || "Unknown"
     const year = effectiveDate(t).getFullYear()
     const key = `${year}-${bank}`
 
-    const existing = groups.get(key)
-    if (existing) {
-      existing.transactionIds.push(t.transaction_id)
-      existing.totalAmount = Number((existing.totalAmount + Number(t.amount)).toFixed(2))
-      existing.transactionCount += 1
-    } else {
-      groups.set(key, {
-        year,
-        bank,
-        transactionIds: [t.transaction_id],
-        totalAmount: Number(t.amount),
-        transactionCount: 1
-      })
+    const existing: RawGroup = raw.get(key) ?? {
+      year,
+      bank,
+      interestIds: [],
+      interestTotal: 0,
+      taxIds: [],
+      taxTotal: 0
     }
+    if (t.classification === "Bank Interest") {
+      existing.interestIds.push(t.transaction_id)
+      existing.interestTotal = Number((existing.interestTotal + Number(t.amount)).toFixed(2))
+    } else {
+      existing.taxIds.push(t.transaction_id)
+      existing.taxTotal = Number((existing.taxTotal + Number(t.amount)).toFixed(2))
+    }
+    raw.set(key, existing)
   }
 
-  return Array.from(groups.values()).sort((a, b) => b.year - a.year || a.bank.localeCompare(b.bank))
+  return Array.from(raw.values())
+    .filter((g) => g.interestIds.length > 0)
+    .map(
+      (g): PendingBankInterestGroup => ({
+        year: g.year,
+        bank: g.bank,
+        transactionIds: [...g.interestIds, ...g.taxIds],
+        totalAmount: Number((g.interestTotal + g.taxTotal).toFixed(2)),
+        transactionCount: g.interestIds.length + g.taxIds.length
+      })
+    )
+    .sort((a, b) => b.year - a.year || a.bank.localeCompare(b.bank))
 }
 
 /**
