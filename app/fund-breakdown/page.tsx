@@ -659,6 +659,7 @@ type FundTotals = {
   total_bank_interest: number
   net_investment_gain_loss: number
   total_loan_gain_distributed: number
+  total_bank_writeoff: number
   open_loans_count: number
   open_loans_outstanding: number
 }
@@ -752,6 +753,15 @@ function GroupPanel() {
           0
         )
 
+        // v_fund_summary has no write-off total of its own -- sum each
+        // approved member's Bank Write-off Share instead, same population
+        // the member breakdown below is built from.
+        const approvedMemberIds = new Set((memberResult.data ?? []).map((m: any) => m.member_id))
+        const total_bank_writeoff = (performanceResult.data ?? []).reduce(
+          (sum: number, row: any) => (approvedMemberIds.has(row.member_id) ? sum + Number(row.bank_writeoff ?? 0) : sum),
+          0
+        )
+
         setFund({
           total_cash: Number(fundResult.data.total_cash),
           total_contribution: Number(fundResult.data.total_contribution),
@@ -760,6 +770,7 @@ function GroupPanel() {
           total_bank_interest: Number(fundResult.data.total_bank_interest) + totalTax,
           net_investment_gain_loss: Number(fundResult.data.net_investment_gain_loss),
           total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed),
+          total_bank_writeoff,
           open_loans_count: Number(fundResult.data.open_loans_count),
           open_loans_outstanding: open_loans_principal_outstanding
         })
@@ -957,8 +968,12 @@ function GroupPanel() {
           <InfoBox label="Performance">
             <InfoRow
               label="Total Fund Gain/Loss"
-              value={signed(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
-              valueClass={tone(fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed)}
+              value={signed(
+                fund.total_bank_writeoff + fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed
+              )}
+              valueClass={tone(
+                fund.total_bank_writeoff + fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed
+              )}
               bold
             />
             <div className="pt-1 space-y-1.5">
@@ -967,6 +982,13 @@ function GroupPanel() {
                 value={signed(fund.net_investment_gain_loss)}
                 valueClass={tone(fund.net_investment_gain_loss)}
               />
+              {fund.total_bank_writeoff !== 0 && (
+                <InfoSubRow
+                  label="Bank Write-off"
+                  value={signed(fund.total_bank_writeoff)}
+                  valueClass={tone(fund.total_bank_writeoff)}
+                />
+              )}
               <InfoSubRow label="Bank Interest" value={signed(fund.total_bank_interest)} valueClass="text-sage" />
               <InfoSubRow
                 label="Loan Gains Distributed"
