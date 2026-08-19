@@ -1855,7 +1855,9 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const totalBalance = banks.reduce((sum, b) => sum + b.balance, 0)
-  const totalNetInterest = banks.reduce((sum, b) => sum + (b.interest_earned - b.tax), 0)
+  // tax is stored as a negative amount, so adding it nets it out -- subtracting
+  // it would add the withheld amount back instead.
+  const totalNetInterest = banks.reduce((sum, b) => sum + (b.interest_earned + b.tax), 0)
 
   return (
     <div>
@@ -2000,7 +2002,9 @@ function BankCard({
   fused: boolean
   onEdit?: () => void
 }) {
-  const netInterest = bank.interest_earned - bank.tax
+  // tax is stored as a negative amount, so adding it nets it out --
+  // subtracting it would add the withheld amount back instead.
+  const netInterest = bank.interest_earned + bank.tax
   // Distributed totals are tracked gross (pre-tax) -- they exactly match the
   // sum of transactions already marked distributed, tax was never part of
   // that pool. Diffing against netInterest here would double-count tax as

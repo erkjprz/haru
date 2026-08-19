@@ -188,7 +188,9 @@ export function BankDetailPanel({
     )
   }
 
-  const netInterest = interestEarned - tax
+  // tax is stored as a negative amount, so adding it nets it out --
+  // subtracting it would add the withheld amount back instead.
+  const netInterest = interestEarned + tax
   const totalDistributed = years.reduce((sum, y) => sum + y.amount, 0)
   // totalDistributed is tracked gross (pre-tax) -- it exactly matches the
   // sum of transactions already marked distributed, tax was never part of
