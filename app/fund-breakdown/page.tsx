@@ -946,11 +946,11 @@ function GroupPanel() {
           {fund.open_loans_count > 0 && (
             <InfoBox label="Loans">
               <InfoRow
-                label={`Outstanding (${fund.open_loans_count} active)`}
+                label={`Principal Outstanding (${fund.open_loans_count} active)`}
                 value={`₱${fmt(fund.open_loans_outstanding)}`}
                 bold
               />
-              <p className="text-[11px] text-ink-soft pt-1">Principal only -- doesn't include interest owed.</p>
+              <p className="text-[11px] text-ink-soft pt-1">Doesn't include interest owed.</p>
             </InfoBox>
           )}
 
