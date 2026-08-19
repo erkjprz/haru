@@ -1694,6 +1694,7 @@ type Bank = {
   interest_earned: number
   tax: number
   distributed: number
+  pending_interest: number
 }
 
 type BankAccount = {
@@ -1741,7 +1742,9 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
     // about which bank a transaction belongs to.
     const interestPromise = supabase
       .from("transactions")
-      .select("bank, classification, amount, bank_accounts!transactions_bank_account_id_fkey ( bank_name )")
+      .select(
+        "bank, classification, amount, interest_distributed, bank_accounts!transactions_bank_account_id_fkey ( bank_name )"
+      )
       .eq("status", "approved")
       .in("classification", ["Bank Interest", "Tax"])
     const distributedPromise = supabase.from("bank_interest_allocations").select("bank, amount")
@@ -1763,12 +1766,12 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
 
     const byBank: Record<string, Bank> = {}
     for (const acct of bankAccountsResult.data ?? []) {
-      byBank[acct.bank_name] = { bank: acct.bank_name, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+      byBank[acct.bank_name] = { bank: acct.bank_name, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
     }
 
     if (!balancesResult.error) {
       for (const row of balancesResult.data ?? []) {
-        if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+        if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
         byBank[row.bank].balance = Number(row.balance)
       }
     } else {
@@ -1782,8 +1785,11 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
         // real bank one way or the other -- but skip rather than pool
         // unattributed interest/tax into a bogus "unknown bank" card.
         if (!bankName) continue
-        if (!byBank[bankName]) byBank[bankName] = { bank: bankName, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
-        if (row.classification === "Bank Interest") byBank[bankName].interest_earned += Number(row.amount)
+        if (!byBank[bankName]) byBank[bankName] = { bank: bankName, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
+        if (row.classification === "Bank Interest") {
+          byBank[bankName].interest_earned += Number(row.amount)
+          if (!row.interest_distributed) byBank[bankName].pending_interest += Number(row.amount)
+        }
         if (row.classification === "Tax") byBank[bankName].tax += Number(row.amount)
       }
     } else {
@@ -1792,7 +1798,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
 
     if (!distributedResult.error) {
       for (const row of distributedResult.data ?? []) {
-        if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0 }
+        if (!byBank[row.bank]) byBank[row.bank] = { bank: row.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
         byBank[row.bank].distributed += Number(row.amount)
       }
     } else {
@@ -2059,11 +2065,15 @@ function BankCard({
   // tax is stored as a negative amount, so adding it nets it out --
   // subtracting it would add the withheld amount back instead.
   const netInterest = bank.interest_earned + bank.tax
-  // Distributed totals are tracked gross (pre-tax) -- they exactly match the
-  // sum of transactions already marked distributed, tax was never part of
-  // that pool. Diffing against netInterest here would double-count tax as
-  // if it were still pending distribution, when it's withheld and gone.
-  const undistributed = bank.interest_earned - bank.distributed
+  // Not derived as interest_earned - distributed -- once a group is
+  // distributed, its matching Tax transactions are marked distributed too
+  // (getPendingBankInterestGroups nets tax out before splitting), so
+  // distributed ends up net of tax going forward while interest_earned
+  // stays gross. Diffing those would misreport the withheld tax on an
+  // already-settled group as still pending. pending_interest is tracked
+  // directly from each transaction's own interest_distributed flag
+  // instead, so it's exact regardless of how much tax a given group had.
+  const undistributed = bank.pending_interest
   const distributedPct = netInterest > 0 ? Math.min(100, (bank.distributed / netInterest) * 100) : 0
 
   return (

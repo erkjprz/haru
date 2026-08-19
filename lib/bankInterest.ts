@@ -26,6 +26,15 @@ export interface PendingBankInterestGroup {
  * data uses: one lump-sum distribution per calendar year per bank (e.g.
  * 2025 has two separate events, BDO and Maya, each split across all 10
  * members), not one event per individual transaction.
+ *
+ * Also pulls in not-yet-distributed Tax transactions for the same (year,
+ * bank) so their (negative) amount nets against the interest before it's
+ * split -- the bank withholds tax before the interest ever reaches the
+ * account, so distributing the gross amount would credit members for money
+ * that was never actually there. Tax rows ride along in transactionIds
+ * purely so distributeBankInterestGroup marks them interest_distributed
+ * too, once consumed -- interest_distributed has no meaning of its own for
+ * Tax, it's just reused as "already netted into a distribution."
  */
 export async function getPendingBankInterestGroups(): Promise<PendingBankInterestGroup[]> {
   const { data: pendingTxns, error } = await supabase
@@ -36,7 +45,7 @@ export async function getPendingBankInterestGroups(): Promise<PendingBankInteres
       bank_accounts!transactions_bank_account_id_fkey ( bank_name )
     `
     )
-    .eq("classification", "Bank Interest")
+    .in("classification", ["Bank Interest", "Tax"])
     .eq("interest_distributed", false)
 
   if (error) throw new Error(error.message)

@@ -37,6 +37,7 @@ export function BankDetailPanel({
   const [balance, setBalance] = useState(0)
   const [interestEarned, setInterestEarned] = useState(0)
   const [tax, setTax] = useState(0)
+  const [pendingGrossInterest, setPendingGrossInterest] = useState(0)
   const [years, setYears] = useState<YearRow[]>([])
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
@@ -80,7 +81,9 @@ export function BankDetailPanel({
     // already use.
     const interestPromise = supabase
       .from("transactions")
-      .select("classification, amount, bank, bank_accounts!transactions_bank_account_id_fkey ( bank_name )")
+      .select(
+        "classification, amount, bank, interest_distributed, bank_accounts!transactions_bank_account_id_fkey ( bank_name )"
+      )
       .eq("status", "approved")
       .in("classification", ["Bank Interest", "Tax"])
 
@@ -117,14 +120,19 @@ export function BankDetailPanel({
     if (!interestResult.error) {
       let earned = 0
       let taxTotal = 0
+      let pendingGross = 0
       for (const row of interestResult.data ?? []) {
         const bankName = row.bank || (row as any).bank_accounts?.bank_name
         if (bankName !== bank) continue
-        if (row.classification === "Bank Interest") earned += Number(row.amount)
+        if (row.classification === "Bank Interest") {
+          earned += Number(row.amount)
+          if (!row.interest_distributed) pendingGross += Number(row.amount)
+        }
         if (row.classification === "Tax") taxTotal += Number(row.amount)
       }
       setInterestEarned(earned)
       setTax(taxTotal)
+      setPendingGrossInterest(pendingGross)
     } else {
       setLoadError(interestResult.error.message)
     }
@@ -186,12 +194,15 @@ export function BankDetailPanel({
   // subtracting it would add the withheld amount back instead.
   const netInterest = interestEarned + tax
   const totalDistributed = years.reduce((sum, y) => sum + y.amount, 0)
-  // totalDistributed is tracked gross (pre-tax) -- it exactly matches the
-  // sum of transactions already marked distributed, tax was never part of
-  // that pool. Diffing against netInterest here would double-count tax as
-  // if it were still pending distribution, when it's withheld and gone
-  // (matches the same fix in fund-breakdown/page.tsx's BankCard).
-  const undistributed = interestEarned - totalDistributed
+  // Not derived as interestEarned - totalDistributed -- once a group is
+  // distributed, its matching Tax transactions are marked distributed too
+  // (getPendingBankInterestGroups nets tax out before splitting), so
+  // totalDistributed is net of tax going forward while interestEarned
+  // stays gross. Diffing those would misreport the withheld tax on an
+  // already-settled group as still pending. pendingGrossInterest is
+  // tracked directly from each transaction's own interest_distributed flag
+  // instead, so it's exact regardless of how much tax a given group had.
+  const undistributed = pendingGrossInterest
 
   return (
     <div>
