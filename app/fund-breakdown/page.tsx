@@ -895,6 +895,18 @@ function GroupPanel() {
   // exactly true on the per-member card.
   const fundTotalWithHold = fund != null ? fund.total_cash + totalMoneyOnHold : 0
 
+  const fundTotalGainLoss =
+    fund != null
+      ? fund.total_bank_writeoff + fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed
+      : 0
+  // Capital + Loans + Performance is a ledger view built from contribution/
+  // withdrawal/allocation records; Fund Total Cash above is the actual bank
+  // balance. They mostly agree but older entries (from before this fund
+  // tracked individual bank transactions) can leave a small gap -- shown
+  // here rather than left for someone to notice the two cards don't add up.
+  const fundOtherAdjustments =
+    fund != null ? fund.total_cash - (fund.net_contribution + fundTotalGainLoss - fund.open_loans_outstanding) : 0
+
   return (
     <div>
       <p className="text-sm text-ink-soft mt-0 mb-6">
@@ -982,12 +994,8 @@ function GroupPanel() {
           <InfoBox label="Performance">
             <InfoRow
               label="Total Fund Gain/Loss"
-              value={signed(
-                fund.total_bank_writeoff + fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed
-              )}
-              valueClass={tone(
-                fund.total_bank_writeoff + fund.total_bank_interest + fund.net_investment_gain_loss + fund.total_loan_gain_distributed
-              )}
+              value={signed(fundTotalGainLoss)}
+              valueClass={tone(fundTotalGainLoss)}
               bold
             />
             <div className="pt-1 space-y-1.5">
@@ -1010,6 +1018,17 @@ function GroupPanel() {
                 valueClass={tone(fund.total_loan_gain_distributed)}
               />
             </div>
+          </InfoBox>
+
+          <InfoBox label="Reconciliation">
+            {fundOtherAdjustments !== 0 && (
+              <InfoRow
+                label="Other Adjustments"
+                value={signed(fundOtherAdjustments)}
+                valueClass={tone(fundOtherAdjustments)}
+              />
+            )}
+            <InfoRow label="= Fund Total Cash" value={`₱${fmt(fund.total_cash)}`} bold />
           </InfoBox>
         </div>
       )}
