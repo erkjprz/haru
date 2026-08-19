@@ -37,7 +37,6 @@ export function BankDetailPanel({
   const [balance, setBalance] = useState(0)
   const [interestEarned, setInterestEarned] = useState(0)
   const [tax, setTax] = useState(0)
-  const [pendingGrossInterest, setPendingGrossInterest] = useState(0)
   const [years, setYears] = useState<YearRow[]>([])
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
@@ -120,19 +119,14 @@ export function BankDetailPanel({
     if (!interestResult.error) {
       let earned = 0
       let taxTotal = 0
-      let pendingGross = 0
       for (const row of interestResult.data ?? []) {
         const bankName = row.bank || (row as any).bank_accounts?.bank_name
         if (bankName !== bank) continue
-        if (row.classification === "Bank Interest") {
-          earned += Number(row.amount)
-          if (!row.interest_distributed) pendingGross += Number(row.amount)
-        }
+        if (row.classification === "Bank Interest") earned += Number(row.amount)
         if (row.classification === "Tax") taxTotal += Number(row.amount)
       }
       setInterestEarned(earned)
       setTax(taxTotal)
-      setPendingGrossInterest(pendingGross)
     } else {
       setLoadError(interestResult.error.message)
     }
@@ -194,15 +188,13 @@ export function BankDetailPanel({
   // subtracting it would add the withheld amount back instead.
   const netInterest = interestEarned + tax
   const totalDistributed = years.reduce((sum, y) => sum + y.amount, 0)
-  // Not derived as interestEarned - totalDistributed -- once a group is
-  // distributed, its matching Tax transactions are marked distributed too
-  // (getPendingBankInterestGroups nets tax out before splitting), so
-  // totalDistributed is net of tax going forward while interestEarned
-  // stays gross. Diffing those would misreport the withheld tax on an
-  // already-settled group as still pending. pendingGrossInterest is
-  // tracked directly from each transaction's own interest_distributed flag
-  // instead, so it's exact regardless of how much tax a given group had.
-  const undistributed = pendingGrossInterest
+  // Not computed independently from interestEarned/totalDistributed --
+  // reuses pendingGroups (the same getPendingBankInterestGroups result the
+  // "Pending Distribution" section below is built from) so this figure can
+  // never drift from what actually gets credited when Distribute is
+  // clicked. That function already nets tax out and excludes years whose
+  // interest was already fully distributed.
+  const undistributed = pendingGroups.reduce((sum, g) => sum + g.totalAmount, 0)
 
   return (
     <div>
