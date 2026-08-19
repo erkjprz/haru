@@ -19,12 +19,6 @@ import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
 import BankQrModal from "@/app/components/BankQrModal"
 
 type YearRow = { year: string; amount: number; memberCount: number }
-type InterestRow = {
-  classification: string
-  amount: number
-  bank: string | null
-  bank_accounts: { bank_name: string } | null
-}
 type QrAccount = { id: string; account_name: string | null; qr_code_url: string }
 
 export function BankDetailPanel({
@@ -123,8 +117,8 @@ export function BankDetailPanel({
     if (!interestResult.error) {
       let earned = 0
       let taxTotal = 0
-      for (const row of (interestResult.data ?? []) as InterestRow[]) {
-        const bankName = row.bank || row.bank_accounts?.bank_name
+      for (const row of interestResult.data ?? []) {
+        const bankName = row.bank || (row as any).bank_accounts?.bank_name
         if (bankName !== bank) continue
         if (row.classification === "Bank Interest") earned += Number(row.amount)
         if (row.classification === "Tax") taxTotal += Number(row.amount)
