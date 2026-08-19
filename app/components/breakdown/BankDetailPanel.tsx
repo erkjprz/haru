@@ -23,7 +23,7 @@ type InterestRow = {
   classification: string
   amount: number
   bank: string | null
-  bank_accounts: { bank_name: string }[] | null
+  bank_accounts: { bank_name: string } | null
 }
 type QrAccount = { id: string; account_name: string | null; qr_code_url: string }
 
@@ -124,7 +124,7 @@ export function BankDetailPanel({
       let earned = 0
       let taxTotal = 0
       for (const row of (interestResult.data ?? []) as InterestRow[]) {
-        const bankName = row.bank || row.bank_accounts?.[0]?.bank_name
+        const bankName = row.bank || row.bank_accounts?.bank_name
         if (bankName !== bank) continue
         if (row.classification === "Bank Interest") earned += Number(row.amount)
         if (row.classification === "Tax") taxTotal += Number(row.amount)
