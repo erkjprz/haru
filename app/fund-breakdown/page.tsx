@@ -703,11 +703,17 @@ function GroupPanel() {
         .select("month, running_balance")
         .order("month", { ascending: true })
 
-      const [memberResult, performanceResult, fundResult, fundTrendResult] = await Promise.all([
+      // v_fund_summary's total_bank_interest is gross, before withholding tax --
+      // netted here against Tax so this matches the Banks tab's Interest Earned
+      // (same fix, same reasoning: tax is stored as a negative amount).
+      const taxPromise = supabase.from("transactions").select("amount").eq("classification", "Tax").eq("status", "approved")
+
+      const [memberResult, performanceResult, fundResult, fundTrendResult, taxResult] = await Promise.all([
         memberPromise,
         performancePromise,
         fundPromise,
-        fundTrendPromise
+        fundTrendPromise,
+        taxPromise
       ])
 
       if (cancelled) return
@@ -721,12 +727,14 @@ function GroupPanel() {
       }
 
       if (fundResult.data) {
+        const totalTax = (taxResult.data ?? []).reduce((sum: number, row: any) => sum + Number(row.amount), 0)
+
         setFund({
           total_cash: Number(fundResult.data.total_cash),
           total_contribution: Number(fundResult.data.total_contribution),
           total_withdrawal: Number(fundResult.data.total_withdrawal),
           net_contribution: Number(fundResult.data.net_contribution),
-          total_bank_interest: Number(fundResult.data.total_bank_interest),
+          total_bank_interest: Number(fundResult.data.total_bank_interest) + totalTax,
           net_investment_gain_loss: Number(fundResult.data.net_investment_gain_loss),
           total_loan_gain_distributed: Number(fundResult.data.total_loan_gain_distributed),
           open_loans_count: Number(fundResult.data.open_loans_count),
