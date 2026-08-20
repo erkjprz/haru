@@ -701,17 +701,17 @@ function TransactionsPageInner() {
                   : null
 
               // loanName is always "Loan - {year-month}" (e.g. "Loan -
-              // 2021-07") -- swap the hyphen for a dot so it reads as the
-              // same "label · value · counterpart" shape as the bank
-              // interest case below instead of its own one-off format.
-              const gainAllocationLoanLabel = loanName?.replace(/^Loan - /, "Loan · ") ?? loanName
+              // 2021-07") -- swap the hyphen for a dot everywhere it's
+              // shown, so it reads as "label · value" instead of the raw
+              // stored name.
+              const loanLabel = loanName?.replace(/^Loan - /, "Loan · ") ?? loanName
 
               const gainAllocationDetail = !isGainAllocation
                 ? null
                 : loanName
                 ? borrowerName
-                  ? `${gainAllocationLoanLabel} · ${borrowerName}`
-                  : gainAllocationLoanLabel
+                  ? `${loanLabel} · ${borrowerName}`
+                  : loanLabel
                 : gainAllocationBankMatch
                 ? `Interest · ${gainAllocationBankMatch[1]} · ${gainAllocationBankMatch[2]}`
                 : null
@@ -847,7 +847,7 @@ function TransactionsPageInner() {
                         Recorded by {transaction.submitted_by_member.name}
                       </p>
                     )}
-                    {isLoanTxn && loanName && <p className="text-xs text-ink-soft font-mono">{loanName}</p>}
+                    {isLoanTxn && loanLabel && <p className="text-xs text-ink-soft font-mono">{loanLabel}</p>}
                     {gainAllocationDetail && (
                       <p className="text-xs text-ink-soft font-mono">{gainAllocationDetail}</p>
                     )}
