@@ -1890,6 +1890,10 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   // own scroll-to-top-on-open when the user backs out of them.
   const bankScrollPosRef = useRef(0)
   const yearScrollPosRef = useRef(0)
+  // True for exactly the one BankDetailPanel mount caused by backing out of
+  // the year view -- tells it to skip its own scroll-to-top so it doesn't
+  // race the restore below. Reset on every fresh bank pick from the list.
+  const [cameBackFromYear, setCameBackFromYear] = useState(false)
   useEffect(() => {
     if (selectedBank === null) restoreScrollY(bankScrollPosRef.current)
   }, [selectedBank])
@@ -2105,7 +2109,14 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
 
   if (selectedBank && selectedYear) {
     return (
-      <BankYearDetailPanel bank={selectedBank} year={selectedYear} onBack={() => setSelectedYear(null)} />
+      <BankYearDetailPanel
+        bank={selectedBank}
+        year={selectedYear}
+        onBack={() => {
+          setCameBackFromYear(true)
+          setSelectedYear(null)
+        }}
+      />
     )
   }
 
@@ -2113,6 +2124,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
     return (
       <BankDetailPanel
         bank={selectedBank}
+        skipTopScroll={cameBackFromYear}
         onBack={() => setSelectedBank(null)}
         onSelectYear={(y) => {
           yearScrollPosRef.current = window.scrollY
@@ -2224,6 +2236,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
                 fmt={fmt}
                 onClick={() => {
                   bankScrollPosRef.current = window.scrollY
+                  setCameBackFromYear(false)
                   setSelectedBank(b.bank)
                 }}
                 showEdit={isAdmin && manageMode}

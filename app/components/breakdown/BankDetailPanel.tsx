@@ -24,11 +24,18 @@ type QrAccount = { id: string; account_name: string | null; qr_code_url: string 
 export function BankDetailPanel({
   bank,
   onBack,
-  onSelectYear
+  onSelectYear,
+  skipTopScroll
 }: {
   bank: string
   onBack: () => void
   onSelectYear: (year: string) => void
+  // Set by BanksPanel when this mount is a return from a year drill-down
+  // rather than a fresh open from the bank list -- the parent is already
+  // restoring the scroll position that drill-down came from, so this
+  // panel's own scroll-to-top-on-open would otherwise win the race and
+  // undo it every time.
+  skipTopScroll?: boolean
 }) {
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
@@ -153,10 +160,11 @@ export function BankDetailPanel({
 
   // Opening a drill-down while the list is scrolled down would otherwise
   // leave the Breakdown header out of view -- jump back to top so it's
-  // visible the instant the detail mounts.
+  // visible the instant the detail mounts. Skipped when returning from the
+  // year view, where BanksPanel is restoring a different position instead.
   useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [])
+    if (!skipTopScroll) window.scrollTo(0, 0)
+  }, [skipTopScroll])
 
   useEffect(() => {
     if (bank) {
