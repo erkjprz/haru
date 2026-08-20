@@ -1675,14 +1675,14 @@ function LoanCard({
         )}
       </div>
 
-      <div className="h-1.5 rounded-full bg-hairline overflow-hidden mt-2.5">
-        <div
-          className={`h-full ${
-            loan.status === "closed" ? (fullyRepaid ? "bg-sage" : "bg-rust") : "bg-gold"
-          }`}
-          style={{ width: `${repaidPct}%` }}
-        />
-      </div>
+      {!(loan.status === "closed" && fullyRepaid) && (
+        <div className="h-1.5 rounded-full bg-hairline overflow-hidden mt-2.5">
+          <div
+            className={`h-full ${loan.status === "closed" ? "bg-rust" : "bg-gold"}`}
+            style={{ width: `${repaidPct}%` }}
+          />
+        </div>
+      )}
     </button>
   )
 }

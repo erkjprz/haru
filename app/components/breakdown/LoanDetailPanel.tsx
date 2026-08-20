@@ -599,16 +599,16 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
             {formatInterestLabel(loan.interest_type, loan.interest_rate, loan.interest_amount, fmt)} interest
           </p>
         )}
-        <div className="mt-3">
-          <div className="h-2 rounded-full bg-hairline overflow-hidden">
-            <div
-              className={`h-full ${
-                loan.status === "closed" ? (fullyRepaid ? "bg-sage" : "bg-rust") : "bg-gold"
-              }`}
-              style={{ width: `${repaidPct}%` }}
-            />
+        {!(loan.status === "closed" && fullyRepaid) && (
+          <div className="mt-3">
+            <div className="h-2 rounded-full bg-hairline overflow-hidden">
+              <div
+                className={`h-full ${loan.status === "closed" ? "bg-rust" : "bg-gold"}`}
+                style={{ width: `${repaidPct}%` }}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Capital / Performance boxes, matching Dashboard's InfoBox pattern */}
