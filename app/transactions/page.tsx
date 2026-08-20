@@ -688,9 +688,7 @@ function TransactionsPageInner() {
               const loanName = transaction.loans?.name || null
               const borrowerName = transaction.loans?.borrowers?.name || null
               const transferLabel = isTransferTxn ? transaction._transferLabel ?? null : null
-              const isInvestmentTxn =
-                transaction.classification === "Investment" || transaction.classification === "Investment Return"
-              const investmentName = isInvestmentTxn ? transaction.investments?.name || null : null
+              const investmentName = transaction.investments?.name || null
 
               // Legacy migrated rows carry the bank as plain text in `bank`.
               // Rows created through the app instead link a real bank
@@ -826,9 +824,7 @@ function TransactionsPageInner() {
                       </p>
                     )}
                     {isLoanTxn && loanName && <p className="text-xs text-ink-soft font-mono">{loanName}</p>}
-                    {isInvestmentTxn && investmentName && (
-                      <p className="text-xs text-ink-soft font-mono">{investmentName}</p>
-                    )}
+                    {investmentName && <p className="text-xs text-ink-soft font-mono">{investmentName}</p>}
                     {showDescription && (
                       <p className="text-xs text-ink-soft font-mono break-words">{transaction.description}</p>
                     )}
