@@ -17,7 +17,7 @@ const typeColor: Record<string, string> = {
   "Expense": "text-rust border-rust",
   "Loan Release": "text-gold border-gold",
   "Loan Repayment": "text-gold border-gold",
-  "Gain Allocation": "text-ink-soft border-ink-soft",
+  "Gain Allocation": "text-slate border-slate",
   "Bank Interest": "text-sage border-sage",
   "Investment Return": "text-sage border-sage",
   "Investment": "text-gold border-gold",
@@ -677,11 +677,10 @@ function TransactionsPageInner() {
 
               // "Gain Allocation" covers a member's share of a loan gain, an
               // investment gain/loss, or bank interest -- one classification
-              // for both directions, unlike every other type here which gets
-              // its own fixed color. The sign of the amount is the only
-              // signal for which one this row actually is, so the badge
-              // color has to key off that instead of the static typeColor
-              // map, or a loss reads identically to a gain.
+              // for both directions. The type badge stays one fixed color
+              // (slate) either way -- the sign shows up as a +/- on the
+              // amount instead, so a loss doesn't borrow rust's "money left
+              // the fund" meaning that Withdrawal/Expense/Tax/Write-off use.
               const isGainAllocationLoss =
                 transaction.classification === "Gain Allocation" && Number(transaction.amount) < 0
 
@@ -701,14 +700,20 @@ function TransactionsPageInner() {
                   ? transaction.description?.match(/^Share of (\d{4}) (.+) bank interest$/) ?? null
                   : null
 
+              // loanName is always "Loan - {year-month}" (e.g. "Loan -
+              // 2021-07") -- swap the hyphen for a dot everywhere it's
+              // shown, so it reads as "label · value" instead of the raw
+              // stored name.
+              const loanLabel = loanName?.replace(/^Loan - /, "Loan · ") ?? loanName
+
               const gainAllocationDetail = !isGainAllocation
                 ? null
                 : loanName
                 ? borrowerName
-                  ? `${loanName} · ${borrowerName}`
-                  : loanName
+                  ? `${loanLabel} · ${borrowerName}`
+                  : loanLabel
                 : gainAllocationBankMatch
-                ? `${gainAllocationBankMatch[2]} · Interest ${gainAllocationBankMatch[1]}`
+                ? `Interest · ${gainAllocationBankMatch[1]} · ${gainAllocationBankMatch[2]}`
                 : null
 
               // Legacy migrated rows carry the bank as plain text in `bank`.
@@ -808,7 +813,7 @@ function TransactionsPageInner() {
                       <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
                       <span className="flex items-center gap-2 shrink-0">
                         <span className="font-mono [font-variant-numeric:tabular-nums] text-lg font-bold whitespace-nowrap">
-                          ₱{fmt(Math.abs(transaction.amount))}
+                          {isGainAllocationLoss ? `(₱${fmt(Math.abs(transaction.amount))})` : `₱${fmt(Math.abs(transaction.amount))}`}
                         </span>
                         {transaction.receipt_url && (
                           <button
@@ -828,10 +833,7 @@ function TransactionsPageInner() {
                       {" · "}
                       <span
                         className={`font-semibold ${
-                          (isGainAllocationLoss
-                            ? "text-rust"
-                            : typeColor[transaction.classification] ?? "text-ink-soft"
-                          ).split(" ")[0]
+                          (typeColor[transaction.classification] ?? "text-ink-soft").split(" ")[0]
                         }`}
                       >
                         {typeLabels[transaction.classification] || transaction.classification}
@@ -845,11 +847,13 @@ function TransactionsPageInner() {
                         Recorded by {transaction.submitted_by_member.name}
                       </p>
                     )}
-                    {isLoanTxn && loanName && <p className="text-xs text-ink-soft font-mono">{loanName}</p>}
+                    {isLoanTxn && loanLabel && <p className="text-xs text-ink-soft font-mono">{loanLabel}</p>}
                     {gainAllocationDetail && (
                       <p className="text-xs text-ink-soft font-mono">{gainAllocationDetail}</p>
                     )}
-                    {investmentName && <p className="text-xs text-ink-soft font-mono">{investmentName}</p>}
+                    {investmentName && (
+                      <p className="text-xs text-ink-soft font-mono">Investment · {investmentName}</p>
+                    )}
                     {showDescription && (
                       <p className="text-xs text-ink-soft font-mono break-words">{transaction.description}</p>
                     )}
