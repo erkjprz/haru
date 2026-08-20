@@ -924,32 +924,18 @@ function TransactionsPageInner() {
 
               <div className="mb-6">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Type</p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedType("")}
-                    className={`border rounded-full px-3.5 py-2 text-sm ${
-                      !selectedType ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
-                    }`}
-                  >
-                    All Types
-                  </button>
-                  {typeOptions.map((type) => {
-                    const active = selectedType === type
-                    return (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => setSelectedType(type)}
-                        className={`border rounded-full px-3.5 py-2 text-sm ${
-                          active ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
-                        }`}
-                      >
-                        {typeLabels[type] || type}
-                      </button>
-                    )
-                  })}
-                </div>
+                <select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3.5 text-sm text-ink focus:outline-none focus:border-gold"
+                >
+                  <option value="">All Types</option>
+                  {typeOptions.map((type) => (
+                    <option key={type} value={type}>
+                      {typeLabels[type] || type}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="mb-2">
