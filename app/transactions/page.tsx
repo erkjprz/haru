@@ -771,85 +771,80 @@ function TransactionsPageInner() {
                     </p>
                   )}
 
-                  {/* Two-column grid: left column is "what it is" (type +
-                      bank badges together, name, loan/description detail),
-                      right column is "the facts" (date, amount, receipt).
-                      Bank sits next to the type tag on the same line, not
-                      demoted to its own row -- they're both short labels
-                      describing the transaction and read naturally as a
-                      pair. */}
+                  {/* Name + amount lead -- that's what a ledger row is
+                      actually scanned for. Type/bank/date follow as one
+                      quiet byline, date leading it in full contrast since
+                      it's the detail people look for next. The rejection
+                      reason sits above the status row rather than below it
+                      so that row -- and its action button -- stays the last
+                      thing in the card regardless of which optional lines
+                      appear above it. */}
                   <div
-                    className={`grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 items-center bg-paper-2 border border-hairline rounded-md px-4 py-3.5 ${
+                    className={`flex flex-col gap-1 bg-paper-2 border border-hairline rounded-md px-4 py-3.5 ${
                       showMonthHeader ? "" : "mt-3"
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono [font-variant-numeric:tabular-nums] text-lg font-bold whitespace-nowrap">
+                          ₱{fmt(Math.abs(transaction.amount))}
+                        </span>
+                        {transaction.receipt_url && (
+                          <button
+                            type="button"
+                            onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
+                            aria-label="View receipt"
+                            className="shrink-0 w-7 h-7 rounded-full border border-gold text-gold text-xs flex items-center justify-center"
+                          >
+                            🧾
+                          </button>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="text-xs font-mono text-ink-soft truncate">
+                      <span className="font-bold text-ink">{cardDate(transaction)}</span>
+                      {" · "}
                       <span
-                        className={`text-[9px] uppercase tracking-widest font-mono border rounded-full px-2 py-0.5 ${
-                          isGainAllocationLoss
-                            ? "text-rust border-rust"
-                            : typeColor[transaction.classification] ?? "text-ink-soft border-hairline"
+                        className={`font-semibold ${
+                          (isGainAllocationLoss
+                            ? "text-rust"
+                            : typeColor[transaction.classification] ?? "text-ink-soft"
+                          ).split(" ")[0]
                         }`}
                       >
                         {typeLabels[transaction.classification] || transaction.classification}
                       </span>
-                      {bankBadge && (
-                        <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                          {bankBadge}
-                        </span>
-                      )}
-                      {isTransferTxn && transferLabel && (
-                        <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-                          {transferLabel}
-                        </span>
-                      )}
-                    </div>
-                    <div className="justify-self-end text-xs text-ink-soft font-mono whitespace-nowrap">
-                      {cardDate(transaction)}
-                    </div>
-
-                    <div className="font-display text-lg font-medium truncate">{displayName}</div>
-                    <div className="justify-self-end flex items-center gap-2">
-                      <span className="font-mono [font-variant-numeric:tabular-nums] text-lg font-semibold whitespace-nowrap">
-                        ₱{fmt(Math.abs(transaction.amount))}
-                      </span>
-                      {transaction.receipt_url && (
-                        <button
-                          type="button"
-                          onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
-                          aria-label="View receipt"
-                          className="shrink-0 w-7 h-7 rounded-full border border-gold text-gold text-xs flex items-center justify-center"
-                        >
-                          🧾
-                        </button>
-                      )}
+                      {bankBadge && <> · {bankBadge}</>}
+                      {isTransferTxn && transferLabel && <> · {transferLabel}</>}
                     </div>
 
                     {transaction.submitted_by_member && (
-                      <p className="col-span-2 text-[11px] text-gold font-mono">
+                      <p className="text-xs text-gold font-mono">
                         Recorded by {transaction.submitted_by_member.name}
                       </p>
                     )}
-                    {isLoanTxn && loanName && (
-                      <p className="col-span-2 text-xs text-ink-soft font-mono">{loanName}</p>
-                    )}
+                    {isLoanTxn && loanName && <p className="text-xs text-ink-soft font-mono">{loanName}</p>}
                     {isInvestmentTxn && investmentName && (
-                      <p className="col-span-2 text-xs text-ink-soft font-mono">{investmentName}</p>
+                      <p className="text-xs text-ink-soft font-mono">{investmentName}</p>
                     )}
                     {showDescription && (
-                      <p className="col-span-2 text-xs text-ink-soft break-words">
-                        {transaction.description}
-                      </p>
+                      <p className="text-xs text-ink-soft font-mono break-words">{transaction.description}</p>
                     )}
+                    {transaction.status === "rejected" && transaction.rejection_reason && (
+                      <p className="text-xs text-rust font-mono">{transaction.rejection_reason}</p>
+                    )}
+
                     {(showStatus || canEdit) && (
                       <div
-                        className={`col-span-2 flex items-center gap-2 ${
+                        className={`flex items-center pt-0.5 ${
                           canEdit && showStatus ? "justify-between" : "justify-end"
                         }`}
                       >
                         {showStatus && (
                           <span
-                            className={`text-[10px] uppercase font-mono ${
+                            className={`text-[10px] uppercase font-mono font-semibold tracking-wide ${
                               statusColor[transaction.status] ?? "text-ink-soft"
                             }`}
                           >
@@ -860,15 +855,12 @@ function TransactionsPageInner() {
                           <button
                             type="button"
                             onClick={() => router.push(`/transactions/${transaction.transaction_id}/edit`)}
-                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gold font-mono"
+                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-paper bg-gold rounded-full px-3 py-1.5"
                           >
                             {transaction.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
                           </button>
                         )}
                       </div>
-                    )}
-                    {transaction.status === "rejected" && transaction.rejection_reason && (
-                      <p className="col-span-2 text-xs text-rust">{transaction.rejection_reason}</p>
                     )}
                   </div>
                 </div>
@@ -924,32 +916,18 @@ function TransactionsPageInner() {
 
               <div className="mb-6">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Type</p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedType("")}
-                    className={`border rounded-full px-3.5 py-2 text-sm ${
-                      !selectedType ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
-                    }`}
-                  >
-                    All Types
-                  </button>
-                  {typeOptions.map((type) => {
-                    const active = selectedType === type
-                    return (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => setSelectedType(type)}
-                        className={`border rounded-full px-3.5 py-2 text-sm ${
-                          active ? "border-gold bg-gold/10 text-ink" : "border-hairline text-ink-soft"
-                        }`}
-                      >
-                        {typeLabels[type] || type}
-                      </button>
-                    )
-                  })}
-                </div>
+                <select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3.5 text-sm text-ink focus:outline-none focus:border-gold"
+                >
+                  <option value="">All Types</option>
+                  {typeOptions.map((type) => (
+                    <option key={type} value={type}>
+                      {typeLabels[type] || type}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="mb-2">
