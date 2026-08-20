@@ -391,9 +391,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
       <section className="mt-8">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="font-display text-lg font-medium text-ink mb-1">
-              {isGain ? "Gain" : "Loss"} Share per Member
-            </h2>
+            <h2 className="font-display text-lg font-medium text-ink mb-1">Distributed Share per Member</h2>
             <p className="text-[13px] text-ink-soft mb-3">
               How this investment's {isGain ? "gain" : "loss"} is split across members.
             </p>

@@ -921,7 +921,7 @@ export default function AdminPage() {
                           checked={bulkTransactions.every((t) => selectedBulkIds.has(t.transaction_id))}
                           onChange={() => toggleSelectAllBulk(bulkTransactions.map((t) => t.transaction_id))}
                         />
-                        Contributions &amp; Loan Repayments
+                        Contributions &amp; Loan Payments
                       </label>
                       <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2.5 py-1">
                         {bulkTransactions.length} pending

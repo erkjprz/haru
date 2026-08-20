@@ -522,7 +522,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     )
   }
 
-  // A closed loan isn't always a full repayment -- "Close Early (Write Off)"
+  // A closed loan isn't always a full repayment -- "Close Early"
   // closes it with whatever was actually repaid, which can be less (or, if
   // extra interest came in, more) than total_repayable. Label and color off
   // the real repayment total instead of assuming every closed loan was paid
@@ -805,7 +805,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                         }}
                         disabled={closing}
                       >
-                        {closing ? "Closing..." : "Close Early (Write Off)"}
+                        {closing ? "Closing..." : "Close Early"}
                       </button>
                     )}
 
@@ -946,10 +946,10 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         </div>
       )}
 
-      {/* Gain share per member (closed) / hold per member (active) */}
+      {/* Distributed share per member (closed) / hold per member (active) */}
       <section className="mt-8">
         <h2 className="font-display text-lg font-medium text-ink mb-1">
-          {loan.status === "active" ? "Hold per Member" : "Gain Share per Member"}
+          {loan.status === "active" ? "Hold per Member" : "Distributed Share per Member"}
         </h2>
         <p className="text-[13px] text-ink-soft mb-3">
           {loan.status === "closed"

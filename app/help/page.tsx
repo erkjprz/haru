@@ -220,10 +220,10 @@ const memberSections: FaqSection[] = [
         a: (
           <ol className="list-decimal list-inside space-y-1">
             <li>Tap the gold <strong>+ New</strong> button, top right of any page.</li>
-            <li>Choose <strong>Contribution</strong> or <strong>Withdrawal Request</strong>.</li>
+            <li>Choose <strong>Contribution</strong> or <strong>Withdrawal</strong>.</li>
             <li>
               For a Contribution, enter the amount and bank, and attach a receipt. For a{" "}
-              <strong>Withdrawal Request</strong>, just enter the amount — nothing&apos;s moved yet,
+              <strong>Withdrawal</strong>, just enter the amount — nothing&apos;s moved yet,
               so the bank and receipt come later, when an admin approves it.
             </li>
             <li>Submit — it shows as <strong>Pending</strong> until an admin approves it.</li>
@@ -672,7 +672,8 @@ const adminSections: FaqSection[] = [
           <p>
             Open the loan itself (Loans → tap it) — as an admin you&apos;ll see a{" "}
             <strong>Manage loan</strong>{" "}
-            panel there with Edit, Close &amp; Distribute, and (for closed loans) Reopen.
+            panel there with Edit, Close &amp; Distribute, Close Early (for an active loan you want to
+            settle before it&apos;s fully repaid, gain or loss either way), and (for closed loans) Reopen.
           </p>
         )
       },

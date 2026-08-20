@@ -1536,7 +1536,7 @@ function termLabel(loan: Loan): string | null {
   return loan.term_months != null ? `${loan.term_months} mo` : null
 }
 
-// A closed loan isn't always a full repayment -- "Close Early (Write Off)"
+// A closed loan isn't always a full repayment -- "Close Early"
 // closes it with whatever was actually repaid, which can be less than
 // total_repayable. Label off the real repayment total instead of assuming
 // every closed loan was paid off in full (same rule as LoanDetailPanel).

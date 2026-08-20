@@ -23,7 +23,7 @@ import { dateOnly } from "@/lib/currentValue"
 
 const ENTRY_TYPES = [
   { key: "contribution", label: "Contribution", adminOnly: false },
-  { key: "withdrawal", label: "Withdrawal Request", adminOnly: false },
+  { key: "withdrawal", label: "Withdrawal", adminOnly: false },
   { key: "loan_request", label: "Loan Request", adminOnly: false },
   { key: "loan_payment", label: "Loan Payment", adminOnly: false },
   { key: "bank_interest", label: "Bank Interest", adminOnly: true },
