@@ -12,7 +12,6 @@ import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
 import { getPendingBankInterestGroups } from "@/lib/bankInterest"
 import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
-import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
 import { InvestmentDetailPanel } from "@/app/components/breakdown/InvestmentDetailPanel"
 import { InfoBox, InfoRow, InfoSubRow } from "@/app/components/breakdown/InfoBox"
 
@@ -29,6 +28,13 @@ const TABS: { id: Tab; label: string }[] = [
 
 function isTab(v: string | null): v is Tab {
   return v === "fund" || v === "loans" || v === "banks" || v === "investments"
+}
+
+// Restores a saved scroll offset after backing out of a detail panel back
+// to a list that's already loaded (no refetch, so no loading skeleton to
+// race against).
+function restoreScrollY(y: number) {
+  window.scrollTo(0, y)
 }
 
 export default function FundBreakdownPage() {
@@ -375,7 +381,7 @@ function YouPanel({ memberId }: { memberId: string }) {
   // scroll-to-top-on-open when the user backs out of it.
   const scrollPosRef = useRef(0)
   useEffect(() => {
-    if (selectedLoanId === null) window.scrollTo(0, scrollPosRef.current)
+    if (selectedLoanId === null) restoreScrollY(scrollPosRef.current)
   }, [selectedLoanId])
 
   useEffect(() => {
@@ -689,7 +695,7 @@ function GroupPanel() {
   // scroll-to-top-on-open when the user closes it.
   const memberScrollPosRef = useRef(0)
   useEffect(() => {
-    if (openMember === null) window.scrollTo(0, memberScrollPosRef.current)
+    if (openMember === null) restoreScrollY(memberScrollPosRef.current)
   }, [openMember])
 
   useEffect(() => {
@@ -1160,7 +1166,7 @@ function MemberBreakdownSheet({
   // scroll-to-top-on-open when the user backs out of it.
   const loanScrollPosRef = useRef(0)
   useEffect(() => {
-    if (selectedLoanId === null) window.scrollTo(0, loanScrollPosRef.current)
+    if (selectedLoanId === null) restoreScrollY(loanScrollPosRef.current)
   }, [selectedLoanId])
 
   // Opening this while the Group carousel is scrolled down would otherwise
@@ -1553,7 +1559,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
   // scroll-to-top-on-open when the user backs out of it.
   const scrollPosRef = useRef(0)
   useEffect(() => {
-    if (selectedLoanId === null) window.scrollTo(0, scrollPosRef.current)
+    if (selectedLoanId === null) restoreScrollY(scrollPosRef.current)
   }, [selectedLoanId])
 
   useEffect(() => {
@@ -1849,22 +1855,14 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
   const [loadError, setLoadError] = useState("")
   const [selectedBank, setSelectedBank] = useState<string | null>(null)
-  const [selectedYear, setSelectedYear] = useState<string | null>(null)
-  // Restores the scroll position lost to BankDetailPanel/BankYearDetailPanel's
-  // own scroll-to-top-on-open when the user backs out of them.
+  // Restores the scroll position lost to BankDetailPanel's own
+  // scroll-to-top-on-open when the user backs out of it. The year
+  // drill-down within a bank is BankDetailPanel's own concern now (it
+  // never remounts for that transition, so it never needs this).
   const bankScrollPosRef = useRef(0)
-  const yearScrollPosRef = useRef(0)
   useEffect(() => {
-    if (selectedBank === null) window.scrollTo(0, bankScrollPosRef.current)
+    if (selectedBank === null) restoreScrollY(bankScrollPosRef.current)
   }, [selectedBank])
-  useEffect(() => {
-    if (selectedYear === null && selectedBank !== null) window.scrollTo(0, yearScrollPosRef.current)
-    // Only re-run when selectedYear itself changes -- selectedBank is read
-    // for its current value, not tracked, so a bank switch (which also
-    // clears selectedYear via a separate path) can't replay a stale offset
-    // left over from a different bank's year drill-down.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedYear])
 
   const [manageMode, setManageMode] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -2067,23 +2065,8 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
     return <SkeletonCardList rows={3} />
   }
 
-  if (selectedBank && selectedYear) {
-    return (
-      <BankYearDetailPanel bank={selectedBank} year={selectedYear} onBack={() => setSelectedYear(null)} />
-    )
-  }
-
   if (selectedBank) {
-    return (
-      <BankDetailPanel
-        bank={selectedBank}
-        onBack={() => setSelectedBank(null)}
-        onSelectYear={(y) => {
-          yearScrollPosRef.current = window.scrollY
-          setSelectedYear(y)
-        }}
-      />
-    )
+    return <BankDetailPanel bank={selectedBank} onBack={() => setSelectedBank(null)} />
   }
 
   const totalBalance = banks.reduce((sum, b) => sum + b.balance, 0)
@@ -2511,7 +2494,7 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   // scroll-to-top-on-open when the user backs out of it.
   const scrollPosRef = useRef(0)
   useEffect(() => {
-    if (selectedInvestmentId === null) window.scrollTo(0, scrollPosRef.current)
+    if (selectedInvestmentId === null) restoreScrollY(scrollPosRef.current)
   }, [selectedInvestmentId])
 
   const [manageMode, setManageMode] = useState(false)
