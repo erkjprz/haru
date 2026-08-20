@@ -1139,6 +1139,7 @@ function MemberBreakdownSheet({
   const [memberLoans, setMemberLoans] = useState<Loan[]>([])
   const [loansLoadError, setLoansLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
+  const [closedYear, setClosedYear] = useState<number | "all" | null>(null)
 
   // Opening this while the Group carousel is scrolled down would otherwise
   // leave the Breakdown header out of view -- jump back to top so it's
@@ -1197,6 +1198,19 @@ function MemberBreakdownSheet({
   }
 
   const clampedYearIndex = Math.min(yearIndex, Math.max(0, years.length - 1))
+
+  const openMemberLoans = memberLoans.filter((l) => l.status !== "closed")
+  const closedMemberLoans = memberLoans.filter((l) => l.status === "closed")
+  // Newest first. Defaults to the current year when it has closed loans;
+  // otherwise falls back to the most recent year that does.
+  const closedMemberYears = Array.from(new Set(closedMemberLoans.map(loanYear))).sort((a, b) => b - a)
+  const currentYear = new Date().getFullYear()
+  const effectiveClosedYear =
+    closedYear ?? (closedMemberYears.includes(currentYear) ? currentYear : closedMemberYears[0] ?? "all")
+  const visibleClosedMemberLoans =
+    effectiveClosedYear === "all"
+      ? closedMemberLoans
+      : closedMemberLoans.filter((l) => loanYear(l) === effectiveClosedYear)
 
   if (selectedLoanId) {
     return <LoanDetailPanel loanId={selectedLoanId} onBack={() => setSelectedLoanId(null)} />
@@ -1395,8 +1409,50 @@ function MemberBreakdownSheet({
                   present.
                 </p>
                 {loansLoadError && <p className="mb-3 text-sm text-rust">Couldn&apos;t load loans: {loansLoadError}</p>}
+
+                {openMemberLoans.length > 0 && (
+                  <div className="flex flex-col gap-3 mb-3">
+                    {openMemberLoans.map((loan) => (
+                      <LoanCard
+                        key={loan.loan_id}
+                        loan={loan}
+                        meta={loanStatusMeta(loan)}
+                        fmt={fmt}
+                        isMine={isSelf}
+                        onClick={() => setSelectedLoanId(loan.loan_id)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {closedMemberYears.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto mb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button
+                      type="button"
+                      onClick={() => setClosedYear("all")}
+                      className={`shrink-0 border rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap ${
+                        effectiveClosedYear === "all" ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
+                      }`}
+                    >
+                      All
+                    </button>
+                    {closedMemberYears.map((y) => (
+                      <button
+                        key={y}
+                        type="button"
+                        onClick={() => setClosedYear(y)}
+                        className={`shrink-0 border rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap ${
+                          effectiveClosedYear === y ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
+                        }`}
+                      >
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-3">
-                  {memberLoans.map((loan) => (
+                  {visibleClosedMemberLoans.map((loan) => (
                     <LoanCard
                       key={loan.loan_id}
                       loan={loan}
