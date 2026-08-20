@@ -708,7 +708,7 @@ function TransactionsPageInner() {
                   ? `${loanName} · ${borrowerName}`
                   : loanName
                 : gainAllocationBankMatch
-                ? `${gainAllocationBankMatch[2]} · Interest ${gainAllocationBankMatch[1]}`
+                ? `Interest ${gainAllocationBankMatch[1]} · ${gainAllocationBankMatch[2]}`
                 : null
 
               // Legacy migrated rows carry the bank as plain text in `bank`.
