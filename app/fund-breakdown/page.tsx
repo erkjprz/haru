@@ -371,6 +371,12 @@ function YouPanel({ memberId }: { memberId: string }) {
   const [myLoans, setMyLoans] = useState<Loan[]>([])
   const [loansLoadError, setLoansLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
+  // Restores the scroll position lost to LoanDetailPanel's own
+  // scroll-to-top-on-open when the user backs out of it.
+  const scrollPosRef = useRef(0)
+  useEffect(() => {
+    if (selectedLoanId === null) window.scrollTo(0, scrollPosRef.current)
+  }, [selectedLoanId])
 
   useEffect(() => {
     let cancelled = false
@@ -620,7 +626,10 @@ function YouPanel({ memberId }: { memberId: string }) {
                 meta={loanStatusMeta(loan)}
                 fmt={fmt}
                 isMine
-                onClick={() => setSelectedLoanId(loan.loan_id)}
+                onClick={() => {
+                  scrollPosRef.current = window.scrollY
+                  setSelectedLoanId(loan.loan_id)
+                }}
               />
             ))}
           </div>
@@ -1140,6 +1149,12 @@ function MemberBreakdownSheet({
   const [loansLoadError, setLoansLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
   const [closedYear, setClosedYear] = useState<number | "all" | null>(null)
+  // Restores the scroll position lost to LoanDetailPanel's own
+  // scroll-to-top-on-open when the user backs out of it.
+  const loanScrollPosRef = useRef(0)
+  useEffect(() => {
+    if (selectedLoanId === null) window.scrollTo(0, loanScrollPosRef.current)
+  }, [selectedLoanId])
 
   // Opening this while the Group carousel is scrolled down would otherwise
   // leave the Breakdown header out of view -- jump back to top so it's
@@ -1419,7 +1434,10 @@ function MemberBreakdownSheet({
                         meta={loanStatusMeta(loan)}
                         fmt={fmt}
                         isMine={isSelf}
-                        onClick={() => setSelectedLoanId(loan.loan_id)}
+                        onClick={() => {
+                          loanScrollPosRef.current = window.scrollY
+                          setSelectedLoanId(loan.loan_id)
+                        }}
                       />
                     ))}
                   </div>
@@ -1459,7 +1477,10 @@ function MemberBreakdownSheet({
                       meta={loanStatusMeta(loan)}
                       fmt={fmt}
                       isMine={isSelf}
-                      onClick={() => setSelectedLoanId(loan.loan_id)}
+                      onClick={() => {
+                        loanScrollPosRef.current = window.scrollY
+                        setSelectedLoanId(loan.loan_id)
+                      }}
                     />
                   ))}
                 </div>
@@ -1521,6 +1542,12 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
   const [loadError, setLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
   const [closedYear, setClosedYear] = useState<number | "all" | null>(null)
+  // Restores the scroll position lost to LoanDetailPanel's own
+  // scroll-to-top-on-open when the user backs out of it.
+  const scrollPosRef = useRef(0)
+  useEffect(() => {
+    if (selectedLoanId === null) window.scrollTo(0, scrollPosRef.current)
+  }, [selectedLoanId])
 
   useEffect(() => {
     let cancelled = false
@@ -1624,7 +1651,10 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
                 meta={loanStatusMeta(loan)}
                 fmt={fmt}
                 isMine={loan.borrower_member_id === myMemberId}
-                onClick={() => setSelectedLoanId(loan.loan_id)}
+                onClick={() => {
+                  scrollPosRef.current = window.scrollY
+                  setSelectedLoanId(loan.loan_id)
+                }}
               />
             ))}
           </div>
@@ -1669,7 +1699,10 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
                 meta={loanStatusMeta(loan)}
                 fmt={fmt}
                 isMine={loan.borrower_member_id === myMemberId}
-                onClick={() => setSelectedLoanId(loan.loan_id)}
+                onClick={() => {
+                  scrollPosRef.current = window.scrollY
+                  setSelectedLoanId(loan.loan_id)
+                }}
               />
             ))}
           </div>
