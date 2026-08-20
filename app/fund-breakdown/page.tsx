@@ -1508,10 +1508,12 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
   const totalInterestEarned = closedLoans.reduce((sum, l) => sum + l.gain, 0)
   const totalOutstanding = openLoans.reduce((sum, l) => sum + l.outstanding, 0)
 
-  // Newest first, so the default (most recent year) lands on the pill users
-  // want most often instead of the full history.
+  // Newest first. Defaults to the current year when it has closed loans;
+  // otherwise falls back to the most recent year that does.
   const closedYears = Array.from(new Set(closedLoans.map(loanYear))).sort((a, b) => b - a)
-  const effectiveClosedYear = closedYear ?? closedYears[0] ?? "all"
+  const currentYear = new Date().getFullYear()
+  const effectiveClosedYear =
+    closedYear ?? (closedYears.includes(currentYear) ? currentYear : closedYears[0] ?? "all")
   const visibleClosedLoans =
     effectiveClosedYear === "all" ? closedLoans : closedLoans.filter((l) => loanYear(l) === effectiveClosedYear)
 
@@ -1579,6 +1581,15 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
 
           {closedYears.length > 1 && (
             <div className="flex gap-2 overflow-x-auto mb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <button
+                type="button"
+                onClick={() => setClosedYear("all")}
+                className={`shrink-0 border rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap ${
+                  effectiveClosedYear === "all" ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
+                }`}
+              >
+                All
+              </button>
               {closedYears.map((y) => (
                 <button
                   key={y}
@@ -1591,15 +1602,6 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
                   {y}
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => setClosedYear("all")}
-                className={`shrink-0 border rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap ${
-                  effectiveClosedYear === "all" ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
-                }`}
-              >
-                All
-              </button>
             </div>
           )}
 
