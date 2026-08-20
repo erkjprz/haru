@@ -979,11 +979,15 @@ function GroupPanel() {
 
           {fund.open_loans_count > 0 && (
             <InfoBox label="Loans">
-              <InfoRow
-                label={`Principal Outstanding (${fund.open_loans_count} active)`}
-                value={`₱${fmt(fund.open_loans_outstanding)}`}
-                bold
-              />
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-[13px] text-ink font-semibold">
+                  Outstanding
+                  <span className="block text-[11px] text-ink-soft font-normal">{fund.open_loans_count} active</span>
+                </span>
+                <span className="font-mono [font-variant-numeric:tabular-nums] whitespace-nowrap text-[15px] font-bold text-ink">
+                  ₱{fmt(fund.open_loans_outstanding)}
+                </span>
+              </div>
               <p className="text-[11px] text-ink-soft pt-1">Doesn't include interest owed.</p>
             </InfoBox>
           )}
