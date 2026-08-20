@@ -36,16 +36,35 @@ function isTab(v: string | null): v is Tab {
 // being returned to has to refetch its own data first (e.g. BankDetailPanel
 // after a year drill-down) -- the page is still shortened by its loading
 // skeleton at that instant, so the browser just clamps the scroll near the
-// top. Retrying across a few frames lets it land correctly once the real
-// content has grown the page back out.
+// top and a single follow-up attempt a frame or two later can still lose
+// the race against a slow query. Watching the page's actual height via
+// ResizeObserver -- rather than guessing how many frames a fetch takes --
+// re-attempts exactly when the real content grows the page back out,
+// however long that takes.
 function restoreScrollY(y: number) {
-  let attempts = 0
-  function attempt() {
+  window.scrollTo(0, y)
+  if (window.scrollY >= y) return
+
+  const root = document.documentElement
+  let done = false
+
+  const observer = new ResizeObserver(() => {
+    if (done) return
     window.scrollTo(0, y)
-    attempts += 1
-    if (window.scrollY < y && attempts < 30) requestAnimationFrame(attempt)
-  }
-  requestAnimationFrame(attempt)
+    if (window.scrollY >= y) {
+      done = true
+      observer.disconnect()
+    }
+  })
+  observer.observe(root)
+
+  // Safety net for a saved offset the page never grows tall enough to
+  // reach (e.g. the remembered position no longer exists) -- stop
+  // watching instead of leaving the observer running indefinitely.
+  setTimeout(() => {
+    done = true
+    observer.disconnect()
+  }, 8000)
 }
 
 export default function FundBreakdownPage() {
