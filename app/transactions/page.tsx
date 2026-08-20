@@ -700,14 +700,20 @@ function TransactionsPageInner() {
                   ? transaction.description?.match(/^Share of (\d{4}) (.+) bank interest$/) ?? null
                   : null
 
+              // loanName is always "Loan - {year-month}" (e.g. "Loan -
+              // 2021-07") -- swap the hyphen for a dot so it reads as the
+              // same "label · value · counterpart" shape as the bank
+              // interest case below instead of its own one-off format.
+              const gainAllocationLoanLabel = loanName?.replace(/^Loan - /, "Loan · ") ?? loanName
+
               const gainAllocationDetail = !isGainAllocation
                 ? null
                 : loanName
                 ? borrowerName
-                  ? `${loanName} · ${borrowerName}`
-                  : loanName
+                  ? `${gainAllocationLoanLabel} · ${borrowerName}`
+                  : gainAllocationLoanLabel
                 : gainAllocationBankMatch
-                ? `Interest ${gainAllocationBankMatch[1]} · ${gainAllocationBankMatch[2]}`
+                ? `Interest · ${gainAllocationBankMatch[1]} · ${gainAllocationBankMatch[2]}`
                 : null
 
               // Legacy migrated rows carry the bank as plain text in `bank`.
