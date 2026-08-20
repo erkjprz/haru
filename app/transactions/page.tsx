@@ -700,23 +700,20 @@ function TransactionsPageInner() {
                   ? transaction.description?.match(/^Share of (\d{4}) (.+) bank interest$/) ?? null
                   : null
 
-              // loanName is now "{Borrower} · {year-month}" -- exactly
-              // what's needed here, since the row's headline name is
-              // whoever received this share, not the borrower.
+              // loanName is "{Borrower} · {year-month}" -- pull the
+              // year-month back out so a loan gain share can read
+              // "Loan · {year-month} · {Borrower}", matching the
+              // "Interest · {year} · {bank}" / "Investment · {name}" byline
+              // shape used by the other two gain-allocation sources.
+              const loanDate = loanName?.match(/(\d{4}-\d{2})$/)?.[1] ?? null
+
               const gainAllocationDetail = !isGainAllocation
                 ? null
                 : loanName
-                ? loanName
+                ? `Loan · ${loanDate} · ${borrowerName}`
                 : gainAllocationBankMatch
                 ? `Interest · ${gainAllocationBankMatch[1]} · ${gainAllocationBankMatch[2]}`
                 : null
-
-              // On an actual Loan Release/Repayment row the headline name
-              // is already the borrower (see displayName below), so
-              // repeating "{Borrower} · {year-month}" there would just
-              // repeat the borrower a second time -- show only the
-              // year-month.
-              const loanDate = loanName?.match(/(\d{4}-\d{2})$/)?.[1] ?? null
 
               // Legacy migrated rows carry the bank as plain text in `bank`.
               // Rows created through the app instead link a real bank
