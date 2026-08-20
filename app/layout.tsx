@@ -7,6 +7,7 @@ import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { ScrollToTop } from "@/app/scroll-to-top";
 import { AuthProvider } from "@/app/auth-context";
 import { ServiceWorkerRegister } from "@/app/components/ServiceWorkerRegister";
+import { BackgroundResumeReload } from "@/app/components/BackgroundResumeReload";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -72,6 +73,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ScrollToTop />
         <ServiceWorkerRegister />
+        <BackgroundResumeReload />
         <AuthProvider>
           <ThemeProvider>
             <PullToRefresh>{children}</PullToRefresh>
