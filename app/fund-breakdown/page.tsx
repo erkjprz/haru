@@ -685,6 +685,12 @@ function GroupPanel() {
   const [openMember, setOpenMember] = useState<{ id: string; name: string } | null>(null)
   const touchStartX = useRef<number | null>(null)
   const suppressClickRef = useRef(false)
+  // Restores the scroll position lost to MemberBreakdownSheet's own
+  // scroll-to-top-on-open when the user closes it.
+  const memberScrollPosRef = useRef(0)
+  useEffect(() => {
+    if (openMember === null) window.scrollTo(0, memberScrollPosRef.current)
+  }, [openMember])
 
   useEffect(() => {
     let cancelled = false
@@ -876,6 +882,7 @@ function GroupPanel() {
       e.preventDefault()
       return
     }
+    memberScrollPosRef.current = window.scrollY
     setOpenMember({ id: memberId, name: memberName })
   }
 
@@ -1843,6 +1850,21 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   const [loadError, setLoadError] = useState("")
   const [selectedBank, setSelectedBank] = useState<string | null>(null)
   const [selectedYear, setSelectedYear] = useState<string | null>(null)
+  // Restores the scroll position lost to BankDetailPanel/BankYearDetailPanel's
+  // own scroll-to-top-on-open when the user backs out of them.
+  const bankScrollPosRef = useRef(0)
+  const yearScrollPosRef = useRef(0)
+  useEffect(() => {
+    if (selectedBank === null) window.scrollTo(0, bankScrollPosRef.current)
+  }, [selectedBank])
+  useEffect(() => {
+    if (selectedYear === null && selectedBank !== null) window.scrollTo(0, yearScrollPosRef.current)
+    // Only re-run when selectedYear itself changes -- selectedBank is read
+    // for its current value, not tracked, so a bank switch (which also
+    // clears selectedYear via a separate path) can't replay a stale offset
+    // left over from a different bank's year drill-down.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear])
 
   const [manageMode, setManageMode] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -2056,7 +2078,10 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       <BankDetailPanel
         bank={selectedBank}
         onBack={() => setSelectedBank(null)}
-        onSelectYear={(y) => setSelectedYear(y)}
+        onSelectYear={(y) => {
+          yearScrollPosRef.current = window.scrollY
+          setSelectedYear(y)
+        }}
       />
     )
   }
@@ -2161,7 +2186,10 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
               <BankCard
                 bank={b}
                 fmt={fmt}
-                onClick={() => setSelectedBank(b.bank)}
+                onClick={() => {
+                  bankScrollPosRef.current = window.scrollY
+                  setSelectedBank(b.bank)
+                }}
                 showEdit={isAdmin && manageMode}
                 fused={isEditingThis}
                 onEdit={acct ? () => startEdit(acct) : undefined}
@@ -2479,6 +2507,12 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   const [investments, setInvestments] = useState<Investment[]>([])
   const [loadError, setLoadError] = useState("")
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null)
+  // Restores the scroll position lost to InvestmentDetailPanel's own
+  // scroll-to-top-on-open when the user backs out of it.
+  const scrollPosRef = useRef(0)
+  useEffect(() => {
+    if (selectedInvestmentId === null) window.scrollTo(0, scrollPosRef.current)
+  }, [selectedInvestmentId])
 
   const [manageMode, setManageMode] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -2621,7 +2655,10 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
         <InvestmentCard
           inv={inv}
           fmt={fmt}
-          onClick={() => setSelectedInvestmentId(inv.investment_id)}
+          onClick={() => {
+            scrollPosRef.current = window.scrollY
+            setSelectedInvestmentId(inv.investment_id)
+          }}
           showEdit={isAdmin && manageMode}
           fused={isEditingThis}
           onEdit={() => startEdit(inv)}
