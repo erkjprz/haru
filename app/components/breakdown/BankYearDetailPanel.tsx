@@ -126,7 +126,7 @@ export function BankYearDetailPanel({
       {loadError && <p className="mt-4 text-sm text-rust">{loadError}</p>}
 
       <section className="mt-8">
-        <h2 className="font-display text-lg font-medium text-ink mb-1">Share per Member</h2>
+        <h2 className="font-display text-lg font-medium text-ink mb-1">Distributed Share per Member</h2>
         <p className="text-[13px] text-ink-soft mb-3">
           How {bank}'s {year} interest was split across members.
         </p>
