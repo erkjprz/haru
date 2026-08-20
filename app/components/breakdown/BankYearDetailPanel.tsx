@@ -8,6 +8,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
 
 type Share = {
   member_id: string
@@ -32,6 +33,8 @@ export function BankYearDetailPanel({
 
   const [dataLoading, setDataLoading] = useState(true)
   const [shares, setShares] = useState<Share[]>([])
+  const [interestEarned, setInterestEarned] = useState(0)
+  const [tax, setTax] = useState(0)
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
 
@@ -45,12 +48,26 @@ export function BankYearDetailPanel({
   useEffect(() => {
     async function load() {
       // Per-member split for this bank's interest in this calendar year.
-      const { data, error } = await supabase
+      const sharesPromise = supabase
         .from("bank_interest_allocations")
         .select("amount, allocation_date, member_id, current_value, pct_share, members(name)")
         .eq("bank", bank)
         .gte("allocation_date", `${year}-01-01`)
         .lte("allocation_date", `${year}-12-31`)
+
+      // The source Bank Interest/Tax transactions behind that split -- bank
+      // falls back to the linked bank_accounts.bank_name and the year to
+      // created_at, same fallbacks BankDetailPanel and getPendingBankInterestGroups
+      // use, since legacy rows don't reliably have both set.
+      const txnPromise = supabase
+        .from("transactions")
+        .select(
+          "classification, amount, bank, txn_date, created_at, bank_accounts!transactions_bank_account_id_fkey ( bank_name )"
+        )
+        .eq("status", "approved")
+        .in("classification", ["Bank Interest", "Tax"])
+
+      const [{ data, error }, { data: txnData, error: txnError }] = await Promise.all([sharesPromise, txnPromise])
 
       if (error) {
         setLoadError(error.message)
@@ -67,6 +84,23 @@ export function BankYearDetailPanel({
             pct_share: Number(r.pct_share)
           }))
         )
+      }
+
+      if (txnError) {
+        setLoadError(txnError.message)
+      } else {
+        let earned = 0
+        let taxTotal = 0
+        for (const row of txnData ?? []) {
+          const bankName = row.bank || (row as any).bank_accounts?.bank_name
+          if (bankName !== bank) continue
+          const rowYear = String(new Date(row.txn_date ?? row.created_at ?? Date.now()).getFullYear())
+          if (rowYear !== year) continue
+          if (row.classification === "Bank Interest") earned += Number(row.amount)
+          if (row.classification === "Tax") taxTotal += Number(row.amount)
+        }
+        setInterestEarned(Number(earned.toFixed(2)))
+        setTax(Number(taxTotal.toFixed(2)))
       }
 
       setDataLoading(false)
@@ -118,9 +152,12 @@ export function BankYearDetailPanel({
         </p>
       )}
 
-      <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5">
-        <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Total Distributed</p>
-        <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-sage">+₱{fmt(total)}</p>
+      <div className="bg-paper-2 border border-hairline rounded-md p-5">
+        <InfoBox label="Interest">
+          <InfoRow label="Interest Earned" value={`+₱${fmt(interestEarned)}`} valueClass="text-sage" />
+          {tax !== 0 && <InfoRow label="Tax Withheld" value={`-₱${fmt(Math.abs(tax))}`} valueClass="text-rust" />}
+          <InfoRow label="Net Interest" value={`₱${fmt(total)}`} bold />
+        </InfoBox>
       </div>
 
       {loadError && <p className="mt-4 text-sm text-rust">{loadError}</p>}
