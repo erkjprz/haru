@@ -10,19 +10,21 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 )
 
+// Kept in sync by hand with TRANSACTION_TYPE_LABELS in lib/transactionLabels.ts
+// -- this Deno function can't import from the Next.js app's lib.
 const CLASSIFICATION_LABEL: Record<string, string> = {
   "Opening Balance": "Opening Balance",
-  "Member Contribution": "Member Contribution",
-  "Member Withdrawal": "Member Withdrawal",
+  "Member Contribution": "Contribution",
+  "Member Withdrawal": "Withdrawal",
   "Loan Release": "Loan Release",
   "Loan Repayment": "Loan Repayment",
   "Investment": "Investment",
   "Investment Return": "Investment Return",
   "Bank Interest": "Bank Interest",
   "Tax": "Tax",
-  "Internal Transfer": "Internal Transfer",
+  "Internal Transfer": "Bank Transfer",
   "Expense": "Expense",
-  "Gain Allocation": "Gain Allocation",
+  "Gain Allocation": "Distributed Share",
   "Bank Write-off": "Bank Write-off"
 }
 

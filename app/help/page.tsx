@@ -672,7 +672,8 @@ const adminSections: FaqSection[] = [
           <p>
             Open the loan itself (Loans → tap it) — as an admin you&apos;ll see a{" "}
             <strong>Manage loan</strong>{" "}
-            panel there with Edit, Close &amp; Distribute, and (for closed loans) Reopen.
+            panel there with Edit, Close &amp; Distribute, Close Early (for an active loan you want to
+            settle before it&apos;s fully repaid, gain or loss either way), and (for closed loans) Reopen.
           </p>
         )
       },
