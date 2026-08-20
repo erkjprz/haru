@@ -12,7 +12,6 @@ import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
 import { getPendingBankInterestGroups } from "@/lib/bankInterest"
 import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
-import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
 import { InvestmentDetailPanel } from "@/app/components/breakdown/InvestmentDetailPanel"
 import { InfoBox, InfoRow, InfoSubRow } from "@/app/components/breakdown/InfoBox"
 
@@ -31,40 +30,11 @@ function isTab(v: string | null): v is Tab {
   return v === "fund" || v === "loans" || v === "banks" || v === "investments"
 }
 
-// Restores a saved scroll offset after backing out of a detail panel. A
-// plain window.scrollTo(0, y) right on return isn't enough when the panel
-// being returned to has to refetch its own data first (e.g. BankDetailPanel
-// after a year drill-down) -- the page is still shortened by its loading
-// skeleton at that instant, so the browser just clamps the scroll near the
-// top and a single follow-up attempt a frame or two later can still lose
-// the race against a slow query. Watching the page's actual height via
-// ResizeObserver -- rather than guessing how many frames a fetch takes --
-// re-attempts exactly when the real content grows the page back out,
-// however long that takes.
+// Restores a saved scroll offset after backing out of a detail panel back
+// to a list that's already loaded (no refetch, so no loading skeleton to
+// race against).
 function restoreScrollY(y: number) {
   window.scrollTo(0, y)
-  if (window.scrollY >= y) return
-
-  const root = document.documentElement
-  let done = false
-
-  const observer = new ResizeObserver(() => {
-    if (done) return
-    window.scrollTo(0, y)
-    if (window.scrollY >= y) {
-      done = true
-      observer.disconnect()
-    }
-  })
-  observer.observe(root)
-
-  // Safety net for a saved offset the page never grows tall enough to
-  // reach (e.g. the remembered position no longer exists) -- stop
-  // watching instead of leaving the observer running indefinitely.
-  setTimeout(() => {
-    done = true
-    observer.disconnect()
-  }, 8000)
 }
 
 export default function FundBreakdownPage() {
@@ -1885,26 +1855,14 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
   const [loadError, setLoadError] = useState("")
   const [selectedBank, setSelectedBank] = useState<string | null>(null)
-  const [selectedYear, setSelectedYear] = useState<string | null>(null)
-  // Restores the scroll position lost to BankDetailPanel/BankYearDetailPanel's
-  // own scroll-to-top-on-open when the user backs out of them.
+  // Restores the scroll position lost to BankDetailPanel's own
+  // scroll-to-top-on-open when the user backs out of it. The year
+  // drill-down within a bank is BankDetailPanel's own concern now (it
+  // never remounts for that transition, so it never needs this).
   const bankScrollPosRef = useRef(0)
-  const yearScrollPosRef = useRef(0)
-  // True for exactly the one BankDetailPanel mount caused by backing out of
-  // the year view -- tells it to skip its own scroll-to-top so it doesn't
-  // race the restore below. Reset on every fresh bank pick from the list.
-  const [cameBackFromYear, setCameBackFromYear] = useState(false)
   useEffect(() => {
     if (selectedBank === null) restoreScrollY(bankScrollPosRef.current)
   }, [selectedBank])
-  useEffect(() => {
-    if (selectedYear === null && selectedBank !== null) restoreScrollY(yearScrollPosRef.current)
-    // Only re-run when selectedYear itself changes -- selectedBank is read
-    // for its current value, not tracked, so a bank switch (which also
-    // clears selectedYear via a separate path) can't replay a stale offset
-    // left over from a different bank's year drill-down.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedYear])
 
   const [manageMode, setManageMode] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -2107,31 +2065,8 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
     return <SkeletonCardList rows={3} />
   }
 
-  if (selectedBank && selectedYear) {
-    return (
-      <BankYearDetailPanel
-        bank={selectedBank}
-        year={selectedYear}
-        onBack={() => {
-          setCameBackFromYear(true)
-          setSelectedYear(null)
-        }}
-      />
-    )
-  }
-
   if (selectedBank) {
-    return (
-      <BankDetailPanel
-        bank={selectedBank}
-        skipTopScroll={cameBackFromYear}
-        onBack={() => setSelectedBank(null)}
-        onSelectYear={(y) => {
-          yearScrollPosRef.current = window.scrollY
-          setSelectedYear(y)
-        }}
-      />
-    )
+    return <BankDetailPanel bank={selectedBank} onBack={() => setSelectedBank(null)} />
   }
 
   const totalBalance = banks.reduce((sum, b) => sum + b.balance, 0)
@@ -2236,7 +2171,6 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
                 fmt={fmt}
                 onClick={() => {
                   bankScrollPosRef.current = window.scrollY
-                  setCameBackFromYear(false)
                   setSelectedBank(b.bank)
                 }}
                 showEdit={isAdmin && manageMode}

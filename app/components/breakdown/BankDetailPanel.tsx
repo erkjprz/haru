@@ -2,10 +2,13 @@
 
 // Inline replacement for the old standalone /bank/[bank] route -- rendered
 // in place inside BanksPanel so the Breakdown header and tab row stay on
-// screen. Tapping a year hands off to onSelectYear instead of navigating
-// to /bank/[bank]/[year].
+// screen. The year drill-down (formerly /bank/[bank]/[year]) is owned
+// entirely by this component rather than by BanksPanel: keeping it a local
+// UI toggle instead of a separate mount means backing out of a year never
+// re-triggers this panel's own data fetch or loading skeleton, so there's
+// nothing for the remembered scroll position to race against.
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
@@ -17,28 +20,26 @@ import {
 } from "@/lib/bankInterest"
 import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
 import BankQrModal from "@/app/components/BankQrModal"
+import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
 
 type YearRow = { year: string; amount: number; memberCount: number }
 type QrAccount = { id: string; account_name: string | null; qr_code_url: string }
 
 export function BankDetailPanel({
   bank,
-  onBack,
-  onSelectYear,
-  skipTopScroll
+  onBack
 }: {
   bank: string
   onBack: () => void
-  onSelectYear: (year: string) => void
-  // Set by BanksPanel when this mount is a return from a year drill-down
-  // rather than a fresh open from the bank list -- the parent is already
-  // restoring the scroll position that drill-down came from, so this
-  // panel's own scroll-to-top-on-open would otherwise win the race and
-  // undo it every time.
-  skipTopScroll?: boolean
 }) {
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
+
+  const [selectedYear, setSelectedYear] = useState<string | null>(null)
+  const yearScrollPosRef = useRef(0)
+  useEffect(() => {
+    if (selectedYear === null) window.scrollTo(0, yearScrollPosRef.current)
+  }, [selectedYear])
 
   const [dataLoading, setDataLoading] = useState(true)
   const [balance, setBalance] = useState(0)
@@ -160,11 +161,12 @@ export function BankDetailPanel({
 
   // Opening a drill-down while the list is scrolled down would otherwise
   // leave the Breakdown header out of view -- jump back to top so it's
-  // visible the instant the detail mounts. Skipped when returning from the
-  // year view, where BanksPanel is restoring a different position instead.
+  // visible the instant the detail mounts. Runs once, only for the initial
+  // open from the bank list -- the year drill-down is a local view swap
+  // within this same mount, not a fresh one, so it doesn't hit this again.
   useEffect(() => {
-    if (!skipTopScroll) window.scrollTo(0, 0)
-  }, [skipTopScroll])
+    window.scrollTo(0, 0)
+  }, [])
 
   useEffect(() => {
     if (bank) {
@@ -189,6 +191,16 @@ export function BankDetailPanel({
           ← Back to Banks
         </button>
       </div>
+    )
+  }
+
+  if (selectedYear) {
+    return (
+      <BankYearDetailPanel
+        bank={bank}
+        year={selectedYear}
+        onBack={() => setSelectedYear(null)}
+      />
     )
   }
 
@@ -303,7 +315,10 @@ export function BankDetailPanel({
               {years.map((y, i) => (
                 <button
                   key={y.year}
-                  onClick={() => onSelectYear(y.year)}
+                  onClick={() => {
+                    yearScrollPosRef.current = window.scrollY
+                    setSelectedYear(y.year)
+                  }}
                   className={`w-full py-3 flex justify-between items-center gap-3 text-left ${
                     i !== years.length - 1 ? "border-b border-dashed border-hairline" : ""
                   }`}
