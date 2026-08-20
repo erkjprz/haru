@@ -87,14 +87,14 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                 </div>
               </div>
 
-              <div className="h-1.5 rounded-full bg-hairline overflow-hidden mt-2.5">
-                <div
-                  className={`h-full ${
-                    loan.status === "closed" ? (fullyRepaid ? "bg-sage" : "bg-rust") : "bg-gold"
-                  }`}
-                  style={{ width: `${repaidPct}%` }}
-                />
-              </div>
+              {!(loan.status === "closed" && fullyRepaid) && (
+                <div className="h-1.5 rounded-full bg-hairline overflow-hidden mt-2.5">
+                  <div
+                    className={`h-full ${loan.status === "closed" ? "bg-rust" : "bg-gold"}`}
+                    style={{ width: `${repaidPct}%` }}
+                  />
+                </div>
+              )}
 
               {loan.term_months && (
                 <p className="text-[11px] text-ink-soft mt-1.5">
