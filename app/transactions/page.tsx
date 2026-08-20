@@ -851,7 +851,7 @@ function TransactionsPageInner() {
                       <p className="text-xs text-ink-soft font-mono">{gainAllocationDetail}</p>
                     )}
                     {investmentName && (
-                      <p className="text-xs text-ink-soft font-mono">{investmentName} Investment</p>
+                      <p className="text-xs text-ink-soft font-mono">Investment · {investmentName}</p>
                     )}
                     {showDescription && (
                       <p className="text-xs text-ink-soft font-mono break-words">{transaction.description}</p>
