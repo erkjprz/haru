@@ -2776,7 +2776,6 @@ function InvestmentCard({
 }) {
   const isGain = inv.gain_loss > 0
   const isFlat = inv.gain_loss === 0
-  const magnitudePct = inv.invested > 0 ? Math.min(100, (Math.abs(inv.gain_loss) / inv.invested) * 100) : 0
 
   return (
     <div
@@ -2845,10 +2844,6 @@ function InvestmentCard({
             {inv.gain_loss < 0 ? "-" : "+"}₱{fmt(Math.abs(inv.gain_loss))}
           </p>
         </div>
-      </div>
-
-      <div className="h-1.5 rounded-full bg-hairline overflow-hidden mt-2.5">
-        <div className={`h-full ${isGain ? "bg-sage" : "bg-rust"}`} style={{ width: `${magnitudePct}%` }} />
       </div>
     </div>
   )
