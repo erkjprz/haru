@@ -41,7 +41,7 @@ const ADMIN_EDITABLE = ["Bank Interest", "Expense", "Internal Transfer", "Invest
 
 const TYPE_LABEL: Record<string, string> = {
   "Member Contribution": "Contribution",
-  "Member Withdrawal": "Withdrawal Request",
+  "Member Withdrawal": "Withdrawal",
   "Loan Repayment": "Loan Payment",
   "Loan Release": "Loan Release",
   "Bank Interest": "Bank Interest",

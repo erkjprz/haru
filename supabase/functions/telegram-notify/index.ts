@@ -17,7 +17,7 @@ const CLASSIFICATION_LABEL: Record<string, string> = {
   "Member Contribution": "Contribution",
   "Member Withdrawal": "Withdrawal",
   "Loan Release": "Loan Release",
-  "Loan Repayment": "Loan Repayment",
+  "Loan Repayment": "Loan Payment",
   "Investment": "Investment",
   "Investment Return": "Investment Return",
   "Bank Interest": "Bank Interest",

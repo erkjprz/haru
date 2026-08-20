@@ -8,7 +8,7 @@ import { TRANSACTION_TYPE_LABELS } from "@/lib/transactionLabels"
 import type { Loan } from "@/lib/useLoansSummary"
 
 // A closed loan isn't always a full repayment -- an admin can close one
-// early via "Close Early (Write Off)" with less than totalRepayable
+// early via "Close Early" with less than totalRepayable
 // actually repaid. Label off the real repaid amount instead of assuming
 // every closed loan was paid off in full (same rule as LoanDetailPanel
 // and the Breakdown > Loans list).
