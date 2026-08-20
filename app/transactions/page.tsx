@@ -690,6 +690,27 @@ function TransactionsPageInner() {
               const transferLabel = isTransferTxn ? transaction._transferLabel ?? null : null
               const investmentName = transaction.investments?.name || null
 
+              const isGainAllocation = transaction.classification === "Gain Allocation"
+
+              // Bank interest Gain Allocation rows have no relational
+              // bank/year field (legacy data) -- both only exist embedded
+              // in the description, which follows one exact template for
+              // every such row, so it's safe to parse out.
+              const gainAllocationBankMatch =
+                isGainAllocation && !loanName && !investmentName
+                  ? transaction.description?.match(/^Share of (\d{4}) (.+) bank interest$/) ?? null
+                  : null
+
+              const gainAllocationDetail = !isGainAllocation
+                ? null
+                : loanName
+                ? borrowerName
+                  ? `${loanName} · ${borrowerName}`
+                  : loanName
+                : gainAllocationBankMatch
+                ? `${gainAllocationBankMatch[2]} · Interest ${gainAllocationBankMatch[1]}`
+                : null
+
               // Legacy migrated rows carry the bank as plain text in `bank`.
               // Rows created through the app instead link a real bank
               // account via bank_account_id, so fall back to that embed's
@@ -710,7 +731,8 @@ function TransactionsPageInner() {
                 !isRedundantDescription(transaction.description, memberName) &&
                 !CLASSIFICATIONS_WITH_HIDDEN_DESCRIPTION.has(transaction.classification) &&
                 !isLoanTxn &&
-                !isTransferTxn
+                !isTransferTxn &&
+                !(isGainAllocation && (gainAllocationDetail || investmentName))
 
               const showStatus = transaction.status !== "approved"
 
@@ -824,6 +846,9 @@ function TransactionsPageInner() {
                       </p>
                     )}
                     {isLoanTxn && loanName && <p className="text-xs text-ink-soft font-mono">{loanName}</p>}
+                    {gainAllocationDetail && (
+                      <p className="text-xs text-ink-soft font-mono">{gainAllocationDetail}</p>
+                    )}
                     {investmentName && <p className="text-xs text-ink-soft font-mono">{investmentName}</p>}
                     {showDescription && (
                       <p className="text-xs text-ink-soft font-mono break-words">{transaction.description}</p>
