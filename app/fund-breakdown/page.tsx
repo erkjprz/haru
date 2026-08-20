@@ -1745,8 +1745,14 @@ function LoanCard({
   const repaidPct = loan.total_repayable > 0 ? Math.min(100, (loan.repayment / loan.total_repayable) * 100) : 0
   const fullyRepaid = loan.repayment >= loan.total_repayable
 
-  const dateLabel = new Date(loan.start_date).toLocaleDateString(undefined, { month: "short", year: "numeric" })
   const overdueLabel = paymentOverdueLabel(loan.status, loan.repayment_frequency, loan.start_date, loan.last_repayment_date)
+
+  const subtitleParts = [
+    termLabel(loan),
+    loan.status === "closed" && durationLabel(loan.start_date, loan.closed_date)
+      ? `paid off in ${durationLabel(loan.start_date, loan.closed_date)}`
+      : null
+  ].filter((part): part is string => Boolean(part))
 
   return (
     <button
@@ -1763,13 +1769,11 @@ function LoanCard({
               </span>
             )}
           </div>
-          <p className="text-[12px] text-ink-soft">
-            {loan.borrower} · {dateLabel}
-            {termLabel(loan) && ` · ${termLabel(loan)}`}
-            {loan.status === "closed" &&
-              durationLabel(loan.start_date, loan.closed_date) &&
-              ` · paid off in ${durationLabel(loan.start_date, loan.closed_date)}`}
-          </p>
+          {/* Borrower and year-month already lead the loan's own name
+              above -- this line only adds what that doesn't cover. */}
+          {subtitleParts.length > 0 && (
+            <p className="text-[12px] text-ink-soft">{subtitleParts.join(" · ")}</p>
+          )}
           {overdueLabel && (
             <p className="text-[11px] font-mono uppercase tracking-wide text-rust mt-1">⚠ {overdueLabel}</p>
           )}

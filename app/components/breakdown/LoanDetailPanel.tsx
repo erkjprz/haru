@@ -580,9 +580,10 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         )}
       </div>
       <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">{loan.loan}</h1>
+      {/* Borrower already leads the loan's own name above -- this line
+          only adds what that doesn't cover. */}
       <p className="text-[13px] text-ink-soft mb-6">
-        Borrowed by {loan.borrower}
-        {loan.borrower_member_id === myMemberId && " (you)"} · released {startLabel}
+        {loan.borrower_member_id === myMemberId && "You · "}Released {startLabel}
       </p>
 
       {/* Principal / repayment overview */}

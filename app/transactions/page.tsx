@@ -700,21 +700,23 @@ function TransactionsPageInner() {
                   ? transaction.description?.match(/^Share of (\d{4}) (.+) bank interest$/) ?? null
                   : null
 
-              // loanName is always "Loan - {year-month}" (e.g. "Loan -
-              // 2021-07") -- swap the hyphen for a dot everywhere it's
-              // shown, so it reads as "label · value" instead of the raw
-              // stored name.
-              const loanLabel = loanName?.replace(/^Loan - /, "Loan · ") ?? loanName
-
+              // loanName is now "{Borrower} · {year-month}" -- exactly
+              // what's needed here, since the row's headline name is
+              // whoever received this share, not the borrower.
               const gainAllocationDetail = !isGainAllocation
                 ? null
                 : loanName
-                ? borrowerName
-                  ? `${loanLabel} · ${borrowerName}`
-                  : loanLabel
+                ? loanName
                 : gainAllocationBankMatch
                 ? `Interest · ${gainAllocationBankMatch[1]} · ${gainAllocationBankMatch[2]}`
                 : null
+
+              // On an actual Loan Release/Repayment row the headline name
+              // is already the borrower (see displayName below), so
+              // repeating "{Borrower} · {year-month}" there would just
+              // repeat the borrower a second time -- show only the
+              // year-month.
+              const loanDate = loanName?.match(/(\d{4}-\d{2})$/)?.[1] ?? null
 
               // Legacy migrated rows carry the bank as plain text in `bank`.
               // Rows created through the app instead link a real bank
@@ -847,7 +849,7 @@ function TransactionsPageInner() {
                         Recorded by {transaction.submitted_by_member.name}
                       </p>
                     )}
-                    {isLoanTxn && loanLabel && <p className="text-xs text-ink-soft font-mono">{loanLabel}</p>}
+                    {isLoanTxn && loanDate && <p className="text-xs text-ink-soft font-mono">{loanDate}</p>}
                     {gainAllocationDetail && (
                       <p className="text-xs text-ink-soft font-mono">{gainAllocationDetail}</p>
                     )}
