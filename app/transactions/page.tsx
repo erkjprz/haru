@@ -17,7 +17,7 @@ const typeColor: Record<string, string> = {
   "Expense": "text-rust border-rust",
   "Loan Release": "text-gold border-gold",
   "Loan Repayment": "text-gold border-gold",
-  "Gain Allocation": "text-ink-soft border-ink-soft",
+  "Gain Allocation": "text-slate border-slate",
   "Bank Interest": "text-sage border-sage",
   "Investment Return": "text-sage border-sage",
   "Investment": "text-gold border-gold",
@@ -677,11 +677,10 @@ function TransactionsPageInner() {
 
               // "Gain Allocation" covers a member's share of a loan gain, an
               // investment gain/loss, or bank interest -- one classification
-              // for both directions, unlike every other type here which gets
-              // its own fixed color. The sign of the amount is the only
-              // signal for which one this row actually is, so the badge
-              // color has to key off that instead of the static typeColor
-              // map, or a loss reads identically to a gain.
+              // for both directions. The type badge stays one fixed color
+              // (slate) either way -- the sign shows up as a +/- on the
+              // amount instead, so a loss doesn't borrow rust's "money left
+              // the fund" meaning that Withdrawal/Expense/Tax/Write-off use.
               const isGainAllocationLoss =
                 transaction.classification === "Gain Allocation" && Number(transaction.amount) < 0
 
@@ -808,6 +807,11 @@ function TransactionsPageInner() {
                       <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
                       <span className="flex items-center gap-2 shrink-0">
                         <span className="font-mono [font-variant-numeric:tabular-nums] text-lg font-bold whitespace-nowrap">
+                          {isGainAllocation && (
+                            <span className={isGainAllocationLoss ? "text-rust" : "text-sage"}>
+                              {isGainAllocationLoss ? "−" : "+"}
+                            </span>
+                          )}
                           ₱{fmt(Math.abs(transaction.amount))}
                         </span>
                         {transaction.receipt_url && (
@@ -828,10 +832,7 @@ function TransactionsPageInner() {
                       {" · "}
                       <span
                         className={`font-semibold ${
-                          (isGainAllocationLoss
-                            ? "text-rust"
-                            : typeColor[transaction.classification] ?? "text-ink-soft"
-                          ).split(" ")[0]
+                          (typeColor[transaction.classification] ?? "text-ink-soft").split(" ")[0]
                         }`}
                       >
                         {typeLabels[transaction.classification] || transaction.classification}
