@@ -2229,7 +2229,6 @@ function BankCard({
   // actually credits: tax netted out, and years whose interest was
   // already fully distributed correctly excluded.
   const undistributed = bank.pending_interest
-  const distributedPct = netInterest > 0 ? Math.min(100, (bank.distributed / netInterest) * 100) : 0
 
   return (
     <div
@@ -2280,10 +2279,6 @@ function BankCard({
           <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Distributed</p>
           <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-ink">₱{fmt(bank.distributed)}</p>
         </div>
-      </div>
-
-      <div className="h-1.5 rounded-full bg-hairline overflow-hidden mt-2.5">
-        <div className="h-full bg-sage" style={{ width: `${distributedPct}%` }} />
       </div>
 
       {undistributed > 0.01 && (
