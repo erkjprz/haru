@@ -1000,11 +1000,6 @@ function GroupPanel() {
               bold
             />
             <div className="pt-1 space-y-1.5">
-              <InfoSubRow
-                label="Investment Gain/Loss"
-                value={signed(fund.net_investment_gain_loss)}
-                valueClass={tone(fund.net_investment_gain_loss)}
-              />
               {fund.total_bank_writeoff !== 0 && (
                 <InfoSubRow
                   label="Bank Write-off"
@@ -1012,6 +1007,11 @@ function GroupPanel() {
                   valueClass={tone(fund.total_bank_writeoff)}
                 />
               )}
+              <InfoSubRow
+                label="Investment Gain/Loss"
+                value={signed(fund.net_investment_gain_loss)}
+                valueClass={tone(fund.net_investment_gain_loss)}
+              />
               <InfoSubRow label="Bank Interest" value={signed(fund.total_bank_interest)} valueClass="text-sage" />
               <InfoSubRow
                 label="Loan Gains Distributed"
