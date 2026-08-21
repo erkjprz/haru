@@ -738,6 +738,15 @@ function TransactionsPageInner() {
                 !isTransferTxn &&
                 !(isGainAllocation && (gainAllocationDetail || investmentName))
 
+              // Same color the type badge always used, just resolved once
+              // here now that it's rendered beside the name instead of in
+              // the mono byline below.
+              const typeColorClass = isGainAllocation
+                ? isGainAllocationLoss
+                  ? "text-rust"
+                  : "text-sage"
+                : (typeColor[transaction.classification] ?? "text-ink-soft").split(" ")[0]
+
               const showStatus = transaction.status !== "approved"
 
               // Member-submitted entries: editable by their owner while
@@ -809,7 +818,12 @@ function TransactionsPageInner() {
                     }`}
                   >
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
+                      <span className="flex items-baseline gap-1.5 min-w-0">
+                        <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
+                        <span className={`font-display text-xs font-bold shrink-0 ${typeColorClass}`}>
+                          {typeLabels[transaction.classification] || transaction.classification}
+                        </span>
+                      </span>
                       <span className="flex items-center gap-2 shrink-0">
                         <span className="font-mono [font-variant-numeric:tabular-nums] text-lg font-bold whitespace-nowrap">
                           ₱{fmt(Math.abs(transaction.amount))}
@@ -829,18 +843,6 @@ function TransactionsPageInner() {
 
                     <div className="text-xs font-mono text-ink-soft truncate">
                       <span className="font-bold text-ink">{cardDate(transaction)}</span>
-                      {" · "}
-                      <span
-                        className={`font-semibold ${
-                          isGainAllocation
-                            ? isGainAllocationLoss
-                              ? "text-rust"
-                              : "text-sage"
-                            : (typeColor[transaction.classification] ?? "text-ink-soft").split(" ")[0]
-                        }`}
-                      >
-                        {typeLabels[transaction.classification] || transaction.classification}
-                      </span>
                       {bankBadge && <> · {bankBadge}</>}
                       {isTransferTxn && transferLabel && <> · {transferLabel}</>}
                     </div>
