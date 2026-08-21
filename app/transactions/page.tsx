@@ -812,7 +812,7 @@ function TransactionsPageInner() {
                       <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
                       <span className="flex items-center gap-2 shrink-0">
                         <span className="font-mono [font-variant-numeric:tabular-nums] text-lg font-bold whitespace-nowrap">
-                          {isGainAllocationLoss ? `(₱${fmt(Math.abs(transaction.amount))})` : `₱${fmt(Math.abs(transaction.amount))}`}
+                          ₱{fmt(Math.abs(transaction.amount))}
                         </span>
                         {transaction.receipt_url && (
                           <button
@@ -832,7 +832,11 @@ function TransactionsPageInner() {
                       {" · "}
                       <span
                         className={`font-semibold ${
-                          (typeColor[transaction.classification] ?? "text-ink-soft").split(" ")[0]
+                          isGainAllocation
+                            ? isGainAllocationLoss
+                              ? "text-rust"
+                              : "text-sage"
+                            : (typeColor[transaction.classification] ?? "text-ink-soft").split(" ")[0]
                         }`}
                       >
                         {typeLabels[transaction.classification] || transaction.classification}
