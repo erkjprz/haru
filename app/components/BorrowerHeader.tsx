@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { NotificationBell } from "@/app/components/NotificationBell"
+import { useTheme } from "@/app/components/ThemeProvider"
 
 function MenuIcon() {
   return (
@@ -13,8 +14,12 @@ function MenuIcon() {
   )
 }
 
+const APPEARANCE_CYCLE = { system: "light", light: "dark", dark: "system" } as const
+const APPEARANCE_LABEL = { system: "🌓 System", light: "☀️ Light", dark: "🌙 Dark" } as const
+
 function MenuDropdown({ onAccount }: { onAccount: boolean }) {
   const router = useRouter()
+  const { preference, setPreference } = useTheme()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -52,7 +57,7 @@ function MenuDropdown({ onAccount }: { onAccount: boolean }) {
       </button>
 
       {open && (
-        <div className="absolute z-50 right-0 mt-1.5 w-40 border border-hairline rounded-sm bg-paper shadow-lg overflow-hidden">
+        <div className="absolute z-50 right-0 mt-1.5 w-48 border border-hairline rounded-sm bg-paper shadow-lg overflow-hidden">
           {!onAccount && (
             <button
               onClick={() => go("/account")}
@@ -66,6 +71,13 @@ function MenuDropdown({ onAccount }: { onAccount: boolean }) {
             className="w-full text-left px-4 py-2.5 text-sm text-ink-soft hover:text-ink hover:bg-paper-2 transition-colors border-b border-hairline"
           >
             Help
+          </button>
+          <button
+            onClick={() => setPreference(APPEARANCE_CYCLE[preference])}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-ink-soft hover:text-ink hover:bg-paper-2 transition-colors border-b border-hairline"
+          >
+            <span>Appearance</span>
+            <span>{APPEARANCE_LABEL[preference]}</span>
           </button>
           <button
             onClick={logout}
@@ -83,9 +95,9 @@ function MenuDropdown({ onAccount }: { onAccount: boolean }) {
 // loans list, or "+ New" transaction button, since none of those apply to
 // a restricted borrower account. The wordmark goes home (/borrower) --
 // previously there was no way back from a page like Help short of the
-// browser's own back button. Account/Help/Sign Out live behind a single
-// Menu button rather than as separate top-bar links -- with the
-// notification bell added, spelling all three out here wrapped onto two
+// browser's own back button. Account/Help/Appearance/Sign Out live behind
+// a single Menu button rather than as separate top-bar links -- with the
+// notification bell added, spelling all four out here wrapped onto two
 // lines on narrow screens, and a fixed-width Menu button scales to however
 // many items end up in here later without that happening again.
 export default function BorrowerHeader() {
