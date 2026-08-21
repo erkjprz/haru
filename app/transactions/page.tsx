@@ -738,6 +738,15 @@ function TransactionsPageInner() {
                 !isTransferTxn &&
                 !(isGainAllocation && (gainAllocationDetail || investmentName))
 
+              // Same color the type badge always used, just resolved once
+              // here now that it's rendered beside the name instead of in
+              // the mono byline below.
+              const typeColorClass = isGainAllocation
+                ? isGainAllocationLoss
+                  ? "text-rust"
+                  : "text-sage"
+                : (typeColor[transaction.classification] ?? "text-ink-soft").split(" ")[0]
+
               const showStatus = transaction.status !== "approved"
 
               // Member-submitted entries: editable by their owner while
@@ -795,21 +804,31 @@ function TransactionsPageInner() {
                     </p>
                   )}
 
-                  {/* Name + amount lead -- that's what a ledger row is
-                      actually scanned for. Type/bank/date follow as one
-                      quiet byline, date leading it in full contrast since
-                      it's the detail people look for next. The rejection
-                      reason sits above the status row rather than below it
-                      so that row -- and its action button -- stays the last
-                      thing in the card regardless of which optional lines
-                      appear above it. */}
+                  {/* Date/bank lead as a quiet byline -- date in full
+                      contrast since it's what people scan a ledger by --
+                      then name + type + amount as the punchline right under
+                      it. The rejection reason sits above the status row
+                      rather than below it so that row -- and its action
+                      button -- stays the last thing in the card regardless
+                      of which optional lines appear above it. */}
                   <div
                     className={`flex flex-col gap-1 bg-paper-2 border border-hairline rounded-md px-4 py-3.5 ${
                       showMonthHeader ? "" : "mt-3"
                     }`}
                   >
+                    <div className="text-xs font-mono text-ink-soft truncate">
+                      <span className="font-bold text-ink">{cardDate(transaction)}</span>
+                      {bankBadge && <> · {bankBadge}</>}
+                      {isTransferTxn && transferLabel && <> · {transferLabel}</>}
+                    </div>
+
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
+                      <span className="flex items-baseline gap-1.5 min-w-0">
+                        <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
+                        <span className={`font-display text-xs font-bold shrink-0 ${typeColorClass}`}>
+                          {typeLabels[transaction.classification] || transaction.classification}
+                        </span>
+                      </span>
                       <span className="flex items-center gap-2 shrink-0">
                         <span className="font-mono [font-variant-numeric:tabular-nums] text-lg font-bold whitespace-nowrap">
                           ₱{fmt(Math.abs(transaction.amount))}
@@ -825,24 +844,6 @@ function TransactionsPageInner() {
                           </button>
                         )}
                       </span>
-                    </div>
-
-                    <div className="text-xs font-mono text-ink-soft truncate">
-                      <span className="font-bold text-ink">{cardDate(transaction)}</span>
-                      {" · "}
-                      <span
-                        className={`font-semibold ${
-                          isGainAllocation
-                            ? isGainAllocationLoss
-                              ? "text-rust"
-                              : "text-sage"
-                            : (typeColor[transaction.classification] ?? "text-ink-soft").split(" ")[0]
-                        }`}
-                      >
-                        {typeLabels[transaction.classification] || transaction.classification}
-                      </span>
-                      {bankBadge && <> · {bankBadge}</>}
-                      {isTransferTxn && transferLabel && <> · {transferLabel}</>}
                     </div>
 
                     {transaction.submitted_by_member && (
