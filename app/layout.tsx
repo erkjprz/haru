@@ -34,9 +34,11 @@ export const metadata: Metadata = {
   },
 };
 
-// Theme is a manual toggle stored in localStorage (see ThemeProvider), not
-// driven by prefers-color-scheme, so this is just the pre-hydration default
-// -- ThemeProvider updates the theme-color meta tag to match on toggle.
+// Theme follows the device's prefers-color-scheme by default, unless the
+// user has explicitly picked light or dark (stored in localStorage -- see
+// ThemeProvider). "dark" here is just the pre-hydration fallback for the
+// rare case JS hasn't run yet; ThemeProvider (and the inline script below)
+// resolve the real value before paint.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -58,14 +60,14 @@ export default function RootLayout({
     >
       <head>
         {/* Runs synchronously during HTML parsing, before first paint --
-            applies the stored theme (defaulting to dark, same default
-            ThemeProvider's own state starts with) so a hard reload never
-            shows a flash of the light theme while React hydrates. Without
-            this, pull-to-refresh's window.location.reload() briefly
-            painted the default light background every time. */}
+            applies the stored theme override if there is one, otherwise
+            resolves the device's prefers-color-scheme, so a hard reload
+            never shows a flash of the wrong theme while React hydrates.
+            Without this, pull-to-refresh's window.location.reload() briefly
+            painted the wrong background every time. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("haru-theme");var isDark=t?t==="dark":true;document.documentElement.classList.toggle("dark",isDark);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",isDark?"#0a0a0a":"#ffffff")}catch(e){}})()`
+            __html: `(function(){try{var t=localStorage.getItem("haru-theme");var isDark=t==="dark"?true:t==="light"?false:window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",isDark);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",isDark?"#0a0a0a":"#ffffff")}catch(e){}})()`
           }}
         />
       </head>

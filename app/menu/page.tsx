@@ -29,10 +29,16 @@ function MenuSection({ title, children }: { title: string; children: React.React
   )
 }
 
+const APPEARANCE_OPTIONS: { value: "system" | "light" | "dark"; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" }
+]
+
 export default function MenuPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
-  const { theme, toggleTheme } = useTheme()
+  const { preference, setPreference } = useTheme()
 
   useEffect(() => {
     if (authLoading) return
@@ -91,13 +97,25 @@ export default function MenuPage() {
           </MenuSection>
 
           <div className="mt-6">
-            <button
-              onClick={toggleTheme}
-              className="w-full flex items-center justify-between px-5 py-3.5 bg-paper-2 border border-hairline rounded-md text-sm text-ink"
-            >
-              <span>Appearance</span>
-              <span>{theme === "light" ? "🌙 Dark mode" : "☀️ Light mode"}</span>
-            </button>
+            <div className="bg-paper-2 border border-hairline rounded-md px-5 py-3.5">
+              <p className="text-sm text-ink mb-3">Appearance</p>
+              <div className="flex items-center gap-1 bg-paper border border-hairline rounded-md p-1">
+                {APPEARANCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPreference(option.value)}
+                    className={`flex-1 py-2 rounded-md text-sm ${
+                      preference === option.value
+                        ? "bg-gold text-ink font-semibold"
+                        : "text-ink-soft"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <button
               onClick={logout}

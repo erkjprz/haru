@@ -357,7 +357,13 @@ const memberSections: FaqSection[] = [
       },
       {
         q: "How do I switch between light and dark mode?",
-        a: <p>Open the menu (☰, top left) → <strong>Appearance</strong>, at the bottom of the menu.</p>
+        a: (
+          <p>
+            Open the menu (☰, top left) → <strong>Appearance</strong>, at the bottom of the menu. Pick{" "}
+            <strong>System</strong> to match your device's setting automatically, or lock it to{" "}
+            <strong>Light</strong>/<strong>Dark</strong>.
+          </p>
+        )
       },
       {
         q: "How do I add Est. 2017 to my phone's home screen?",
