@@ -804,19 +804,24 @@ function TransactionsPageInner() {
                     </p>
                   )}
 
-                  {/* Name + amount lead -- that's what a ledger row is
-                      actually scanned for. Type/bank/date follow as one
-                      quiet byline, date leading it in full contrast since
-                      it's the detail people look for next. The rejection
-                      reason sits above the status row rather than below it
-                      so that row -- and its action button -- stays the last
-                      thing in the card regardless of which optional lines
-                      appear above it. */}
+                  {/* Date/bank lead as a quiet byline -- date in full
+                      contrast since it's what people scan a ledger by --
+                      then name + type + amount as the punchline right under
+                      it. The rejection reason sits above the status row
+                      rather than below it so that row -- and its action
+                      button -- stays the last thing in the card regardless
+                      of which optional lines appear above it. */}
                   <div
                     className={`flex flex-col gap-1 bg-paper-2 border border-hairline rounded-md px-4 py-3.5 ${
                       showMonthHeader ? "" : "mt-3"
                     }`}
                   >
+                    <div className="text-xs font-mono text-ink-soft truncate">
+                      <span className="font-bold text-ink">{cardDate(transaction)}</span>
+                      {bankBadge && <> · {bankBadge}</>}
+                      {isTransferTxn && transferLabel && <> · {transferLabel}</>}
+                    </div>
+
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="flex items-baseline gap-1.5 min-w-0">
                         <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
@@ -839,12 +844,6 @@ function TransactionsPageInner() {
                           </button>
                         )}
                       </span>
-                    </div>
-
-                    <div className="text-xs font-mono text-ink-soft truncate">
-                      <span className="font-bold text-ink">{cardDate(transaction)}</span>
-                      {bankBadge && <> · {bankBadge}</>}
-                      {isTransferTxn && transferLabel && <> · {transferLabel}</>}
                     </div>
 
                     {transaction.submitted_by_member && (
