@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Navbar from "@/app/components/Navbar"
+import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
@@ -91,6 +92,7 @@ function AmountField({
 export default function PreferencesPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
+  const isBorrower = member?.role === "borrower"
 
   const [dataLoading, setDataLoading] = useState(true)
   const [banks, setBanks] = useState<{ id: string; bank_name: string; account_name: string | null }[]>([])
@@ -114,11 +116,10 @@ export default function PreferencesPage() {
       router.push("/waiting")
       return
     }
-    if (member.role === "borrower") router.push("/borrower")
   }, [authLoading, member, router])
 
   useEffect(() => {
-    if (authLoading || !member || member.status !== "approved" || member.role === "borrower") return
+    if (authLoading || !member || member.status !== "approved") return
 
     async function load() {
       const [{ data }, { data: bankList }] = await Promise.all([
@@ -184,10 +185,12 @@ export default function PreferencesPage() {
     setLoanPaymentMessage(error?.message || bankError?.message || "Saved.")
   }
 
-  if (authLoading || !member || member.status !== "approved" || member.role === "borrower" || dataLoading) {
+  const Header = isBorrower ? BorrowerHeader : Navbar
+
+  if (authLoading || !member || member.status !== "approved" || dataLoading) {
     return (
       <>
-        <Navbar />
+        <Header />
         <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
           <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
             <SkeletonPanel />
@@ -199,15 +202,15 @@ export default function PreferencesPage() {
 
   return (
     <>
-      <Navbar />
+      <Header />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
 
           <button
-            onClick={() => router.push("/menu")}
+            onClick={() => router.push(isBorrower ? "/borrower" : "/menu")}
             className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
           >
-            ← Menu
+            {isBorrower ? "← Your Loan" : "← Menu"}
           </button>
 
           <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
@@ -217,26 +220,34 @@ export default function PreferencesPage() {
             Preferences
           </h1>
           <p className="text-[13px] text-ink-soft mb-6">
-            Set default amounts and banks for transactions you make often. Leave a field blank to clear it.
+            {isBorrower
+              ? "Set a default amount and bank for the repayments you make often. Leave a field blank to clear it."
+              : "Set default amounts and banks for transactions you make often. Leave a field blank to clear it."}
           </p>
 
           <div className="space-y-4">
-            <AmountField
-              label="Default Contribution Amount"
-              helper="Pre-fills the amount and bank when you start a Contribution in New Transaction."
-              value={contributionAmount}
-              onChange={setContributionAmount}
-              bankId={contributionBankId}
-              onBankChange={setContributionBankId}
-              banks={banks}
-              onSave={saveContribution}
-              saving={savingContribution}
-              message={contributionMessage}
-            />
+            {!isBorrower && (
+              <AmountField
+                label="Default Contribution Amount"
+                helper="Pre-fills the amount and bank when you start a Contribution in New Transaction."
+                value={contributionAmount}
+                onChange={setContributionAmount}
+                bankId={contributionBankId}
+                onBankChange={setContributionBankId}
+                banks={banks}
+                onSave={saveContribution}
+                saving={savingContribution}
+                message={contributionMessage}
+              />
+            )}
 
             <AmountField
               label="Default Loan Payment Amount"
-              helper="Pre-fills the amount and bank when you start a Loan Payment in New Transaction."
+              helper={
+                isBorrower
+                  ? "Pre-fills the amount and bank when you make a repayment."
+                  : "Pre-fills the amount and bank when you start a Loan Payment in New Transaction."
+              }
               value={loanPaymentAmount}
               onChange={setLoanPaymentAmount}
               bankId={loanPaymentBankId}
