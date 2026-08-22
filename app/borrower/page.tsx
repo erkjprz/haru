@@ -3,7 +3,6 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
-import { NotificationPrompt } from "@/app/components/NotificationPrompt"
 import ScanToPayCard from "@/app/components/ScanToPayCard"
 import { LoanCards } from "@/app/components/LoanCards"
 import { useAuth } from "@/app/auth-context"
@@ -64,8 +63,6 @@ export default function BorrowerPage() {
             {member!.name}
           </h1>
           <p className="text-[13px] text-ink-soft mb-6">Request a loan, or repay one you already have.</p>
-
-          <NotificationPrompt memberId={member!.member_id} />
 
           <div className="flex gap-2 mb-7">
             <button
