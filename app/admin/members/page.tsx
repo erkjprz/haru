@@ -260,7 +260,7 @@ export default function AdminMembersPage() {
               </h1>
             </div>
             <button
-              className="shrink-0 bg-gold text-ink px-4 py-2.5 rounded-sm text-sm font-semibold"
+              className="shrink-0 bg-gold-soft text-ink px-4 py-2.5 rounded-sm text-sm font-semibold"
               onClick={() => setShowAddForm(!showAddForm)}
             >
               {showAddForm ? "Cancel" : "+ Add Member"}

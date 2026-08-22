@@ -77,7 +77,7 @@ export default function BorrowerPage() {
             {hasActiveLoan && (
               <button
                 onClick={() => router.push("/borrower/repay")}
-                className="flex-1 bg-gold text-ink px-4 py-3 rounded-md text-sm font-semibold"
+                className="flex-1 bg-gold-soft text-ink px-4 py-3 rounded-md text-sm font-semibold"
               >
                 Make a Repayment
               </button>

@@ -400,7 +400,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
           {isAdmin && investment.status === "open" && (
             <div className="flex items-center gap-2 flex-wrap mb-3">
               <button
-                className="shrink-0 bg-gold text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+                className="shrink-0 bg-gold-soft text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
                 onClick={() => openDistribute(false)}
               >
                 <span className="text-lg leading-none">+</span>

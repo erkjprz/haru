@@ -597,7 +597,7 @@ export default function InstallPage() {
             launch URL. */}
         <Link
           href={APP_PATH}
-          className="block text-center mt-8 bg-gold text-ink rounded-md py-3.5 text-sm font-bold"
+          className="block text-center mt-8 bg-gold-soft text-ink rounded-md py-3.5 text-sm font-bold"
         >
           Continue to Sign In →
         </Link>
