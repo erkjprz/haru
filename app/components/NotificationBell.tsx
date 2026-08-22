@@ -15,6 +15,8 @@ type Notification = {
 }
 
 const PREVIEW_LIMIT = 8
+const PANEL_WIDTH = 320
+const VIEWPORT_MARGIN = 16
 
 export function NotificationBell() {
   const router = useRouter()
@@ -23,7 +25,9 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0, width: PANEL_WIDTH })
   const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!member) return
@@ -75,6 +79,21 @@ export function NotificationBell() {
     setOpen(next)
     if (!next || !member) return
 
+    // Anchored via getBoundingClientRect + fixed positioning rather than
+    // `absolute right-0` off the button's own wrapper -- the bell isn't
+    // always the right-most element in its header (a "+ New" button or
+    // Menu dropdown can sit to its right), so anchoring to the wrapper's
+    // own edge left too little room and pushed the panel off-screen.
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (rect) {
+      const width = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2)
+      const left = Math.min(
+        Math.max(rect.right - width, VIEWPORT_MARGIN),
+        window.innerWidth - width - VIEWPORT_MARGIN
+      )
+      setPanelPos({ top: rect.bottom + 6, left, width })
+    }
+
     const { data, error } = await supabase
       .from("notifications")
       .select("id, title, body, link, read, created_at")
@@ -109,6 +128,7 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={containerRef}>
       <button
+        ref={buttonRef}
         onClick={toggleOpen}
         aria-label="Notifications"
         className="relative w-9 h-9 flex items-center justify-center text-ink-soft hover:text-ink transition-colors"
@@ -125,7 +145,10 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute z-50 right-0 mt-1.5 w-80 max-w-[calc(100vw-2rem)] border border-hairline rounded-sm bg-paper shadow-lg overflow-hidden">
+        <div
+          className="fixed z-50 border border-hairline rounded-sm bg-paper shadow-lg overflow-hidden"
+          style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width }}
+        >
           <div className="px-4 py-2.5 border-b border-hairline text-[11px] tracking-[0.14em] uppercase text-gold font-mono">
             Notifications
           </div>
