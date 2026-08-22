@@ -635,7 +635,7 @@ function TransactionsPageInner() {
                 {activeChips.map((chip) => (
                   <span
                     key={chip.key}
-                    className="shrink-0 flex items-center gap-1.5 bg-gold text-ink rounded-full pl-3.5 pr-1.5 py-1.5 text-[13px] font-semibold whitespace-nowrap max-w-[12rem]"
+                    className="shrink-0 flex items-center gap-1.5 bg-gold-soft text-ink rounded-full pl-3.5 pr-1.5 py-1.5 text-[13px] font-semibold whitespace-nowrap max-w-[12rem]"
                   >
                     <span className="truncate">{chip.label}</span>
                     <button
@@ -884,7 +884,7 @@ function TransactionsPageInner() {
                           <button
                             type="button"
                             onClick={() => router.push(`/transactions/${transaction.transaction_id}/edit`)}
-                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-paper bg-gold rounded-full px-3 py-1.5"
+                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-paper bg-gold-soft rounded-full px-3 py-1.5"
                           >
                             {transaction.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
                           </button>
@@ -978,7 +978,7 @@ function TransactionsPageInner() {
                           setDateTo(preset.to)
                         }}
                         className={`shrink-0 border rounded-full px-3.5 py-2 text-sm whitespace-nowrap ${
-                          active ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
+                          active ? "bg-gold-soft border-gold-soft text-ink font-semibold" : "border-hairline text-ink-soft"
                         }`}
                       >
                         {preset.label}
@@ -1015,7 +1015,7 @@ function TransactionsPageInner() {
               <button
                 type="button"
                 onClick={() => setFilterSheetOpen(false)}
-                className="w-full mt-5 bg-gold text-ink rounded-md py-3.5 text-sm font-semibold"
+                className="w-full mt-5 bg-gold-soft text-ink rounded-md py-3.5 text-sm font-semibold"
               >
                 Apply Filters
               </button>

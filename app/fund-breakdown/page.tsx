@@ -1466,7 +1466,7 @@ function MemberBreakdownSheet({
                       type="button"
                       onClick={() => setClosedYear("all")}
                       className={`shrink-0 border rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap ${
-                        effectiveClosedYear === "all" ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
+                        effectiveClosedYear === "all" ? "bg-gold-soft border-gold-soft text-ink font-semibold" : "border-hairline text-ink-soft"
                       }`}
                     >
                       All
@@ -1477,7 +1477,7 @@ function MemberBreakdownSheet({
                         type="button"
                         onClick={() => setClosedYear(y)}
                         className={`shrink-0 border rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap ${
-                          effectiveClosedYear === y ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
+                          effectiveClosedYear === y ? "bg-gold-soft border-gold-soft text-ink font-semibold" : "border-hairline text-ink-soft"
                         }`}
                       >
                         {y}
@@ -1688,7 +1688,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
                 type="button"
                 onClick={() => setClosedYear("all")}
                 className={`shrink-0 border rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap ${
-                  effectiveClosedYear === "all" ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
+                  effectiveClosedYear === "all" ? "bg-gold-soft border-gold-soft text-ink font-semibold" : "border-hairline text-ink-soft"
                 }`}
               >
                 All
@@ -1699,7 +1699,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
                   type="button"
                   onClick={() => setClosedYear(y)}
                   className={`shrink-0 border rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap ${
-                    effectiveClosedYear === y ? "bg-gold border-gold text-ink font-semibold" : "border-hairline text-ink-soft"
+                    effectiveClosedYear === y ? "bg-gold-soft border-gold-soft text-ink font-semibold" : "border-hairline text-ink-soft"
                   }`}
                 >
                   {y}
@@ -2110,7 +2110,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
             </button>
           )}
           <button
-            className="shrink-0 bg-gold text-ink px-4 py-2.5 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            className="shrink-0 bg-gold-soft text-ink px-4 py-2.5 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
             onClick={startAdd}
           >
             <span className="text-lg leading-none">+</span>
@@ -2696,7 +2696,7 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
             </button>
           )}
           <button
-            className="shrink-0 bg-gold text-ink px-4 py-2.5 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            className="shrink-0 bg-gold-soft text-ink px-4 py-2.5 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
             onClick={startAdd}
           >
             <span className="text-lg leading-none">+</span>

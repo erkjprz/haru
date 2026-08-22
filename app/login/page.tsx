@@ -95,7 +95,7 @@ export default function LoginPage() {
             </p>
             <button
               onClick={() => supabase.auth.signOut()}
-              className="mt-4 w-full rounded-md bg-gold py-3 font-semibold text-ink shadow-sm transition-all hover:opacity-90 active:scale-[0.99]"
+              className="mt-4 w-full rounded-md bg-gold-soft py-3 font-semibold text-ink shadow-sm transition-all hover:opacity-90 active:scale-[0.99]"
             >
               Sign Out
             </button>
@@ -284,7 +284,7 @@ export default function LoginPage() {
               className="
                 w-full
                 rounded-md
-                bg-gold
+                bg-gold-soft
                 py-3
                 font-semibold
                 text-ink

@@ -11,6 +11,11 @@
   --ink: #1f1b16;
   --ink-soft: #6b5f4f;
   --gold: #a8761f;
+  /* Lighter gold for primary buttons and active/selected pills -- --gold
+     itself stays the stronger accent color (labels, links, status dots,
+     borders) since those read fine at full strength and lightening them
+     too just washes the whole page out. */
+  --gold-soft: #d8b672;
   --sage: #4f6f4f;
   --rust: #96432f;
   --slate: #4d6273;
@@ -33,6 +38,7 @@
   --ink: #f5f5f5;
   --ink-soft: #a0a0a0;
   --gold: #d4a24e;
+  --gold-soft: #e7cc9e;
   --sage: #7fa87f;
   --rust: #c96b56;
   --slate: #8fabc0;
@@ -48,6 +54,7 @@
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
   --color-sage: var(--sage);
   --color-rust: var(--rust);
   --color-slate: var(--slate);

@@ -107,7 +107,7 @@ export default function MenuPage() {
                     onClick={() => setPreference(option.value)}
                     className={`flex-1 py-2 rounded-md text-sm ${
                       preference === option.value
-                        ? "bg-gold text-ink font-semibold"
+                        ? "bg-gold-soft text-ink font-semibold"
                         : "text-ink-soft"
                     }`}
                   >

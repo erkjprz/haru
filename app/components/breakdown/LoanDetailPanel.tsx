@@ -769,7 +769,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
 
                     {adminLoan.status === "active" && adminLoan.remainingApproved <= 0 && (
                       <button
-                        className="w-full bg-gold text-ink px-4 py-3 rounded-sm text-sm font-semibold shadow-sm disabled:opacity-50"
+                        className="w-full bg-gold-soft text-ink px-4 py-3 rounded-sm text-sm font-semibold shadow-sm disabled:opacity-50"
                         onClick={handleClose}
                         disabled={closing}
                       >

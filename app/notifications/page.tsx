@@ -71,7 +71,7 @@ function PushToggle({ memberId }: { memberId: string }) {
             onClick={toggle}
             disabled={busy}
             className={`shrink-0 px-4 py-2 rounded-md text-sm font-semibold disabled:opacity-60 ${
-              subscribed ? "bg-paper border border-hairline text-ink" : "bg-gold text-ink"
+              subscribed ? "bg-paper border border-hairline text-ink" : "bg-gold-soft text-ink"
             }`}
           >
             {busy ? "..." : subscribed ? "Disable" : "Enable"}

@@ -118,7 +118,7 @@ export default function SignupPage() {
                 type="button"
                 onClick={() => setAccountType("member")}
                 className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                  accountType === "member" ? "bg-gold text-ink" : "bg-paper text-ink-soft"
+                  accountType === "member" ? "bg-gold-soft text-ink" : "bg-paper text-ink-soft"
                 }`}
               >
                 Join the fund
@@ -127,7 +127,7 @@ export default function SignupPage() {
                 type="button"
                 onClick={() => setAccountType("borrower")}
                 className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                  accountType === "borrower" ? "bg-gold text-ink" : "bg-paper text-ink-soft"
+                  accountType === "borrower" ? "bg-gold-soft text-ink" : "bg-paper text-ink-soft"
                 }`}
               >
                 Repaying a loan
@@ -312,7 +312,7 @@ export default function SignupPage() {
               className="
                 w-full
                 rounded-md
-                bg-gold
+                bg-gold-soft
                 py-3
                 font-semibold
                 text-ink
