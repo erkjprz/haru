@@ -11,11 +11,12 @@
   --ink: #1f1b16;
   --ink-soft: #6b5f4f;
   --gold: #a8761f;
-  /* Lighter gold for primary buttons and active/selected pills -- --gold
-     itself stays the stronger accent color (labels, links, status dots,
-     borders) since those read fine at full strength and lightening them
-     too just washes the whole page out. */
-  --gold-soft: #d8b672;
+  /* Lighter gold for primary buttons and active/selected pills, light mode
+     only -- --gold itself stays the stronger accent color (labels, links,
+     status dots, borders) since those read fine at full strength and
+     lightening them too just washes the whole page out. Dark mode's
+     override below points this back at --gold so dark mode is untouched. */
+  --gold-soft: #c99a4a;
   --sage: #4f6f4f;
   --rust: #96432f;
   --slate: #4d6273;
@@ -38,7 +39,9 @@
   --ink: #f5f5f5;
   --ink-soft: #a0a0a0;
   --gold: #d4a24e;
-  --gold-soft: #e7cc9e;
+  /* No change requested for dark mode -- buttons/pills fall back to the
+     same value as --gold instead of getting their own lighter shade. */
+  --gold-soft: #d4a24e;
   --sage: #7fa87f;
   --rust: #c96b56;
   --slate: #8fabc0;
