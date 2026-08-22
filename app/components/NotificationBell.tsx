@@ -30,15 +30,19 @@ export function NotificationBell() {
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
-  // Push opt-in prompt, shown inline in the dropdown instead of a dashboard
-  // banner. Only checked once the dropdown is opened, same as the
-  // notification list itself -- no need to touch the service worker on
-  // every page load.
+  // Push opt-in state. Checked once on mount (rather than lazily on open,
+  // like the notification list) so the bell can show a "not enabled" badge
+  // even before the dropdown is ever opened.
   const [pushSupported] = useState(() => isPushSupported())
   const [pushChecked, setPushChecked] = useState(false)
   const [pushSubscribed, setPushSubscribed] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
   const [pushError, setPushError] = useState("")
+  const pushNeedsSetup =
+    pushChecked &&
+    pushSupported &&
+    !pushSubscribed &&
+    (typeof Notification === "undefined" || Notification.permission !== "denied")
 
   useEffect(() => {
     if (!member) return
@@ -73,6 +77,13 @@ export function NotificationBell() {
   }, [member])
 
   useEffect(() => {
+    if (!member || !pushSupported) return
+    getExistingSubscription()
+      .then((sub) => setPushSubscribed(!!sub))
+      .finally(() => setPushChecked(true))
+  }, [member, pushSupported])
+
+  useEffect(() => {
     if (!open) return
     function handlePointerDown(e: MouseEvent | TouchEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
@@ -103,12 +114,6 @@ export function NotificationBell() {
         window.innerWidth - width - VIEWPORT_MARGIN
       )
       setPanelPos({ top: rect.bottom + 6, left, width })
-    }
-
-    if (pushSupported && !pushChecked) {
-      getExistingSubscription()
-        .then((sub) => setPushSubscribed(!!sub))
-        .finally(() => setPushChecked(true))
     }
 
     const { data, error } = await supabase
@@ -173,6 +178,12 @@ export function NotificationBell() {
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
+        {pushNeedsSetup && (
+          <span
+            aria-label="Push notifications not enabled"
+            className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-gold ring-2 ring-paper"
+          />
+        )}
       </button>
 
       {open && (
@@ -184,18 +195,15 @@ export function NotificationBell() {
             Notifications
           </div>
 
-          {pushChecked &&
-            pushSupported &&
-            !pushSubscribed &&
-            (typeof Notification === "undefined" || Notification.permission !== "denied") && (
-              <div className="px-4 py-3 border-b border-hairline bg-paper-2">
-                <button onClick={enablePush} disabled={pushBusy} className="w-full text-left disabled:opacity-60">
-                  <p className="text-sm text-ink font-medium">{pushBusy ? "Enabling..." : "Enable notifications"}</p>
-                  <p className="text-xs text-gold mt-0.5">Get notified about approvals and gains</p>
-                </button>
-                {pushError && <p className="text-xs text-rust mt-2">{pushError}</p>}
-              </div>
-            )}
+          {pushNeedsSetup && (
+            <div className="px-4 py-3 border-b border-hairline bg-paper-2">
+              <button onClick={enablePush} disabled={pushBusy} className="w-full text-left disabled:opacity-60">
+                <p className="text-sm text-ink font-medium">{pushBusy ? "Enabling..." : "Enable notifications"}</p>
+                <p className="text-xs text-gold mt-0.5">Get notified about approvals and gains</p>
+              </button>
+              {pushError && <p className="text-xs text-rust mt-2">{pushError}</p>}
+            </div>
+          )}
 
           {!loaded && <div className="px-4 py-6 text-center text-sm text-ink-soft">Loading...</div>}
 
