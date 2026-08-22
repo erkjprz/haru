@@ -56,12 +56,20 @@ export default function BorrowerRepayPage() {
     }
 
     async function load() {
-      const [{ data: bankList }, { data: borrowerRow }] = await Promise.all([
+      const [{ data: bankList }, { data: borrowerRow }, { data: prefs }] = await Promise.all([
         supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name"),
-        supabase.from("borrowers").select("borrower_id").eq("member_id", member!.member_id).maybeSingle()
+        supabase.from("borrowers").select("borrower_id").eq("member_id", member!.member_id).maybeSingle(),
+        supabase
+          .from("members")
+          .select("default_loan_payment_amount, default_loan_payment_bank_id")
+          .eq("member_id", member!.member_id)
+          .single()
       ])
 
       setBanks(bankList ?? [])
+
+      if (prefs?.default_loan_payment_amount != null) setAmount(String(prefs.default_loan_payment_amount))
+      if (prefs?.default_loan_payment_bank_id) setBankId(prefs.default_loan_payment_bank_id)
 
       const filter = borrowerRow?.borrower_id
         ? `member_id.eq.${member!.member_id},borrower_id.eq.${borrowerRow.borrower_id}`

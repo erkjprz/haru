@@ -17,7 +17,7 @@ function MenuIcon() {
 const APPEARANCE_CYCLE = { system: "light", light: "dark", dark: "system" } as const
 const APPEARANCE_LABEL = { system: "🌓 System", light: "☀️ Light", dark: "🌙 Dark" } as const
 
-function MenuDropdown({ onAccount }: { onAccount: boolean }) {
+function MenuDropdown({ onAccount, onPreferences }: { onAccount: boolean; onPreferences: boolean }) {
   const router = useRouter()
   const { preference, setPreference } = useTheme()
   const [open, setOpen] = useState(false)
@@ -66,6 +66,14 @@ function MenuDropdown({ onAccount }: { onAccount: boolean }) {
               Account
             </button>
           )}
+          {!onPreferences && (
+            <button
+              onClick={() => go("/account/preferences")}
+              className="w-full text-left px-4 py-2.5 text-sm text-ink-soft hover:text-ink hover:bg-paper-2 transition-colors border-b border-hairline"
+            >
+              Preferences
+            </button>
+          )}
           <button
             onClick={() => go("/notifications")}
             className="w-full text-left px-4 py-2.5 text-sm text-ink-soft hover:text-ink hover:bg-paper-2 transition-colors border-b border-hairline"
@@ -110,6 +118,7 @@ export default function BorrowerHeader() {
   const router = useRouter()
   const pathname = usePathname()
   const onAccount = pathname === "/account"
+  const onPreferences = pathname === "/account/preferences"
 
   return (
     // Installed on iOS with statusBarStyle "black-translucent" (see
@@ -127,7 +136,7 @@ export default function BorrowerHeader() {
         </button>
         <div className="flex items-center gap-2">
           <NotificationBell />
-          <MenuDropdown onAccount={onAccount} />
+          <MenuDropdown onAccount={onAccount} onPreferences={onPreferences} />
         </div>
       </div>
     </nav>
