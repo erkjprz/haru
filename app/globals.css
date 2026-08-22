@@ -16,7 +16,7 @@
      status dots, borders) since those read fine at full strength and
      lightening them too just washes the whole page out. Dark mode's
      override below points this back at --gold so dark mode is untouched. */
-  --gold-soft: #c99a4a;
+  --gold-soft: #d8b672;
   --sage: #4f6f4f;
   --rust: #96432f;
   --slate: #4d6273;
