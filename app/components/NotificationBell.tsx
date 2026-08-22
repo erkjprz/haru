@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
+import { isPushSupported, getExistingSubscription, subscribeToPush } from "@/lib/push"
 
 type Notification = {
   id: string
@@ -28,6 +29,16 @@ export function NotificationBell() {
   const [panelPos, setPanelPos] = useState({ top: 0, left: 0, width: PANEL_WIDTH })
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
+
+  // Push opt-in prompt, shown inline in the dropdown instead of a dashboard
+  // banner. Only checked once the dropdown is opened, same as the
+  // notification list itself -- no need to touch the service worker on
+  // every page load.
+  const [pushSupported] = useState(() => isPushSupported())
+  const [pushChecked, setPushChecked] = useState(false)
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushError, setPushError] = useState("")
 
   useEffect(() => {
     if (!member) return
@@ -94,6 +105,12 @@ export function NotificationBell() {
       setPanelPos({ top: rect.bottom + 6, left, width })
     }
 
+    if (pushSupported && !pushChecked) {
+      getExistingSubscription()
+        .then((sub) => setPushSubscribed(!!sub))
+        .finally(() => setPushChecked(true))
+    }
+
     const { data, error } = await supabase
       .from("notifications")
       .select("id, title, body, link, read, created_at")
@@ -110,6 +127,20 @@ export function NotificationBell() {
       await supabase.from("notifications").update({ read: true }).in("id", unreadIds)
       setNotifications((prev) => prev.map((n) => (unreadIds.includes(n.id) ? { ...n, read: true } : n)))
       setUnreadCount(0)
+    }
+  }
+
+  async function enablePush() {
+    if (!member) return
+    setPushBusy(true)
+    setPushError("")
+    try {
+      await subscribeToPush(member.member_id)
+      setPushSubscribed(true)
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : "Something went wrong.")
+    } finally {
+      setPushBusy(false)
     }
   }
 
@@ -152,6 +183,19 @@ export function NotificationBell() {
           <div className="px-4 py-2.5 border-b border-hairline text-[11px] tracking-[0.14em] uppercase text-gold font-mono">
             Notifications
           </div>
+
+          {pushChecked &&
+            pushSupported &&
+            !pushSubscribed &&
+            (typeof Notification === "undefined" || Notification.permission !== "denied") && (
+              <div className="px-4 py-3 border-b border-hairline bg-paper-2">
+                <button onClick={enablePush} disabled={pushBusy} className="w-full text-left disabled:opacity-60">
+                  <p className="text-sm text-ink font-medium">{pushBusy ? "Enabling..." : "Enable notifications"}</p>
+                  <p className="text-xs text-gold mt-0.5">Get notified about approvals and gains</p>
+                </button>
+                {pushError && <p className="text-xs text-rust mt-2">{pushError}</p>}
+              </div>
+            )}
 
           {!loaded && <div className="px-4 py-6 text-center text-sm text-ink-soft">Loading...</div>}
 
