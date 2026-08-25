@@ -283,18 +283,6 @@ function TransactionsPageInner() {
   const [dataLoading, setDataLoading] = useState(!cached)
   const [totalCount, setTotalCount] = useState(cached?.totalCount ?? 0)
   const [members, setMembers] = useState<any[]>(cached?.members ?? [])
-  const [selectedMemberId, setSelectedMemberId] = useState("")
-  const [selectedType, setSelectedType] = useState("")
-  const [dateFrom, setDateFrom] = useState("")
-  const [dateTo, setDateTo] = useState("")
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
-  // The raw, keystroke-by-keystroke value lives in SearchBox itself (see
-  // above) -- this only ever updates once typing pauses, which keeps this
-  // component (and the potentially long list it renders) from re-rendering
-  // on every keystroke.
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
-  const [loadError, setLoadError] = useState("")
-  const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
   // Set once from the ?loan= / ?investment= query param (e.g. "View all"
   // from a loan's or investment's detail page) -- cleared locally like any
@@ -307,7 +295,29 @@ function TransactionsPageInner() {
   // alone so switching to "All members" (or anyone else) sticks. Skipped
   // when arriving pre-filtered to a specific loan/investment -- that view
   // should show every member's activity on it, not just the viewer's own.
-  const defaultMemberAppliedRef = useRef(false)
+  //
+  // Applied synchronously in useState's initializer, not a useEffect, so it
+  // takes effect on the very first render -- member is already known on a
+  // normal client-side navigation (the auth context resolved on an earlier
+  // page), so waiting for a post-paint effect meant the first frame or two
+  // rendered the cached *unfiltered* transactions list (everyone's, not
+  // just this member's) before narrowing down, a visible flash now that
+  // there's cached data to paint immediately instead of a loading skeleton.
+  const defaultMemberAppliedRef = useRef(!!member)
+  const [selectedMemberId, setSelectedMemberId] = useState(() =>
+    member && !searchParams.get("loan") && !searchParams.get("investment") ? member.member_id : ""
+  )
+  const [selectedType, setSelectedType] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  // The raw, keystroke-by-keystroke value lives in SearchBox itself (see
+  // above) -- this only ever updates once typing pauses, which keeps this
+  // component (and the potentially long list it renders) from re-rendering
+  // on every keystroke.
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+  const [loadError, setLoadError] = useState("")
+  const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
   async function loadTransactions() {
     // members needs an explicit FK hint: transactions has two FKs into

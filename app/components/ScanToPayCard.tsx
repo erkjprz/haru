@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
 import BankQrModal from "@/app/components/BankQrModal"
+import { readCache, writeCache } from "@/lib/cache"
 
 type Bank = {
   id: string
@@ -11,6 +12,10 @@ type Bank = {
   account_name: string | null
   qr_code_url: string | null
 }
+
+// Fixed, unscoped key -- the QR bank list is the same for every viewer, not
+// per-member.
+const CACHE_KEY = "scan-to-pay:banks"
 
 // Shared by Dashboard (contributions) and the Borrower hub (repayments) --
 // same "in case they lose or forget it" purpose in both places, so it's one
@@ -20,7 +25,14 @@ type Bank = {
 // heights, so this only takes ~48px until tapped.
 // Renders nothing once loaded if no bank has a QR uploaded yet.
 export default function ScanToPayCard() {
-  const [banks, setBanks] = useState<Bank[]>([])
+  // Seeded from cache so this doesn't blink out and back in every time its
+  // parent page (Dashboard, Borrower) remounts on navigation -- previously
+  // this always mounted blank for one paint, invisible only because the
+  // whole page was behind its own loading skeleton at the same time; now
+  // that the rest of the page paints instantly from cache, this component's
+  // own blank flash stood out as a visible layout shift.
+  const cached = readCache<Bank[]>(CACHE_KEY)
+  const [banks, setBanks] = useState<Bank[]>(cached ?? [])
   const [sheetOpen, setSheetOpen] = useState(false)
   const [zoomedBank, setZoomedBank] = useState<Bank | null>(null)
 
@@ -33,7 +45,10 @@ export default function ScanToPayCard() {
       .not("qr_code_url", "is", null)
       .order("bank_name")
       .then(({ data }) => {
-        if (!cancelled) setBanks((data as Bank[]) ?? [])
+        if (cancelled) return
+        const next = (data as Bank[]) ?? []
+        setBanks(next)
+        writeCache(CACHE_KEY, next)
       })
 
     return () => {
