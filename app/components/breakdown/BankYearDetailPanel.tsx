@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
+import { readCache, writeCache } from "@/lib/cache"
 
 type Share = {
   member_id: string
@@ -17,6 +18,12 @@ type Share = {
   allocation_date: string
   current_value: number
   pct_share: number
+}
+
+type BankYearDetailSnapshot = {
+  shares: Share[]
+  interestEarned: number
+  tax: number
 }
 
 export function BankYearDetailPanel({
@@ -31,10 +38,13 @@ export function BankYearDetailPanel({
   const { member } = useAuth()
   const myMemberId = member?.member_id ?? null
 
-  const [dataLoading, setDataLoading] = useState(true)
-  const [shares, setShares] = useState<Share[]>([])
-  const [interestEarned, setInterestEarned] = useState(0)
-  const [tax, setTax] = useState(0)
+  const cacheKey = `bank-year-detail:${bank}:${year}`
+  const cached = readCache<BankYearDetailSnapshot>(cacheKey)
+
+  const [dataLoading, setDataLoading] = useState(!cached)
+  const [shares, setShares] = useState<Share[]>(cached?.shares ?? [])
+  const [interestEarned, setInterestEarned] = useState(cached?.interestEarned ?? 0)
+  const [tax, setTax] = useState(cached?.tax ?? 0)
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
 
@@ -47,6 +57,11 @@ export function BankYearDetailPanel({
 
   useEffect(() => {
     async function load() {
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(cacheKey)) setDataLoading(true)
+
       // Per-member split for this bank's interest in this calendar year.
       const sharesPromise = supabase
         .from("bank_interest_allocations")
@@ -69,23 +84,25 @@ export function BankYearDetailPanel({
 
       const [{ data, error }, { data: txnData, error: txnError }] = await Promise.all([sharesPromise, txnPromise])
 
+      let nextShares = shares
       if (error) {
         setLoadError(error.message)
       } else if (!data || data.length === 0) {
         setNotFound(true)
       } else {
-        setShares(
-          data.map((r: any) => ({
-            member_id: r.member_id,
-            member: r.members?.name ?? "Unknown",
-            amount: Number(r.amount),
-            allocation_date: r.allocation_date,
-            current_value: Number(r.current_value),
-            pct_share: Number(r.pct_share)
-          }))
-        )
+        nextShares = data.map((r: any) => ({
+          member_id: r.member_id,
+          member: r.members?.name ?? "Unknown",
+          amount: Number(r.amount),
+          allocation_date: r.allocation_date,
+          current_value: Number(r.current_value),
+          pct_share: Number(r.pct_share)
+        }))
+        setShares(nextShares)
       }
 
+      let nextInterestEarned = interestEarned
+      let nextTax = tax
       if (txnError) {
         setLoadError(txnError.message)
       } else {
@@ -99,11 +116,19 @@ export function BankYearDetailPanel({
           if (row.classification === "Bank Interest") earned += Number(row.amount)
           if (row.classification === "Tax") taxTotal += Number(row.amount)
         }
-        setInterestEarned(Number(earned.toFixed(2)))
-        setTax(Number(taxTotal.toFixed(2)))
+        nextInterestEarned = Number(earned.toFixed(2))
+        nextTax = Number(taxTotal.toFixed(2))
+        setInterestEarned(nextInterestEarned)
+        setTax(nextTax)
       }
 
       setDataLoading(false)
+
+      writeCache<BankYearDetailSnapshot>(cacheKey, {
+        shares: nextShares,
+        interestEarned: nextInterestEarned,
+        tax: nextTax
+      })
     }
 
     if (bank && year) load()

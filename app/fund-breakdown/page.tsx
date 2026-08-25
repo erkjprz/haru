@@ -14,6 +14,7 @@ import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
 import { InvestmentDetailPanel } from "@/app/components/breakdown/InvestmentDetailPanel"
 import { InfoBox, InfoRow, InfoSubRow } from "@/app/components/breakdown/InfoBox"
+import { readCache, writeCache } from "@/lib/cache"
 
 type Tab = "fund" | "loans" | "banks" | "investments"
 type FundView = "you" | "group"
@@ -192,17 +193,31 @@ type YearRow = {
 // differing only in whether the value-over-time trend is needed too (only
 // YouPanel renders a sparkline for it). Keeping this in one place means a
 // fix to one no longer has to be remembered for the other.
+type MemberBreakdownSnapshot = {
+  performance: MemberPerformance | null
+  years: YearRow[]
+  trend: TrendPoint[]
+}
+
 function useMemberBreakdown(memberId: string, includeTrend: boolean) {
-  const [dataLoading, setDataLoading] = useState(true)
-  const [performance, setPerformance] = useState<MemberPerformance | null>(null)
-  const [years, setYears] = useState<YearRow[]>([])
-  const [trend, setTrend] = useState<TrendPoint[]>([])
+  const cacheKey = `member-breakdown:${memberId}:${includeTrend}`
+  const cached = readCache<MemberBreakdownSnapshot>(cacheKey)
+
+  const [dataLoading, setDataLoading] = useState(!cached)
+  const [performance, setPerformance] = useState<MemberPerformance | null>(cached?.performance ?? null)
+  const [years, setYears] = useState<YearRow[]>(cached?.years ?? [])
+  const [trend, setTrend] = useState<TrendPoint[]>(cached?.trend ?? [])
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(cacheKey)) setDataLoading(true)
+
       const performancePromise = supabase
         .from("v_member_performance")
         .select(
@@ -266,12 +281,15 @@ function useMemberBreakdown(memberId: string, includeTrend: boolean) {
         investmentDatesResult.error
       if (firstError) setLoadError(firstError.message)
 
+      let nextTrend = trend
       if (includeTrend && !trendResult.error && trendResult.data) {
-        setTrend((trendResult.data as any[]).map((r: any) => ({ value: Number(r.running_total), date: r.event_date })))
+        nextTrend = (trendResult.data as any[]).map((r: any) => ({ value: Number(r.running_total), date: r.event_date }))
+        setTrend(nextTrend)
       }
 
+      let nextPerformance = performance
       if (!performanceResult.error && performanceResult.data) {
-        setPerformance({
+        nextPerformance = {
           total_contribution: Number(performanceResult.data.total_contribution),
           total_withdrawal: Number(performanceResult.data.total_withdrawal),
           net_contribution: Number(performanceResult.data.net_contribution),
@@ -282,7 +300,8 @@ function useMemberBreakdown(memberId: string, includeTrend: boolean) {
           total_value: Number(performanceResult.data.total_value),
           money_on_hold: Number(performanceResult.data.money_on_hold),
           withdrawable_now: Number(performanceResult.data.withdrawable_now)
-        })
+        }
+        setPerformance(nextPerformance)
       }
 
       const byYear: Record<string, YearRow> = {}
@@ -355,8 +374,15 @@ function useMemberBreakdown(memberId: string, includeTrend: boolean) {
         row.endingBalance = runningBalance
       })
 
-      setYears(ascendingYears.slice().sort((a, b) => b.year.localeCompare(a.year)))
+      const nextYears = ascendingYears.slice().sort((a, b) => b.year.localeCompare(a.year))
+      setYears(nextYears)
       setDataLoading(false)
+
+      writeCache<MemberBreakdownSnapshot>(cacheKey, {
+        performance: nextPerformance,
+        years: nextYears,
+        trend: nextTrend
+      })
     }
 
     load()
@@ -373,8 +399,10 @@ function YouPanel({ memberId }: { memberId: string }) {
   const [yearIndex, setYearIndex] = useState(0)
   const yearTouchStartX = useRef<number | null>(null)
 
-  const [loansLoading, setLoansLoading] = useState(true)
-  const [myLoans, setMyLoans] = useState<Loan[]>([])
+  const loansCacheKey = `you-loans:${memberId}`
+  const cachedLoans = readCache<Loan[]>(loansCacheKey)
+  const [loansLoading, setLoansLoading] = useState(!cachedLoans)
+  const [myLoans, setMyLoans] = useState<Loan[]>(cachedLoans ?? [])
   const [loansLoadError, setLoansLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
   // Restores the scroll position lost to LoanDetailPanel's own
@@ -388,7 +416,10 @@ function YouPanel({ memberId }: { memberId: string }) {
     let cancelled = false
 
     async function loadLoans() {
-      setLoansLoading(true)
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(loansCacheKey)) setLoansLoading(true)
       const { data, error } = await supabase
         .from("v_loan_summary")
         .select("*")
@@ -400,7 +431,9 @@ function YouPanel({ memberId }: { memberId: string }) {
       if (error) {
         setLoansLoadError(error.message)
       } else {
-        setMyLoans((data as Loan[]) ?? [])
+        const nextLoans = (data as Loan[]) ?? []
+        setMyLoans(nextLoans)
+        writeCache(loansCacheKey, nextLoans)
       }
       setLoansLoading(false)
     }
@@ -409,7 +442,7 @@ function YouPanel({ memberId }: { memberId: string }) {
     return () => {
       cancelled = true
     }
-  }, [memberId])
+  }, [memberId, loansCacheKey])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -680,12 +713,23 @@ type FundTotals = {
   open_loans_outstanding: number
 }
 
+type GroupSnapshot = {
+  members: MemberRow[]
+  fund: FundTotals | null
+  fundTrend: TrendPoint[]
+}
+
+// Fund-wide data shared by every viewer, not scoped to a member -- a single
+// fixed key rather than one keyed by member id.
+const GROUP_CACHE_KEY = "fund-breakdown:group"
+
 function GroupPanel() {
   const { member: authMember } = useAuth()
-  const [members, setMembers] = useState<MemberRow[]>([])
-  const [fund, setFund] = useState<FundTotals | null>(null)
-  const [fundTrend, setFundTrend] = useState<TrendPoint[]>([])
-  const [loading, setLoading] = useState(true)
+  const cachedGroup = readCache<GroupSnapshot>(GROUP_CACHE_KEY)
+  const [members, setMembers] = useState<MemberRow[]>(cachedGroup?.members ?? [])
+  const [fund, setFund] = useState<FundTotals | null>(cachedGroup?.fund ?? null)
+  const [fundTrend, setFundTrend] = useState<TrendPoint[]>(cachedGroup?.fundTrend ?? [])
+  const [loading, setLoading] = useState(!cachedGroup)
   const [loadError, setLoadError] = useState("")
   const [activeIndex, setActiveIndex] = useState(0)
   const [openMember, setOpenMember] = useState<{ id: string; name: string } | null>(null)
@@ -702,6 +746,11 @@ function GroupPanel() {
     let cancelled = false
 
     async function load() {
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(GROUP_CACHE_KEY)) setLoading(true)
+
       const memberPromise = supabase
         .from("members")
         .select("member_id, name")
@@ -763,6 +812,7 @@ function GroupPanel() {
         return
       }
 
+      let nextFund = fund
       if (fundResult.data) {
         const totalTax = (taxResult.data ?? []).reduce((sum: number, row: any) => sum + Number(row.amount), 0)
 
@@ -784,7 +834,7 @@ function GroupPanel() {
           0
         )
 
-        setFund({
+        nextFund = {
           total_cash: Number(fundResult.data.total_cash),
           total_contribution: Number(fundResult.data.total_contribution),
           total_withdrawal: Number(fundResult.data.total_withdrawal),
@@ -795,11 +845,14 @@ function GroupPanel() {
           total_bank_writeoff,
           open_loans_count: Number(fundResult.data.open_loans_count),
           open_loans_outstanding: open_loans_principal_outstanding
-        })
+        }
+        setFund(nextFund)
       }
 
+      let nextFundTrend = fundTrend
       if (!fundTrendResult.error && fundTrendResult.data) {
-        setFundTrend(fundTrendResult.data.map((r: any) => ({ value: Number(r.running_balance), date: r.month })))
+        nextFundTrend = fundTrendResult.data.map((r: any) => ({ value: Number(r.running_balance), date: r.month }))
+        setFundTrend(nextFundTrend)
       }
 
       const performanceByMember: Record<string, any> = {}
@@ -852,6 +905,8 @@ function GroupPanel() {
 
       setMembers(final)
       setLoading(false)
+
+      writeCache<GroupSnapshot>(GROUP_CACHE_KEY, { members: final, fund: nextFund, fundTrend: nextFundTrend })
     }
 
     load()
@@ -1161,8 +1216,10 @@ function MemberBreakdownSheet({
   const [yearIndex, setYearIndex] = useState(0)
   const yearTouchStartX = useRef<number | null>(null)
 
-  const [loansLoading, setLoansLoading] = useState(true)
-  const [memberLoans, setMemberLoans] = useState<Loan[]>([])
+  const loansCacheKey = `member-loans:${memberId}`
+  const cachedLoans = readCache<Loan[]>(loansCacheKey)
+  const [loansLoading, setLoansLoading] = useState(!cachedLoans)
+  const [memberLoans, setMemberLoans] = useState<Loan[]>(cachedLoans ?? [])
   const [loansLoadError, setLoansLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
   const [closedYear, setClosedYear] = useState<number | "all" | null>(null)
@@ -1184,7 +1241,10 @@ function MemberBreakdownSheet({
     let cancelled = false
 
     async function loadLoans() {
-      setLoansLoading(true)
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(loansCacheKey)) setLoansLoading(true)
       const { data, error } = await supabase
         .from("v_loan_summary")
         .select("*")
@@ -1196,7 +1256,9 @@ function MemberBreakdownSheet({
       if (error) {
         setLoansLoadError(error.message)
       } else {
-        setMemberLoans((data as Loan[]) ?? [])
+        const nextLoans = (data as Loan[]) ?? []
+        setMemberLoans(nextLoans)
+        writeCache(loansCacheKey, nextLoans)
       }
       setLoansLoading(false)
     }
@@ -1205,7 +1267,7 @@ function MemberBreakdownSheet({
     return () => {
       cancelled = true
     }
-  }, [memberId])
+  }, [memberId, loansCacheKey])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1553,9 +1615,13 @@ function loanYear(loan: Loan): number {
   return new Date(loan.closed_date ?? loan.start_date).getFullYear()
 }
 
+// Every loan the fund has released -- fund-wide, not scoped to a member.
+const LOANS_CACHE_KEY = "fund-breakdown:loans"
+
 function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
-  const [loading, setLoading] = useState(true)
-  const [loans, setLoans] = useState<Loan[]>([])
+  const cachedLoans = readCache<Loan[]>(LOANS_CACHE_KEY)
+  const [loading, setLoading] = useState(!cachedLoans)
+  const [loans, setLoans] = useState<Loan[]>(cachedLoans ?? [])
   const [loadError, setLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
   const [closedYear, setClosedYear] = useState<number | "all" | null>(null)
@@ -1570,6 +1636,11 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
     let cancelled = false
 
     async function load() {
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(LOANS_CACHE_KEY)) setLoading(true)
+
       const { data, error } = await supabase
         .from("v_loan_summary")
         .select("*")
@@ -1580,7 +1651,9 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
       if (error) {
         setLoadError(error.message)
       } else {
-        setLoans((data as Loan[]) ?? [])
+        const nextLoans = (data as Loan[]) ?? []
+        setLoans(nextLoans)
+        writeCache(LOANS_CACHE_KEY, nextLoans)
       }
 
       setLoading(false)
@@ -1857,10 +1930,19 @@ type BankAccount = {
   qr_code_url: string | null
 }
 
+type BanksSnapshot = {
+  banks: Bank[]
+  bankAccounts: BankAccount[]
+}
+
+// Fund-wide list of bank accounts and balances, not scoped to a member.
+const BANKS_CACHE_KEY = "fund-breakdown:banks"
+
 function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
-  const [loading, setLoading] = useState(true)
-  const [banks, setBanks] = useState<Bank[]>([])
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
+  const cachedBanks = readCache<BanksSnapshot>(BANKS_CACHE_KEY)
+  const [loading, setLoading] = useState(!cachedBanks)
+  const [banks, setBanks] = useState<Bank[]>(cachedBanks?.banks ?? [])
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(cachedBanks?.bankAccounts ?? [])
   const [loadError, setLoadError] = useState("")
   const [selectedBank, setSelectedBank] = useState<string | null>(null)
   // Restores the scroll position lost to BankDetailPanel's own
@@ -1892,6 +1974,11 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   }, [editingId])
 
   async function load() {
+    // Only show the blocking loader on a true cold start -- if we already
+    // rendered cached data (including a quiet reload after saving a bank),
+    // refresh quietly behind it instead of flashing back to a spinner.
+    if (!readCache(BANKS_CACHE_KEY)) setLoading(true)
+
     const bankAccountsPromise = supabase.from("bank_accounts").select("*").order("bank_name")
     const balancesPromise = supabase.from("v_bank_balances").select("*")
     // bank falls back to the linked bank_accounts.bank_name -- transactions
@@ -1933,7 +2020,8 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       return
     }
 
-    setBankAccounts((bankAccountsResult.data as BankAccount[]) ?? [])
+    const nextBankAccounts = (bankAccountsResult.data as BankAccount[]) ?? []
+    setBankAccounts(nextBankAccounts)
 
     const byBank: Record<string, Bank> = {}
     for (const acct of bankAccountsResult.data ?? []) {
@@ -1980,8 +2068,11 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       byBank[group.bank].pending_interest += group.totalAmount
     }
 
-    setBanks(Object.values(byBank).sort((a, b) => b.balance - a.balance))
+    const nextBanks = Object.values(byBank).sort((a, b) => b.balance - a.balance)
+    setBanks(nextBanks)
     setLoading(false)
+
+    writeCache<BanksSnapshot>(BANKS_CACHE_KEY, { banks: nextBanks, bankAccounts: nextBankAccounts })
   }
 
   useEffect(() => {
@@ -2488,9 +2579,13 @@ type Investment = {
   closed_date: string | null
 }
 
+// Fund-wide list of investments, not scoped to a member.
+const INVESTMENTS_CACHE_KEY = "fund-breakdown:investments"
+
 function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
-  const [loading, setLoading] = useState(true)
-  const [investments, setInvestments] = useState<Investment[]>([])
+  const cachedInvestments = readCache<Investment[]>(INVESTMENTS_CACHE_KEY)
+  const [loading, setLoading] = useState(!cachedInvestments)
+  const [investments, setInvestments] = useState<Investment[]>(cachedInvestments ?? [])
   const [loadError, setLoadError] = useState("")
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null)
   // Restores the scroll position lost to InvestmentDetailPanel's own
@@ -2517,12 +2612,20 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   }, [editingId])
 
   async function load() {
+    // Only show the blocking loader on a true cold start -- if we already
+    // rendered cached data (including a quiet reload after saving an
+    // investment), refresh quietly behind it instead of flashing back to a
+    // spinner.
+    if (!readCache(INVESTMENTS_CACHE_KEY)) setLoading(true)
+
     const { data, error } = await supabase.from("v_investment_summary").select("*").order("investment")
 
     if (error) {
       setLoadError(error.message)
     } else {
-      setInvestments((data as Investment[]) ?? [])
+      const nextInvestments = (data as Investment[]) ?? []
+      setInvestments(nextInvestments)
+      writeCache(INVESTMENTS_CACHE_KEY, nextInvestments)
     }
 
     setLoading(false)
