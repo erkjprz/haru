@@ -14,6 +14,7 @@ import { approveLoanRelease } from "@/lib/approveLoan"
 import { approveBorrowerMember } from "@/lib/approveBorrower"
 import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
+import { readCache, writeCache } from "@/lib/cache"
 
 // Same in/out vocabulary as the transaction edit page's FLOW map -- money
 // coming in (Contribution, Loan Repayment) has nothing left for an admin
@@ -38,6 +39,23 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
 const BULK_CLASSIFICATIONS = new Set(["Member Contribution", "Loan Repayment"])
 
 type Tab = "members" | "txns" | "borrowers" | "distrib" | "support"
+
+// Same global admin approvals queue for any admin viewing it -- no
+// per-user scoping needed, so a single fixed cache key covers everyone.
+// loadError is deliberately left out: it should always start empty rather
+// than replaying a stale error from a previous visit.
+const ADMIN_QUEUE_CACHE_KEY = "admin:queue"
+
+type AdminQueueSnapshot = {
+  pendingMembers: any[]
+  unclaimedMembers: any[]
+  banks: any[]
+  pendingTransactions: any[]
+  borrowerMembers: any[]
+  unclaimedBorrowers: any[]
+  linkedLoanNameByMemberId: Record<string, string>
+  pendingGroups: PendingBankInterestGroup[]
+}
 
 type ExportRow = {
   txn_date: string | null
@@ -69,7 +87,13 @@ function timeAgo(dateStr: string): string {
 export default function AdminPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
-  const [dataLoading, setDataLoading] = useState(true)
+  const cached = readCache<AdminQueueSnapshot>(ADMIN_QUEUE_CACHE_KEY)
+
+  // Paints instantly from the last time the approvals queue loaded, before
+  // the browser ever shows a frame -- loadData() below still runs right
+  // after and replaces it with a fresh fetch, so a stale queue never
+  // lingers past that first moment.
+  const [dataLoading, setDataLoading] = useState(!cached)
   const checkingAccess = authLoading || dataLoading
 
   const [activeTab, setActiveTab] = useState<Tab>("txns")
@@ -78,13 +102,13 @@ export default function AdminPage() {
   // to Txns.
   const [lastApprovalsTab, setLastApprovalsTab] = useState<Exclude<Tab, "support">>("txns")
 
-  const [pendingMembers, setPendingMembers] = useState<any[]>([])
-  const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>([])
+  const [pendingMembers, setPendingMembers] = useState<any[]>(cached?.pendingMembers ?? [])
+  const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>(cached?.unclaimedMembers ?? [])
   const [memberLinkChoice, setMemberLinkChoice] = useState<Record<string, string>>({})
   const [memberBusyId, setMemberBusyId] = useState<string | null>(null)
 
-  const [pendingTransactions, setPendingTransactions] = useState<any[]>([])
-  const [banks, setBanks] = useState<any[]>([])
+  const [pendingTransactions, setPendingTransactions] = useState<any[]>(cached?.pendingTransactions ?? [])
+  const [banks, setBanks] = useState<any[]>(cached?.banks ?? [])
   const [withdrawalBankSelections, setWithdrawalBankSelections] = useState<Record<string, string>>({})
   const [loanReleaseBankSelections, setLoanReleaseBankSelections] = useState<Record<string, string>>({})
   const [approvalReceipts, setApprovalReceipts] = useState<Record<string, File>>({})
@@ -99,13 +123,15 @@ export default function AdminPage() {
   const [editTermMonths, setEditTermMonths] = useState<Record<string, string>>({})
   const [savingEditId, setSavingEditId] = useState<string | null>(null)
 
-  const [borrowerMembers, setBorrowerMembers] = useState<any[]>([])
-  const [unclaimedBorrowers, setUnclaimedBorrowers] = useState<any[]>([])
-  const [linkedLoanNameByMemberId, setLinkedLoanNameByMemberId] = useState<Record<string, string>>({})
+  const [borrowerMembers, setBorrowerMembers] = useState<any[]>(cached?.borrowerMembers ?? [])
+  const [unclaimedBorrowers, setUnclaimedBorrowers] = useState<any[]>(cached?.unclaimedBorrowers ?? [])
+  const [linkedLoanNameByMemberId, setLinkedLoanNameByMemberId] = useState<Record<string, string>>(
+    cached?.linkedLoanNameByMemberId ?? {}
+  )
   const [borrowerLinkChoice, setBorrowerLinkChoice] = useState<Record<string, string>>({})
   const [borrowerBusyId, setBorrowerBusyId] = useState<string | null>(null)
 
-  const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>([])
+  const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>(cached?.pendingGroups ?? [])
   const [distributingKey, setDistributingKey] = useState<string | null>(null)
   const [distributeError, setDistributeError] = useState("")
 
@@ -121,6 +147,11 @@ export default function AdminPage() {
   const [exportError, setExportError] = useState("")
 
   async function loadData() {
+    // Only show the blocking loader on a true cold start -- if we already
+    // rendered cached data, refresh quietly behind it instead of flashing
+    // back to a spinner on every navigation or post-mutation reload.
+    if (!readCache(ADMIN_QUEUE_CACHE_KEY)) setDataLoading(true)
+
     const [
       pendingMembersRes,
       unclaimedMembersRes,
@@ -186,11 +217,23 @@ export default function AdminPage() {
 
     setBorrowerMembers(borrowerMembersRes.data ?? [])
     setUnclaimedBorrowers(unclaimedBorrowersRes.data ?? [])
-    setLinkedLoanNameByMemberId(
-      Object.fromEntries((linkedBorrowersRes.data ?? []).map((b: any) => [b.member_id as string, b.name as string]))
+    const nextLinkedLoanNameByMemberId = Object.fromEntries(
+      (linkedBorrowersRes.data ?? []).map((b: any) => [b.member_id as string, b.name as string])
     )
+    setLinkedLoanNameByMemberId(nextLinkedLoanNameByMemberId)
 
     setPendingGroups(pendingGroupsRes.groups)
+
+    writeCache<AdminQueueSnapshot>(ADMIN_QUEUE_CACHE_KEY, {
+      pendingMembers: pendingMembersRes.data ?? [],
+      unclaimedMembers: unclaimedMembersRes.data ?? [],
+      banks: banksRes.data ?? [],
+      pendingTransactions: pendingTxnsRes.error ? [] : pendingTxnsRes.data ?? [],
+      borrowerMembers: borrowerMembersRes.data ?? [],
+      unclaimedBorrowers: unclaimedBorrowersRes.data ?? [],
+      linkedLoanNameByMemberId: nextLinkedLoanNameByMemberId,
+      pendingGroups: pendingGroupsRes.groups
+    })
   }
 
   useEffect(() => {

@@ -6,12 +6,21 @@ import Navbar from "@/app/components/Navbar"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
+import { readCache, writeCache } from "@/lib/cache"
+
+// Two independent loaders (loadMembers/loadUnclaimed) get two independent
+// cache keys -- same global admin data for any admin, no per-user scoping
+// needed.
+const MEMBERS_CACHE_KEY = "admin:members-list"
+const UNCLAIMED_MEMBERS_CACHE_KEY = "admin:unclaimed-members"
 
 export default function AdminMembersPage() {
   const router = useRouter()
   const { loading: authLoading, member: authMember } = useAuth()
+  const cachedMembers = readCache<any[]>(MEMBERS_CACHE_KEY)
+  const cachedUnclaimedMembers = readCache<any[]>(UNCLAIMED_MEMBERS_CACHE_KEY)
 
-  const [members, setMembers] = useState<any[]>([])
+  const [members, setMembers] = useState<any[]>(cachedMembers ?? [])
   const [showAddForm, setShowAddForm] = useState(false)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
@@ -38,7 +47,7 @@ export default function AdminMembersPage() {
 
   const [search, setSearch] = useState("")
 
-  const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>([])
+  const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>(cachedUnclaimedMembers ?? [])
   const [linkChoice, setLinkChoice] = useState<Record<string, string>>({})
   const [linkingId, setLinkingId] = useState<string | null>(null)
 
@@ -48,12 +57,16 @@ export default function AdminMembersPage() {
       .select("*")
       .order("created_at", { ascending: false })
 
-    setMembers(data ?? [])
+    const next = data ?? []
+    setMembers(next)
+    writeCache(MEMBERS_CACHE_KEY, next)
   }
 
   async function loadUnclaimed() {
     const { data } = await supabase.rpc("list_unclaimed_members")
-    setUnclaimedMembers(data ?? [])
+    const next = data ?? []
+    setUnclaimedMembers(next)
+    writeCache(UNCLAIMED_MEMBERS_CACHE_KEY, next)
   }
 
   useEffect(() => {

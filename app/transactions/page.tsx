@@ -10,6 +10,18 @@ import { useAuth } from "@/app/auth-context"
 import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 import { DateField } from "@/app/components/TransactionFormUI"
+import { readCache, writeCache } from "@/lib/cache"
+
+// Not scoped per member -- every approved non-borrower member sees the same
+// full transaction list (filtering happens entirely client-side below), so
+// one shared cache entry covers everyone.
+const TRANSACTIONS_CACHE_KEY = "transactions:list"
+
+type TransactionsSnapshot = {
+  transactions: any[]
+  totalCount: number
+  members: any[]
+}
 
 const typeColor: Record<string, string> = {
   "Member Contribution": "text-sage border-sage",
@@ -261,10 +273,16 @@ function TransactionsPageInner() {
   const searchParams = useSearchParams()
   const { loading: authLoading, member } = useAuth()
   const isAdmin = member?.role === "admin"
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [dataLoading, setDataLoading] = useState(true)
-  const [totalCount, setTotalCount] = useState(0)
-  const [members, setMembers] = useState<any[]>([])
+  const cached = readCache<TransactionsSnapshot>(TRANSACTIONS_CACHE_KEY)
+
+  // Paints instantly from whatever was last loaded here, before the browser
+  // ever shows a frame -- the load() effect below still runs right after
+  // and replaces it with a fresh fetch, so a stale cache never lingers past
+  // that first moment.
+  const [transactions, setTransactions] = useState<any[]>(cached?.transactions ?? [])
+  const [dataLoading, setDataLoading] = useState(!cached)
+  const [totalCount, setTotalCount] = useState(cached?.totalCount ?? 0)
+  const [members, setMembers] = useState<any[]>(cached?.members ?? [])
   const [selectedMemberId, setSelectedMemberId] = useState("")
   const [selectedType, setSelectedType] = useState("")
   const [dateFrom, setDateFrom] = useState("")
@@ -348,7 +366,7 @@ function TransactionsPageInner() {
       setLoadError(error.message)
       setTransactions([])
       setTotalCount(0)
-      return
+      return []
     }
 
     setLoadError("")
@@ -368,6 +386,7 @@ function TransactionsPageInner() {
 
     setTransactions(deduped)
     setTotalCount(deduped.length)
+    return deduped
   }
 
   async function loadMembers() {
@@ -378,10 +397,11 @@ function TransactionsPageInner() {
 
     if (error) {
       setLoadError(error.message)
-      return
+      return []
     }
 
     setMembers(data ?? [])
+    return data ?? []
   }
 
   // Every other main page redirects an unauthenticated/pending/borrower
@@ -409,8 +429,19 @@ function TransactionsPageInner() {
     }
 
     async function load() {
-      await Promise.all([loadTransactions(), loadMembers()])
+      // Only show the blocking loader on a true cold start -- if we already
+      // rendered cached data, refresh quietly behind it instead of flashing
+      // back to a spinner on every navigation.
+      if (!readCache(TRANSACTIONS_CACHE_KEY)) setDataLoading(true)
+
+      const [loadedTransactions, loadedMembers] = await Promise.all([loadTransactions(), loadMembers()])
       setDataLoading(false)
+
+      writeCache<TransactionsSnapshot>(TRANSACTIONS_CACHE_KEY, {
+        transactions: loadedTransactions,
+        totalCount: loadedTransactions.length,
+        members: loadedMembers
+      })
     }
     load()
   }, [authLoading, member, router])

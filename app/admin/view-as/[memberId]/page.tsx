@@ -8,6 +8,7 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { LoanCards } from "@/app/components/LoanCards"
 import { useLoansSummary } from "@/lib/useLoansSummary"
+import { readCache, writeCache } from "@/lib/cache"
 
 type TargetMember = { member_id: string; name: string; role: string }
 
@@ -22,8 +23,11 @@ export default function ViewAsPage() {
   const router = useRouter()
   const { loading: authLoading, member: authMember } = useAuth()
 
-  const [target, setTarget] = useState<TargetMember | null>(null)
-  const [targetLoading, setTargetLoading] = useState(true)
+  const cacheKey = memberId ? `view-as-target:${memberId}` : null
+  const cachedTarget = cacheKey ? readCache<TargetMember>(cacheKey) : undefined
+
+  const [target, setTarget] = useState<TargetMember | null>(cachedTarget ?? null)
+  const [targetLoading, setTargetLoading] = useState(!cachedTarget)
   const [targetError, setTargetError] = useState("")
 
   const isAdmin = authMember?.role === "admin"
@@ -42,6 +46,8 @@ export default function ViewAsPage() {
     }
 
     async function loadTarget() {
+      if (!readCache(`view-as-target:${memberId}`)) setTargetLoading(true)
+
       const { data, error } = await supabase
         .from("members")
         .select("member_id, name, role")
@@ -54,6 +60,7 @@ export default function ViewAsPage() {
         setTargetError("Member not found.")
       } else {
         setTarget(data)
+        writeCache(`view-as-target:${memberId}`, data)
       }
 
       setTargetLoading(false)

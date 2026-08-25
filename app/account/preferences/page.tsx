@@ -7,6 +7,7 @@ import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
+import { readCache, writeCache } from "@/lib/cache"
 
 function isValidNonNegativeNumber(value: string): boolean {
   if (!value.trim()) return true // empty clears the preference
@@ -89,17 +90,27 @@ function AmountField({
   )
 }
 
+type PreferencesSnapshot = {
+  banks: { id: string; bank_name: string; account_name: string | null }[]
+  contributionAmount: string
+  contributionBankId: string
+  loanPaymentAmount: string
+  loanPaymentBankId: string
+}
+
 export default function PreferencesPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
   const isBorrower = member?.role === "borrower"
+  const cacheKey = member ? `preferences:${member.member_id}` : null
+  const cached = cacheKey ? readCache<PreferencesSnapshot>(cacheKey) : undefined
 
-  const [dataLoading, setDataLoading] = useState(true)
-  const [banks, setBanks] = useState<{ id: string; bank_name: string; account_name: string | null }[]>([])
-  const [contributionAmount, setContributionAmount] = useState("")
-  const [contributionBankId, setContributionBankId] = useState("")
-  const [loanPaymentAmount, setLoanPaymentAmount] = useState("")
-  const [loanPaymentBankId, setLoanPaymentBankId] = useState("")
+  const [dataLoading, setDataLoading] = useState(!cached)
+  const [banks, setBanks] = useState<{ id: string; bank_name: string; account_name: string | null }[]>(cached?.banks ?? [])
+  const [contributionAmount, setContributionAmount] = useState(cached?.contributionAmount ?? "")
+  const [contributionBankId, setContributionBankId] = useState(cached?.contributionBankId ?? "")
+  const [loanPaymentAmount, setLoanPaymentAmount] = useState(cached?.loanPaymentAmount ?? "")
+  const [loanPaymentBankId, setLoanPaymentBankId] = useState(cached?.loanPaymentBankId ?? "")
 
   const [savingContribution, setSavingContribution] = useState(false)
   const [contributionMessage, setContributionMessage] = useState("")
@@ -122,6 +133,13 @@ export default function PreferencesPage() {
     if (authLoading || !member || member.status !== "approved") return
 
     async function load() {
+      if (!member) return
+
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(`preferences:${member.member_id}`)) setDataLoading(true)
+
       const [{ data }, { data: bankList }] = await Promise.all([
         supabase
           .from("members")
@@ -133,21 +151,38 @@ export default function PreferencesPage() {
         supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name")
       ])
 
-      setBanks(bankList ?? [])
+      const nextBanks = bankList ?? []
+      setBanks(nextBanks)
 
+      let nextContributionAmount = contributionAmount
       if (data?.default_contribution_amount != null) {
-        setContributionAmount(String(data.default_contribution_amount))
+        nextContributionAmount = String(data.default_contribution_amount)
+        setContributionAmount(nextContributionAmount)
       }
+      let nextContributionBankId = contributionBankId
       if (data?.default_contribution_bank_id) {
-        setContributionBankId(data.default_contribution_bank_id)
+        nextContributionBankId = data.default_contribution_bank_id
+        setContributionBankId(nextContributionBankId)
       }
+      let nextLoanPaymentAmount = loanPaymentAmount
       if (data?.default_loan_payment_amount != null) {
-        setLoanPaymentAmount(String(data.default_loan_payment_amount))
+        nextLoanPaymentAmount = String(data.default_loan_payment_amount)
+        setLoanPaymentAmount(nextLoanPaymentAmount)
       }
+      let nextLoanPaymentBankId = loanPaymentBankId
       if (data?.default_loan_payment_bank_id) {
-        setLoanPaymentBankId(data.default_loan_payment_bank_id)
+        nextLoanPaymentBankId = data.default_loan_payment_bank_id
+        setLoanPaymentBankId(nextLoanPaymentBankId)
       }
       setDataLoading(false)
+
+      writeCache<PreferencesSnapshot>(`preferences:${member.member_id}`, {
+        banks: nextBanks,
+        contributionAmount: nextContributionAmount,
+        contributionBankId: nextContributionBankId,
+        loanPaymentAmount: nextLoanPaymentAmount,
+        loanPaymentBankId: nextLoanPaymentBankId
+      })
     }
 
     load()

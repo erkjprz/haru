@@ -14,6 +14,7 @@ import { distributeInvestmentGain, getUndistributedInvestmentGain } from "@/lib/
 import { closeInvestmentAndDistributeGain } from "@/lib/closeInvestment"
 import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
+import { readCache, writeCache } from "@/lib/cache"
 
 type Investment = {
   investment_id: string
@@ -43,16 +44,25 @@ type RecentTransaction = {
   status: string
 }
 
+type InvestmentDetailSnapshot = {
+  investment: Investment | null
+  shares: Share[]
+  recentTransactions: RecentTransaction[]
+}
+
 export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: string; onBack: () => void }) {
   const router = useRouter()
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
   const myMemberId = member?.member_id ?? null
 
-  const [dataLoading, setDataLoading] = useState(true)
-  const [investment, setInvestment] = useState<Investment | null>(null)
-  const [shares, setShares] = useState<Share[]>([])
-  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
+  const cacheKey = `investment-detail:${investmentId}`
+  const cached = readCache<InvestmentDetailSnapshot>(cacheKey)
+
+  const [dataLoading, setDataLoading] = useState(!cached)
+  const [investment, setInvestment] = useState<Investment | null>(cached?.investment ?? null)
+  const [shares, setShares] = useState<Share[]>(cached?.shares ?? [])
+  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>(cached?.recentTransactions ?? [])
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
 
@@ -76,10 +86,12 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
 
     if (error || !data) {
       setNotFound(true)
-      return
+      return investment
     }
 
-    setInvestment(data as Investment)
+    const next = data as Investment
+    setInvestment(next)
+    return next
   }, [investmentId])
 
   const loadShares = useCallback(async () => {
@@ -93,20 +105,21 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
       .eq("investment_id", investmentId)
 
     if (!error && data) {
-      setShares(
-        data.map((r: any) => ({
-          id: r.id,
-          member_id: r.member_id,
-          member: r.members?.name ?? "Unknown",
-          amount: Number(r.amount),
-          allocation_type: r.allocation_type,
-          notes: r.notes ?? null
-        }))
-      )
+      const next = data.map((r: any) => ({
+        id: r.id,
+        member_id: r.member_id,
+        member: r.members?.name ?? "Unknown",
+        amount: Number(r.amount),
+        allocation_type: r.allocation_type,
+        notes: r.notes ?? null
+      }))
+      setShares(next)
       setLoadError("")
+      return next
     } else if (error) {
       setLoadError(error.message)
     }
+    return shares
   }, [investmentId])
 
   const loadRecentTransactions = useCallback(async () => {
@@ -119,15 +132,15 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
       .order("created_at", { ascending: false })
       .limit(5)
 
-    setRecentTransactions(
-      (data ?? []).map((r) => ({
-        transaction_id: r.transaction_id,
-        date: r.txn_date ?? r.created_at,
-        classification: r.classification,
-        amount: Number(r.amount),
-        status: r.status
-      }))
-    )
+    const next = (data ?? []).map((r) => ({
+      transaction_id: r.transaction_id,
+      date: r.txn_date ?? r.created_at,
+      classification: r.classification,
+      amount: Number(r.amount),
+      status: r.status
+    }))
+    setRecentTransactions(next)
+    return next
   }, [investmentId])
 
   // Opening a drill-down while the list is scrolled down would otherwise
@@ -141,9 +154,24 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     let cancelled = false
 
     async function load() {
-      await Promise.all([loadInvestment(), loadShares(), loadRecentTransactions()])
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(cacheKey)) setDataLoading(true)
+
+      const [nextInvestment, nextShares, nextRecentTransactions] = await Promise.all([
+        loadInvestment(),
+        loadShares(),
+        loadRecentTransactions()
+      ])
       if (cancelled) return
       setDataLoading(false)
+
+      writeCache<InvestmentDetailSnapshot>(cacheKey, {
+        investment: nextInvestment,
+        shares: nextShares,
+        recentTransactions: nextRecentTransactions
+      })
     }
 
     if (investmentId) load()
@@ -230,7 +258,12 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         })
       }
       closeDistribute()
-      await Promise.all([loadShares(), loadInvestment()])
+      const [nextShares, nextInvestment] = await Promise.all([loadShares(), loadInvestment()])
+      writeCache<InvestmentDetailSnapshot>(cacheKey, {
+        investment: nextInvestment,
+        shares: nextShares,
+        recentTransactions
+      })
     } catch (err) {
       setDistributeMessage(err instanceof Error ? err.message : "Something went wrong.")
     } finally {
@@ -270,7 +303,12 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     }
 
     setReopening(false)
-    await Promise.all([loadShares(), loadInvestment()])
+    const [nextShares, nextInvestment] = await Promise.all([loadShares(), loadInvestment()])
+    writeCache<InvestmentDetailSnapshot>(cacheKey, {
+      investment: nextInvestment,
+      shares: nextShares,
+      recentTransactions
+    })
   }
 
   const fmt = (n: number) =>

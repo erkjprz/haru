@@ -18,6 +18,7 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
+import { readCache, writeCache } from "@/lib/cache"
 
 type Loan = {
   loan_id: string
@@ -83,25 +84,38 @@ type AdminLoan = {
   pendingRepayment: number
 }
 
+type LoanDetailSnapshot = {
+  loan: Loan | null
+  shares: GainShare[]
+  holds: HoldShare[]
+  principalOutstanding: number
+  recentTransactions: RecentTransaction[]
+  adminLoan: AdminLoan | null
+  banks: any[]
+}
+
 export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: () => void }) {
   const router = useRouter()
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
   const myMemberId = member?.member_id ?? null
 
-  const [dataLoading, setDataLoading] = useState(true)
-  const [loan, setLoan] = useState<Loan | null>(null)
-  const [shares, setShares] = useState<GainShare[]>([])
-  const [holds, setHolds] = useState<HoldShare[]>([])
-  const [principalOutstanding, setPrincipalOutstanding] = useState(0)
-  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
+  const cacheKey = `loan-detail:${loanId}`
+  const cached = readCache<LoanDetailSnapshot>(cacheKey)
+
+  const [dataLoading, setDataLoading] = useState(!cached)
+  const [loan, setLoan] = useState<Loan | null>(cached?.loan ?? null)
+  const [shares, setShares] = useState<GainShare[]>(cached?.shares ?? [])
+  const [holds, setHolds] = useState<HoldShare[]>(cached?.holds ?? [])
+  const [principalOutstanding, setPrincipalOutstanding] = useState(cached?.principalOutstanding ?? 0)
+  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>(cached?.recentTransactions ?? [])
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
 
   // Admin-only management data/state -- mirrors what the old /admin/loans
   // page tracked, scoped down to just this one loan.
-  const [adminLoan, setAdminLoan] = useState<AdminLoan | null>(null)
-  const [banks, setBanks] = useState<any[]>([])
+  const [adminLoan, setAdminLoan] = useState<AdminLoan | null>(cached?.adminLoan ?? null)
+  const [banks, setBanks] = useState<any[]>(cached?.banks ?? [])
   const [manageOpen, setManageOpen] = useState(false)
   const [manageOpenInitialized, setManageOpenInitialized] = useState(false)
   const [approveBankChoice, setApproveBankChoice] = useState("")
@@ -181,54 +195,66 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       recentTxnsPromise
     ])
 
+    let nextLoan = loan
     if (loanResult.error || !loanResult.data) {
       setNotFound(true)
     } else {
-      setLoan(loanResult.data as Loan)
+      nextLoan = loanResult.data as Loan
+      setLoan(nextLoan)
     }
 
+    let nextShares = shares
     if (!sharesResult.error && sharesResult.data) {
-      setShares(
-        sharesResult.data.map((r: any) => ({
-          member_id: r.member_id,
-          member: r.members?.name ?? "Unknown",
-          amount: Number(r.amount),
-          current_value: Number(r.current_value),
-          pct_share: Number(r.pct_share)
-        }))
-      )
+      nextShares = sharesResult.data.map((r: any) => ({
+        member_id: r.member_id,
+        member: r.members?.name ?? "Unknown",
+        amount: Number(r.amount),
+        current_value: Number(r.current_value),
+        pct_share: Number(r.pct_share)
+      }))
+      setShares(nextShares)
     } else if (sharesResult.error) {
       setLoadError(sharesResult.error.message)
     }
 
+    let nextHolds = holds
     if (!holdsResult.error && holdsResult.data) {
-      setHolds(
-        holdsResult.data.map((r: any) => ({
-          member_id: r.member_id,
-          member: r.members?.name ?? "Unknown",
-          share: Number(r.share)
-        }))
-      )
+      nextHolds = holdsResult.data.map((r: any) => ({
+        member_id: r.member_id,
+        member: r.members?.name ?? "Unknown",
+        share: Number(r.share)
+      }))
+      setHolds(nextHolds)
     } else if (holdsResult.error) {
       setLoadError(holdsResult.error.message)
     }
 
+    let nextPrincipalOutstanding = principalOutstanding
     if (!principalOutstandingResult.error && principalOutstandingResult.data) {
-      setPrincipalOutstanding(Number(principalOutstandingResult.data.outstanding))
+      nextPrincipalOutstanding = Number(principalOutstandingResult.data.outstanding)
+      setPrincipalOutstanding(nextPrincipalOutstanding)
     } else if (principalOutstandingResult.error) {
       setLoadError(principalOutstandingResult.error.message)
     }
 
+    let nextRecentTransactions = recentTransactions
     if (!recentTxnsResult.error && recentTxnsResult.data) {
-      setRecentTransactions(
-        recentTxnsResult.data.map((r) => ({
-          transaction_id: r.transaction_id,
-          date: r.txn_date ?? r.created_at,
-          classification: r.classification,
-          amount: Number(r.amount),
-          status: r.status
-        }))
-      )
+      nextRecentTransactions = recentTxnsResult.data.map((r) => ({
+        transaction_id: r.transaction_id,
+        date: r.txn_date ?? r.created_at,
+        classification: r.classification,
+        amount: Number(r.amount),
+        status: r.status
+      }))
+      setRecentTransactions(nextRecentTransactions)
+    }
+
+    return {
+      loan: nextLoan,
+      shares: nextShares,
+      holds: nextHolds,
+      principalOutstanding: nextPrincipalOutstanding,
+      recentTransactions: nextRecentTransactions
     }
   }
 
@@ -244,9 +270,10 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name")
     ])
 
-    setBanks(bankList ?? [])
+    const nextBanks = bankList ?? []
+    setBanks(nextBanks)
 
-    if (!rawLoan) return
+    if (!rawLoan) return { adminLoan, banks: nextBanks }
 
     // Loan releases are stored negative in the ledger; flip the sign so
     // "disbursed" reads as a positive magnitude.
@@ -301,6 +328,8 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       setManageOpen(needsAttention)
       setManageOpenInitialized(true)
     }
+
+    return { adminLoan: next, banks: nextBanks }
   }
 
   // Opening a drill-down while the list is scrolled down would otherwise
@@ -314,11 +343,20 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     let cancelled = false
 
     async function load() {
-      await loadMemberFacing()
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(cacheKey)) setDataLoading(true)
+
+      const memberFacing = await loadMemberFacing()
+      let adminData: { adminLoan: AdminLoan | null; banks: any[] } = { adminLoan, banks }
       if (!cancelled && isAdmin) {
-        await loadAdminData()
+        adminData = await loadAdminData()
       }
-      if (!cancelled) setDataLoading(false)
+      if (!cancelled) {
+        setDataLoading(false)
+        writeCache<LoanDetailSnapshot>(cacheKey, { ...memberFacing, ...adminData })
+      }
     }
 
     load()
@@ -329,8 +367,10 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   }, [loanId])
 
   async function reloadAll() {
-    await loadMemberFacing()
-    if (isAdmin) await loadAdminData()
+    const memberFacing = await loadMemberFacing()
+    let adminData: { adminLoan: AdminLoan | null; banks: any[] } = { adminLoan, banks }
+    if (isAdmin) adminData = await loadAdminData()
+    writeCache<LoanDetailSnapshot>(cacheKey, { ...memberFacing, ...adminData })
   }
 
   function startEditLoan() {

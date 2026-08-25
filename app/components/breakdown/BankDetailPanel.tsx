@@ -21,9 +21,18 @@ import {
 import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
 import BankQrModal from "@/app/components/BankQrModal"
 import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
+import { readCache, writeCache } from "@/lib/cache"
 
 type YearRow = { year: string; amount: number; memberCount: number }
 type QrAccount = { id: string; account_name: string | null; qr_code_url: string }
+
+type BankDetailSnapshot = {
+  balance: number
+  interestEarned: number
+  tax: number
+  years: YearRow[]
+  qrAccounts: QrAccount[]
+}
 
 export function BankDetailPanel({
   bank,
@@ -41,17 +50,20 @@ export function BankDetailPanel({
     if (selectedYear === null) window.scrollTo(0, yearScrollPosRef.current)
   }, [selectedYear])
 
-  const [dataLoading, setDataLoading] = useState(true)
-  const [balance, setBalance] = useState(0)
-  const [interestEarned, setInterestEarned] = useState(0)
-  const [tax, setTax] = useState(0)
-  const [years, setYears] = useState<YearRow[]>([])
+  const cacheKey = `bank-detail:${bank}`
+  const cached = readCache<BankDetailSnapshot>(cacheKey)
+
+  const [dataLoading, setDataLoading] = useState(!cached)
+  const [balance, setBalance] = useState(cached?.balance ?? 0)
+  const [interestEarned, setInterestEarned] = useState(cached?.interestEarned ?? 0)
+  const [tax, setTax] = useState(cached?.tax ?? 0)
+  const [years, setYears] = useState<YearRow[]>(cached?.years ?? [])
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>([])
   const [distributingYear, setDistributingYear] = useState<number | null>(null)
   const [distributeError, setDistributeError] = useState("")
-  const [qrAccounts, setQrAccounts] = useState<QrAccount[]>([])
+  const [qrAccounts, setQrAccounts] = useState<QrAccount[]>(cached?.qrAccounts ?? [])
   const [zoomedQr, setZoomedQr] = useState<QrAccount | null>(null)
 
   async function loadPending() {
@@ -78,6 +90,12 @@ export function BankDetailPanel({
   }
 
   async function load() {
+    // Only show the blocking loader on a true cold start -- if we already
+    // rendered cached data (including a quiet reload after distributing
+    // interest), refresh quietly behind it instead of flashing back to a
+    // spinner.
+    if (!readCache(cacheKey)) setDataLoading(true)
+
     const balancePromise = supabase.from("v_bank_balances").select("*").eq("bank", bank).maybeSingle()
 
     // bank falls back to the linked bank_accounts.bank_name -- transactions
@@ -114,7 +132,8 @@ export function BankDetailPanel({
       qrPromise
     ])
 
-    if (!qrResult.error) setQrAccounts((qrResult.data as QrAccount[]) ?? [])
+    const nextQrAccounts = !qrResult.error ? ((qrResult.data as QrAccount[]) ?? []) : qrAccounts
+    if (!qrResult.error) setQrAccounts(nextQrAccounts)
 
     if (balanceResult.error || !balanceResult.data) {
       setNotFound(true)
@@ -122,8 +141,11 @@ export function BankDetailPanel({
       return
     }
 
-    setBalance(Number(balanceResult.data.balance))
+    const nextBalance = Number(balanceResult.data.balance)
+    setBalance(nextBalance)
 
+    let nextInterestEarned = interestEarned
+    let nextTax = tax
     if (!interestResult.error) {
       let earned = 0
       let taxTotal = 0
@@ -133,12 +155,15 @@ export function BankDetailPanel({
         if (row.classification === "Bank Interest") earned += Number(row.amount)
         if (row.classification === "Tax") taxTotal += Number(row.amount)
       }
-      setInterestEarned(earned)
-      setTax(taxTotal)
+      nextInterestEarned = earned
+      nextTax = taxTotal
+      setInterestEarned(nextInterestEarned)
+      setTax(nextTax)
     } else {
       setLoadError(interestResult.error.message)
     }
 
+    let nextYears = years
     if (!allocationsResult.error) {
       const byYear: Record<string, { amount: number; members: Set<string> }> = {}
       for (const row of allocationsResult.data ?? []) {
@@ -148,15 +173,23 @@ export function BankDetailPanel({
         byYear[year].amount += Number(row.amount)
         byYear[year].members.add(row.member_id)
       }
-      const rows = Object.entries(byYear)
+      nextYears = Object.entries(byYear)
         .map(([year, v]) => ({ year, amount: v.amount, memberCount: v.members.size }))
         .sort((a, b) => b.year.localeCompare(a.year))
-      setYears(rows)
+      setYears(nextYears)
     } else if (!loadError) {
       setLoadError(allocationsResult.error.message)
     }
 
     setDataLoading(false)
+
+    writeCache<BankDetailSnapshot>(cacheKey, {
+      balance: nextBalance,
+      interestEarned: nextInterestEarned,
+      tax: nextTax,
+      years: nextYears,
+      qrAccounts: nextQrAccounts
+    })
   }
 
   // Opening a drill-down while the list is scrolled down would otherwise
