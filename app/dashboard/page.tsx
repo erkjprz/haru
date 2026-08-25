@@ -8,6 +8,7 @@ import ScanToPayCard from "@/app/components/ScanToPayCard"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
+import { readCache, writeCache } from "@/lib/cache"
 
 type RecentTransaction = {
   transaction_id: string
@@ -17,17 +18,31 @@ type RecentTransaction = {
   status: string
 }
 
+type DashboardSnapshot = {
+  fundCash: number | null
+  myBalance: number | null
+  pendingCount: number
+  recentTransactions: RecentTransaction[]
+  asOf: string
+}
 
 export default function DashboardPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
-  const [dataLoading, setDataLoading] = useState(true)
-  const [asOf, setAsOf] = useState<Date | null>(null)
+  const cacheKey = member ? `dashboard:${member.member_id}` : null
+  const cached = cacheKey ? readCache<DashboardSnapshot>(cacheKey) : undefined
 
-  const [fundCash, setFundCash] = useState<number | null>(null)
-  const [myBalance, setMyBalance] = useState<number | null>(null)
-  const [pendingCount, setPendingCount] = useState(0)
-  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([])
+  // Paints instantly from the last time this member's dashboard loaded,
+  // before the browser ever shows a frame -- loadDashboard() below still
+  // runs right after and replaces it with a fresh fetch, so a stale cache
+  // never lingers past that first moment.
+  const [dataLoading, setDataLoading] = useState(!cached)
+  const [asOf, setAsOf] = useState<Date | null>(cached ? new Date(cached.asOf) : null)
+
+  const [fundCash, setFundCash] = useState<number | null>(cached?.fundCash ?? null)
+  const [myBalance, setMyBalance] = useState<number | null>(cached?.myBalance ?? null)
+  const [pendingCount, setPendingCount] = useState(cached?.pendingCount ?? 0)
+  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>(cached?.recentTransactions ?? [])
   const [loadError, setLoadError] = useState("")
 
   const memberName = member?.name ?? ""
@@ -54,6 +69,11 @@ export default function DashboardPage() {
 
     async function loadDashboard() {
       if (!member) return
+
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(`dashboard:${member.member_id}`)) setDataLoading(true)
 
       // v_fund_summary.total_cash is the same figure the Breakdown hub's
       // Fund tab shows as "Fund Total Cash" -- reuse it rather than
@@ -133,30 +153,35 @@ export default function DashboardPage() {
         recentTransactionsResult.error
       if (firstError) setLoadError(firstError.message)
 
-      if (!fundResult.error && fundResult.data) {
-        setFundCash(Number(fundResult.data.total_cash))
-      }
+      const nextFundCash = !fundResult.error && fundResult.data ? Number(fundResult.data.total_cash) : fundCash
+      const nextMyBalance = !mineResult.error && mineResult.data ? Number(mineResult.data.withdrawable_now) : myBalance
+      const nextPendingCount = (pendingResult.count ?? 0) + (pendingMembersResult.count ?? 0) + (pendingBorrowersResult.count ?? 0)
+      const nextRecentTransactions =
+        !recentTransactionsResult.error && recentTransactionsResult.data
+          ? recentTransactionsResult.data.map((r) => ({
+              transaction_id: r.transaction_id,
+              date: r.txn_date ?? r.created_at,
+              classification: r.classification,
+              amount: Number(r.amount),
+              status: r.status
+            }))
+          : recentTransactions
+      const nextAsOf = new Date()
 
-      if (!mineResult.error && mineResult.data) {
-        setMyBalance(Number(mineResult.data.withdrawable_now))
-      }
-
-      setPendingCount((pendingResult.count ?? 0) + (pendingMembersResult.count ?? 0) + (pendingBorrowersResult.count ?? 0))
-
-      if (!recentTransactionsResult.error && recentTransactionsResult.data) {
-        setRecentTransactions(
-          recentTransactionsResult.data.map((r) => ({
-            transaction_id: r.transaction_id,
-            date: r.txn_date ?? r.created_at,
-            classification: r.classification,
-            amount: Number(r.amount),
-            status: r.status
-          }))
-        )
-      }
-
-      setAsOf(new Date())
+      setFundCash(nextFundCash)
+      setMyBalance(nextMyBalance)
+      setPendingCount(nextPendingCount)
+      setRecentTransactions(nextRecentTransactions)
+      setAsOf(nextAsOf)
       setDataLoading(false)
+
+      writeCache<DashboardSnapshot>(`dashboard:${member.member_id}`, {
+        fundCash: nextFundCash,
+        myBalance: nextMyBalance,
+        pendingCount: nextPendingCount,
+        recentTransactions: nextRecentTransactions,
+        asOf: nextAsOf.toISOString()
+      })
     }
 
     loadDashboard()

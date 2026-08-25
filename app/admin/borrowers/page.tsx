@@ -7,6 +7,11 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { approveBorrowerMember, linkBorrowerRecord } from "@/lib/approveBorrower"
+import { readCache, writeCache } from "@/lib/cache"
+
+// Same global borrower-approvals queue for any admin -- no per-user
+// scoping needed, so a single fixed cache key covers everyone.
+const BORROWERS_CACHE_KEY = "admin:borrowers-list"
 
 type BorrowerMember = {
   member_id: string
@@ -21,20 +26,39 @@ type UnclaimedBorrower = {
   name: string
 }
 
+type BorrowerQueueSnapshot = {
+  borrowerMembers: BorrowerMember[]
+  unclaimedBorrowers: UnclaimedBorrower[]
+  linkedNameByMemberId: Record<string, string>
+}
+
 export default function AdminBorrowersPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
-  const [dataLoading, setDataLoading] = useState(true)
+  const cached = readCache<BorrowerQueueSnapshot>(BORROWERS_CACHE_KEY)
+
+  // Paints instantly from the last time this queue loaded, before the
+  // browser ever shows a frame -- loadData() below still runs right after
+  // and replaces it with a fresh fetch, so a stale queue never lingers
+  // past that first moment.
+  const [dataLoading, setDataLoading] = useState(!cached)
   const checkingAccess = authLoading || dataLoading
 
-  const [borrowerMembers, setBorrowerMembers] = useState<BorrowerMember[]>([])
-  const [unclaimedBorrowers, setUnclaimedBorrowers] = useState<UnclaimedBorrower[]>([])
-  const [linkedNameByMemberId, setLinkedNameByMemberId] = useState<Record<string, string>>({})
+  const [borrowerMembers, setBorrowerMembers] = useState<BorrowerMember[]>(cached?.borrowerMembers ?? [])
+  const [unclaimedBorrowers, setUnclaimedBorrowers] = useState<UnclaimedBorrower[]>(cached?.unclaimedBorrowers ?? [])
+  const [linkedNameByMemberId, setLinkedNameByMemberId] = useState<Record<string, string>>(
+    cached?.linkedNameByMemberId ?? {}
+  )
   const [linkChoice, setLinkChoice] = useState<Record<string, string>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
   const [message, setMessage] = useState("")
 
   async function loadData() {
+    // Only show the blocking loader on a true cold start -- if we already
+    // rendered cached data, refresh quietly behind it instead of flashing
+    // back to a spinner on every navigation or post-mutation reload.
+    if (!readCache(BORROWERS_CACHE_KEY)) setDataLoading(true)
+
     const [{ data: members }, { data: unclaimed }, { data: linked }] = await Promise.all([
       supabase
         .from("members")
@@ -45,11 +69,21 @@ export default function AdminBorrowersPage() {
       supabase.from("borrowers").select("name, member_id").not("member_id", "is", null)
     ])
 
-    setBorrowerMembers(members ?? [])
-    setUnclaimedBorrowers(unclaimed ?? [])
-    setLinkedNameByMemberId(
-      Object.fromEntries((linked ?? []).map((b) => [b.member_id as string, b.name as string]))
+    const nextBorrowerMembers = members ?? []
+    const nextUnclaimedBorrowers = unclaimed ?? []
+    const nextLinkedNameByMemberId = Object.fromEntries(
+      (linked ?? []).map((b) => [b.member_id as string, b.name as string])
     )
+
+    setBorrowerMembers(nextBorrowerMembers)
+    setUnclaimedBorrowers(nextUnclaimedBorrowers)
+    setLinkedNameByMemberId(nextLinkedNameByMemberId)
+
+    writeCache<BorrowerQueueSnapshot>(BORROWERS_CACHE_KEY, {
+      borrowerMembers: nextBorrowerMembers,
+      unclaimedBorrowers: nextUnclaimedBorrowers,
+      linkedNameByMemberId: nextLinkedNameByMemberId
+    })
   }
 
   useEffect(() => {

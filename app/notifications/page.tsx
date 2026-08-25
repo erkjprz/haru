@@ -8,6 +8,7 @@ import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/push"
+import { readCache, writeCache } from "@/lib/cache"
 
 type Notification = {
   id: string
@@ -86,8 +87,15 @@ function PushToggle({ memberId }: { memberId: string }) {
 export default function NotificationsPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
-  const [dataLoading, setDataLoading] = useState(true)
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const cacheKey = member ? `notifications:${member.member_id}` : null
+  const cached = cacheKey ? readCache<Notification[]>(cacheKey) : undefined
+
+  // Paints instantly from the last time this member's notifications loaded,
+  // before the browser ever shows a frame -- load() below still runs right
+  // after and replaces it with a fresh fetch, so a stale cache never
+  // lingers past that first moment.
+  const [dataLoading, setDataLoading] = useState(!cached)
+  const [notifications, setNotifications] = useState<Notification[]>(cached ?? [])
   const [loadError, setLoadError] = useState("")
   const [clearing, setClearing] = useState(false)
 
@@ -103,6 +111,13 @@ export default function NotificationsPage() {
     }
 
     async function load() {
+      const key = `notifications:${member!.member_id}`
+
+      // Only show the blocking loader on a true cold start -- if we already
+      // rendered cached data, refresh quietly behind it instead of flashing
+      // back to a spinner on every navigation.
+      if (!readCache(key)) setDataLoading(true)
+
       const { data, error } = await supabase
         .from("notifications")
         .select("id, type, title, body, link, read, created_at")
@@ -118,6 +133,7 @@ export default function NotificationsPage() {
 
       setNotifications(data ?? [])
       setDataLoading(false)
+      writeCache(key, data ?? [])
 
       const unreadIds = (data ?? []).filter((n) => !n.read).map((n) => n.id)
       if (unreadIds.length > 0) {
@@ -137,7 +153,10 @@ export default function NotificationsPage() {
     setClearing(true)
     const { error } = await supabase.from("notifications").delete().eq("member_id", member.member_id)
     setClearing(false)
-    if (!error) setNotifications([])
+    if (!error) {
+      setNotifications([])
+      writeCache(`notifications:${member.member_id}`, [])
+    }
   }
 
   const Header = member?.role === "borrower" ? BorrowerHeader : Navbar

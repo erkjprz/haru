@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
+import { readCache, writeCache } from "@/lib/cache"
 
 export type LoanTransaction = {
   transaction_id: string
@@ -31,9 +32,12 @@ export type Loan = {
 // Shared between /borrower (the borrower's own view) and the admin "view
 // as" preview -- same loans-plus-transactions query for either, parameterized
 // by whose member_id/borrower_id to fetch.
+const cacheKeyFor = (memberId: string) => `loans:${memberId}`
+
 export function useLoansSummary(memberId: string | undefined) {
-  const [loading, setLoading] = useState(true)
-  const [loans, setLoans] = useState<Loan[]>([])
+  const cached = memberId ? readCache<Loan[]>(cacheKeyFor(memberId)) : undefined
+  const [loading, setLoading] = useState(!cached)
+  const [loans, setLoans] = useState<Loan[]>(cached ?? [])
   const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
@@ -42,7 +46,10 @@ export function useLoansSummary(memberId: string | undefined) {
     let cancelled = false
 
     async function load() {
-      setLoading(true)
+      // Only show the blocking loader on a true cold start -- if we
+      // already rendered cached data, refresh quietly behind it instead
+      // of flashing back to a spinner on every navigation.
+      if (!readCache(cacheKeyFor(memberId!))) setLoading(true)
       setLoadError("")
 
       const { data: borrowerRow } = await supabase
@@ -135,6 +142,7 @@ export function useLoansSummary(memberId: string | undefined) {
       if (!cancelled) {
         setLoans(withProgress)
         setLoading(false)
+        writeCache(cacheKeyFor(memberId!), withProgress)
       }
     }
 
