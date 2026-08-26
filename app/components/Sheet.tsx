@@ -27,6 +27,31 @@ export function Sheet({
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // `dvh` is still a CSS unit the browser has to calculate on its own, and
+  // iOS's installed-home-screen-app display mode has real cases where that
+  // calculation doesn't match the actual visible screen. `visualViewport`
+  // is the browser's own live, JS-readable measurement of the same thing
+  // it's the API iOS keeps accurate specifically because vh/dvh aren't
+  // reliable enough here on their own -- so this measures directly instead
+  // of trusting the CSS unit to get it right. Falls back to the h-dvh
+  // class (still on the element below) if visualViewport isn't available
+  // at all, or hasn't reported yet.
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    function update() {
+      setViewportHeight(vv!.height)
+    }
+    update()
+    vv.addEventListener("resize", update)
+    vv.addEventListener("scroll", update)
+    return () => {
+      vv.removeEventListener("resize", update)
+      vv.removeEventListener("scroll", update)
+    }
+  }, [])
+
   // A Sheet mounts fresh on every open, not behind a route change --
   // Navbar's own page-level scroll-nudge (see its file comment on the
   // same iOS bug) only fires on navigation/resume, so it doesn't
@@ -87,13 +112,13 @@ export function Sheet({
           element's containing block against the toolbar-hidden layout
           viewport, which is taller than what's actually visible while the
           toolbar is showing, so inset-0's implied 0-to-0 span can reach
-          past the real visible bottom edge. dvh tracks the actual visible
-          viewport instead. (Tried this once before and reverted it when it
-          seemed to make no difference -- but backdrop-blur's WebKit
-          compositing bug was still present on the backdrop at the time,
-          which could just as easily have been masking whether this
-          actually helped. Worth a clean retest now that it's gone.) */}
-      <div className="fixed top-0 left-0 right-0 h-dvh z-50">
+          past the real visible bottom edge. The inline height (once
+          visualViewport has reported) overrides h-dvh with the actual
+          measured pixel value -- see the hook above for why. */}
+      <div
+        className="fixed top-0 left-0 right-0 h-dvh z-50"
+        style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
+      >
         {/* No backdrop-blur -- `backdrop-filter` combined with
             `position: fixed` is a known WebKit bug on iOS (confirmed on a
             sibling app's bottom nav, same combination) where the element's
@@ -111,6 +136,7 @@ export function Sheet({
           className={`absolute left-0 right-0 bottom-0 max-h-[92dvh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             open ? "translate-y-0" : "translate-y-full"
           }`}
+          style={viewportHeight ? { maxHeight: `${viewportHeight * 0.92}px` } : undefined}
         >
           <div className="w-9 h-1 rounded-full bg-hairline mx-auto mt-2.5 flex-shrink-0" />
           <div className="relative flex items-center justify-center px-4 pt-3 pb-4 flex-shrink-0">
