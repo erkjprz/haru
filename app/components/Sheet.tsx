@@ -1,7 +1,17 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
+
+// TEMPORARY -- CI (Chromium + WebKit, real login) confirmed no clipping
+// with min-h-0 in place, but only in a plain browser tab; a live device
+// screenshot afterward still showed the Submit button cut off in the
+// installed PWA. This readout has two jobs: BUILD tag rules out a stale
+// cached bundle before chasing a code theory further, and the live
+// panel/footer numbers show whether the wrapper/panel math itself is
+// still off, or whether something else is clipping it. Remove once
+// confirmed either way.
+const BUILD_TAG = "sheet-debug-2"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -22,6 +32,8 @@ export function Sheet({
   footer?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [debugInfo, setDebugInfo] = useState("")
   useEffect(() => {
     const raf = requestAnimationFrame(() => setOpen(true))
     return () => cancelAnimationFrame(raf)
@@ -95,6 +107,27 @@ export function Sheet({
     }
   }, [])
 
+  // TEMPORARY -- see BUILD_TAG comment above.
+  useEffect(() => {
+    function update() {
+      const rect = panelRef.current?.getBoundingClientRect()
+      setDebugInfo(
+        `${BUILD_TAG} vpH:${viewportHeight ?? "null"} scrH:${window.screen.height} innerH:${window.innerHeight} ` +
+          `standalone:${window.matchMedia("(display-mode: standalone)").matches} ` +
+          `panelBottom:${rect?.bottom.toFixed(0) ?? "?"} clipped:${rect ? rect.bottom > window.innerHeight : "?"}`
+      )
+    }
+    update()
+    const raf = requestAnimationFrame(update)
+    const t = setTimeout(update, 500)
+    window.addEventListener("resize", update)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(t)
+      window.removeEventListener("resize", update)
+    }
+  }, [viewportHeight])
+
   // Locks the page behind the sheet from scrolling while it's open. A
   // plain `overflow: hidden` on body doesn't reliably stop it on iOS
   // Safari (a well-known quirk -- touch-scrolling the backdrop can still
@@ -163,12 +196,14 @@ export function Sheet({
           onClick={handleClose}
         />
         <div
+          ref={panelRef}
           className={`absolute left-0 right-0 bottom-0 max-h-[92dvh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             open ? "translate-y-0" : "translate-y-full"
           }`}
           style={viewportHeight ? { maxHeight: `${viewportHeight * 0.92}px` } : undefined}
         >
           <div className="w-9 h-1 rounded-full bg-hairline mx-auto mt-2.5 flex-shrink-0" />
+          <div className="text-[9px] font-mono text-rust text-center flex-shrink-0 break-all px-1">{debugInfo}</div>
           <div className="relative flex items-center justify-center px-4 pt-3 pb-4 flex-shrink-0">
             <h2 className="font-display text-lg font-medium text-ink">{title}</h2>
             <button
