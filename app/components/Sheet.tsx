@@ -3,28 +3,19 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
 
-// TEMPORARY -- the last build's diagnostic answered the question: docH
-// (document.documentElement's own rendered height, nothing to do with
-// position:fixed compositing) was ALSO exactly 793, and so was a plain
-// position:absolute probe anchored straight to <html>. That rules out
-// position:fixed entirely -- the actual HTML document only HAS 793px of
-// layout space to hand out in this exact context (iPhone, installed
-// home-screen app). No CSS technique on our own elements can put content
-// in the remaining 59px, because it was never part of the page's canvas
-// to begin with. That's very likely iOS reserving the status-bar height
-// for the layout viewport even though `black-translucent` makes it look
-// like it's overlaying content -- 59px lines up with the Dynamic Island
-// status bar height on this size of device.
-//
-// So the button never was going to reach y:852, and almost certainly
-// neither does Budget's -- same platform, same "standalone" manifest
-// display mode on both. The real difference is likely just how much of
-// the *shared* 793px canvas each app's own footer padding eats up.
-// This build measures that directly: safeAreaBottomPx reads what
-// `env(safe-area-inset-bottom)` actually resolves to here (rather than
-// assuming the usual 34px), and submitBottom reads the Submit button's
-// own bottom edge, not just the panel's.
-const BUILD_TAG = "sheet-debug-8"
+// TEMPORARY -- the "793 is a hard platform ceiling shared by every app"
+// theory turned out to be wrong. Instrumenting a sibling app's own sheet
+// the same way showed its window.innerHeight reads 852 -- the full
+// physical screen -- on this exact device, not 793. So this was never
+// unfixable; something in this app's own config was shrinking
+// innerHeight/visualViewport itself. The one concrete difference found
+// between the two apps' viewport meta config: the sibling app sets
+// `maximumScale: 1`, this one didn't set it at all. Everything else
+// (viewportFit, appleWebApp/black-translucent, manifest display mode)
+// is identical between them. Added it in layout.tsx -- this build keeps
+// the same measurements to confirm whether that's actually what closes
+// the gap.
+const BUILD_TAG = "sheet-debug-9"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to

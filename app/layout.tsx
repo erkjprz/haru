@@ -48,9 +48,16 @@ export const metadata: Metadata = {
 // ThemeProvider). "dark" here is just the pre-hydration fallback for the
 // rare case JS hasn't run yet; ThemeProvider (and the inline script below)
 // resolve the real value before paint.
+// maximumScale is the one concrete config difference found against a
+// sibling app whose installed-PWA sheet reaches the true screen bottom
+// (window.innerHeight itself: 852 there vs. 793 here, on the same
+// device) -- everything else in both apps' viewport/appleWebApp setup
+// is identical. Untested theory, but it's the only verified difference
+// to test rather than another guess.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
   themeColor: "#0a0a0a",
   colorScheme: "dark light",
   viewportFit: "cover",
