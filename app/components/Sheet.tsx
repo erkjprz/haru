@@ -133,8 +133,18 @@ export function Sheet({
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
+    // TEST: diagnostics showed visualViewport/dvh/svh/inset-0 all agree on
+    // a height ~59px short of window.screen.height in the installed PWA --
+    // not a measurement bug, a hard ceiling on how the browser sizes
+    // position:fixed content here. window.screen.height isn't derived from
+    // viewport/fixed-position layout at all, so forcing it as an explicit
+    // override tests whether that ceiling is soft (an explicit height wins)
+    // or hard (the browser clips back down regardless). Standalone-only --
+    // in a plain browser tab screen.height would wrongly claim space the
+    // browser's own chrome (address bar, toolbar) is actually using.
+    const standalone = window.matchMedia("(display-mode: standalone)").matches
     function update() {
-      setViewportHeight(vv!.height)
+      setViewportHeight(standalone ? window.screen.height : vv!.height)
     }
     update()
     // The very first read above can still land on iOS's stale pre-layout
