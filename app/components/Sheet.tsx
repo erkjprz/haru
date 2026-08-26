@@ -11,23 +11,31 @@ import { Portal } from "@/app/components/Portal"
 // screenshot instead of guessed at. Remove once the real cause is found.
 function DebugReadout({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | null> }) {
   const [info, setInfo] = useState<Record<string, string>>({})
-  const safeAreaRef = useRef<HTMLDivElement>(null)
+  const safeBottomRef = useRef<HTMLDivElement>(null)
+  const safeTopRef = useRef<HTMLDivElement>(null)
+  const dvhProbeRef = useRef<HTMLDivElement>(null)
+  const svhProbeRef = useRef<HTMLDivElement>(null)
+  const insetProbeRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function update() {
       const vv = window.visualViewport
       const panelRect = panelRef.current?.getBoundingClientRect()
+      const insetRect = insetProbeRef.current?.getBoundingClientRect()
       setInfo({
         vvH: vv ? vv.height.toFixed(1) : "n/a",
         vvOffTop: vv ? vv.offsetTop.toFixed(1) : "n/a",
         innerH: String(window.innerHeight),
         docClientH: String(document.documentElement.clientHeight),
         screenH: String(window.screen.height),
-        dpr: String(window.devicePixelRatio),
-        safeBottom: safeAreaRef.current ? String(safeAreaRef.current.offsetHeight) : "n/a",
+        dvhProbe: dvhProbeRef.current ? String(dvhProbeRef.current.offsetHeight) : "n/a",
+        svhProbe: svhProbeRef.current ? String(svhProbeRef.current.offsetHeight) : "n/a",
+        insetTop: insetRect ? insetRect.top.toFixed(1) : "n/a",
+        insetBottom: insetRect ? insetRect.bottom.toFixed(1) : "n/a",
+        safeTop: safeTopRef.current ? String(safeTopRef.current.offsetHeight) : "n/a",
+        safeBottom: safeBottomRef.current ? String(safeBottomRef.current.offsetHeight) : "n/a",
         panelBottom: panelRect ? panelRect.bottom.toFixed(1) : "n/a",
         panelTop: panelRect ? panelRect.top.toFixed(1) : "n/a",
-        scrollY: String(window.scrollY),
         standalone: String(window.matchMedia("(display-mode: standalone)").matches)
       })
     }
@@ -48,7 +56,16 @@ function DebugReadout({ panelRef }: { panelRef: React.RefObject<HTMLDivElement |
 
   return (
     <>
-      <div ref={safeAreaRef} style={{ position: "absolute", width: 0, paddingBottom: "env(safe-area-inset-bottom)" }} />
+      <div ref={safeBottomRef} style={{ position: "absolute", width: 0, paddingBottom: "env(safe-area-inset-bottom)" }} />
+      <div ref={safeTopRef} style={{ position: "absolute", width: 0, paddingTop: "env(safe-area-inset-top)" }} />
+      {/* Plain CSS units, measured with no JS override at all -- to check
+          whether the shortfall visualViewport reports is specific to that
+          API, or whether 100dvh/100svh land on the same short number,
+          which would mean the whole layout viewport is capped, not just
+          the JS measurement of it. */}
+      <div ref={dvhProbeRef} className="h-dvh" style={{ position: "absolute", width: 0 }} />
+      <div ref={svhProbeRef} className="h-svh" style={{ position: "absolute", width: 0 }} />
+      <div ref={insetProbeRef} className="fixed inset-0" style={{ width: 0, pointerEvents: "none" }} />
       <div
         className="fixed top-2 left-2 z-[9999] bg-black text-yellow-300 text-[10px] leading-tight font-mono px-2 py-1.5 rounded pointer-events-none"
         style={{ maxWidth: "90vw" }}
