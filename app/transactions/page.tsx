@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -11,6 +11,7 @@ import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 import { DateField } from "@/app/components/TransactionFormUI"
 import { readCache, writeCache } from "@/lib/cache"
+import { TRANSACTIONS_CHANGED_EVENT } from "@/lib/transactionEvents"
 
 // Not scoped per member -- every approved non-borrower member sees the same
 // full transaction list (filtering happens entirely client-side below), so
@@ -414,6 +415,27 @@ function TransactionsPageInner() {
     return data ?? []
   }
 
+  // Pulled out to its own callback (rather than staying inline in the
+  // mount effect below) so the FAB's quick-entry sheet -- in Navbar, above
+  // this page and with no reference to this page's own load function --
+  // can also trigger a quiet refresh after saving a transaction; see the
+  // listener effect further down.
+  const load = useCallback(async () => {
+    // Only show the blocking loader on a true cold start -- if we already
+    // rendered cached data, refresh quietly behind it instead of flashing
+    // back to a spinner on every navigation.
+    if (!readCache(TRANSACTIONS_CACHE_KEY)) setDataLoading(true)
+
+    const [loadedTransactions, loadedMembers] = await Promise.all([loadTransactions(), loadMembers()])
+    setDataLoading(false)
+
+    writeCache<TransactionsSnapshot>(TRANSACTIONS_CACHE_KEY, {
+      transactions: loadedTransactions,
+      totalCount: loadedTransactions.length,
+      members: loadedMembers
+    })
+  }, [])
+
   // Every other main page redirects an unauthenticated/pending/borrower
   // visitor away before rendering real content -- this one didn't, so
   // navigating here directly just silently showed an empty list (RLS
@@ -438,23 +460,16 @@ function TransactionsPageInner() {
       return
     }
 
-    async function load() {
-      // Only show the blocking loader on a true cold start -- if we already
-      // rendered cached data, refresh quietly behind it instead of flashing
-      // back to a spinner on every navigation.
-      if (!readCache(TRANSACTIONS_CACHE_KEY)) setDataLoading(true)
-
-      const [loadedTransactions, loadedMembers] = await Promise.all([loadTransactions(), loadMembers()])
-      setDataLoading(false)
-
-      writeCache<TransactionsSnapshot>(TRANSACTIONS_CACHE_KEY, {
-        transactions: loadedTransactions,
-        totalCount: loadedTransactions.length,
-        members: loadedMembers
-      })
-    }
     load()
-  }, [authLoading, member, router])
+  }, [authLoading, member, router, load])
+
+  // See the comment on `load` above -- this is what actually lets a
+  // transaction saved through the FAB's sheet show up on this page without
+  // a full navigation away and back.
+  useEffect(() => {
+    window.addEventListener(TRANSACTIONS_CHANGED_EVENT, load)
+    return () => window.removeEventListener(TRANSACTIONS_CHANGED_EVENT, load)
+  }, [load])
 
   // Ref-guarded run-once-on-load initializer, same as the effect above it --
   // loanFilter/investmentFilter are read once here, only at the moment

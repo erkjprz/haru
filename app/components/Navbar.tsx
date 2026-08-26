@@ -1,9 +1,12 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
 import { NotificationBell } from "@/app/components/NotificationBell"
+import { NewTransactionSheet } from "@/app/components/NewTransactionSheet"
+import { Toast } from "@/app/components/Toast"
+import { notifyTransactionsChanged } from "@/lib/transactionEvents"
 
 // Same reduced fraction budget-tracker's BottomNav uses -- a floating pill
 // inset from the edge only needs a little clearance from the home
@@ -72,6 +75,8 @@ export default function Navbar() {
   const navRef = useRef<HTMLElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
   const fabRef = useRef<HTMLButtonElement>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
   // The transaction forms have their own sticky Amount/Save footer -- a
   // second fixed bar at the bottom would stack on top of it. The FAB (which
@@ -201,10 +206,14 @@ export default function Navbar() {
                 border, chips), so a gold FAB read as just one more gold
                 thing instead of standing out -- bg-ink/text-paper plus a
                 gold glow is the same "primary action" language every
-                submit button elsewhere in the app already uses. */}
+                submit button elsewhere in the app already uses. Opens the
+                quick-entry sheet in place rather than navigating -- the
+                full /transactions/new page is still there for the rarer
+                admin-only entry types, reachable from Admin > Members or a
+                Dashboard shortcut same as before. */}
             <button
               ref={fabRef}
-              onClick={() => router.push("/transactions/new")}
+              onClick={() => setSheetOpen(true)}
               aria-label="New Transaction"
               className="absolute right-4 w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center shadow-lg shadow-gold/30 ring-1 ring-gold/40"
               style={{ bottom: "calc(100% + 0.5rem)", transform: "translateZ(0)", willChange: "transform" }}
@@ -214,6 +223,19 @@ export default function Navbar() {
           </div>
         </nav>
       )}
+
+      {sheetOpen && (
+        <NewTransactionSheet
+          onClose={() => setSheetOpen(false)}
+          onSaved={(saveMessage) => {
+            setSheetOpen(false)
+            setToast(saveMessage)
+            notifyTransactionsChanged()
+          }}
+        />
+      )}
+
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -9,6 +9,7 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
 import { readCache, writeCache } from "@/lib/cache"
+import { TRANSACTIONS_CHANGED_EVENT } from "@/lib/transactionEvents"
 
 type RecentTransaction = {
   transaction_id: string
@@ -49,25 +50,11 @@ export default function DashboardPage() {
   const isAdmin = member?.role === "admin"
   const checkingAccess = authLoading || dataLoading
 
-  useEffect(() => {
-    if (authLoading) return
-
-    if (!member) {
-      router.push("/login")
-      return
-    }
-
-    if (member.status !== "approved") {
-      router.push("/waiting")
-      return
-    }
-
-    if (member.role === "borrower") {
-      router.push("/borrower")
-      return
-    }
-
-    async function loadDashboard() {
+  // Pulled out of the mount effect below so the FAB's quick-entry sheet
+  // (in Navbar, above this page and unaware of it) can also trigger a
+  // quiet refresh after saving a transaction -- see the listener effect
+  // further down.
+  const loadDashboard = useCallback(async () => {
       if (!member) return
 
       // Only show the blocking loader on a true cold start -- if we
@@ -182,10 +169,42 @@ export default function DashboardPage() {
         recentTransactions: nextRecentTransactions,
         asOf: nextAsOf.toISOString()
       })
+    // Depends only on member's id (see auth-context's own comment on why),
+    // not on fundCash/myBalance/recentTransactions -- those are read only
+    // as an error-path fallback, so a stale closure over them is harmless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [member?.member_id])
+
+  useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
     }
 
     loadDashboard()
-  }, [authLoading, member, router])
+  }, [authLoading, member, router, loadDashboard])
+
+  // The FAB's quick-entry sheet lives in Navbar, above this page and with
+  // no reference to its load function -- this listens for the plain DOM
+  // event it fires after a successful save instead, so a contribution/
+  // withdrawal/etc. submitted from here shows up without needing a full
+  // navigation away and back.
+  useEffect(() => {
+    window.addEventListener(TRANSACTIONS_CHANGED_EVENT, loadDashboard)
+    return () => window.removeEventListener(TRANSACTIONS_CHANGED_EVENT, loadDashboard)
+  }, [loadDashboard])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
