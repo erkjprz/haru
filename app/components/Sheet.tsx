@@ -3,15 +3,23 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
 
-// TEMPORARY -- maximumScale:1 made no difference (still 793, confirmed
-// on a freshly re-added home-screen icon too, ruling out a stale
-// install). Every source-level config comparison against the sibling
-// app that gets the full 852 has come up empty -- appleWebApp.capable
-// defaults to true in Next's own resolver even when unset, so that
-// wasn't a real difference either. Reading the actual rendered <meta>
-// tags directly instead of reasoning from source config, since that's
-// ground truth and source-diffing has been unreliable so far.
-const BUILD_TAG = "sheet-debug-10"
+// TEMPORARY -- the rendered <meta name="viewport">,
+// apple-mobile-web-app-status-bar-style, and apple-mobile-web-app-
+// capable tags all came back byte-identical between this app and the
+// sibling app that gets the full 852px -- config is conclusively ruled
+// out. The one real code difference found instead: the sibling app's
+// own Sheet never touches document.body at all, while this one's body-
+// lock effect sets body to `position: fixed` the instant the sheet
+// mounts, to stop background scroll-chaining. That happens before every
+// single measurement we've ever taken here, since the lock is active
+// for the sheet's entire open lifetime -- if that's what's making
+// WebKit recompute a shorter visualViewport in standalone mode, it
+// would explain the 793 showing up in literally every build regardless
+// of what else changed. This build disables the lock for one round to
+// test that directly (background scroll is unguarded meanwhile --
+// acceptable for one measurement, not for shipping).
+const BUILD_TAG = "sheet-debug-11"
+const DISABLE_BODY_LOCK_FOR_DIAGNOSTIC = true
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -99,16 +107,21 @@ export function Sheet({
     }
   }, [])
 
-  // Locks the page behind the sheet from scrolling while it's open. A
-  // plain `overflow: hidden` on body doesn't reliably stop it on iOS
-  // Safari (a well-known quirk -- touch-scrolling the backdrop can still
-  // drag the page underneath), so this pins body in place with `position:
-  // fixed` instead and restores the exact scroll position on close. Each
-  // Sheet captures/restores whatever was already on body when it mounted,
-  // not a hardcoded default, so this nests correctly when a picker sheet
-  // (loan, type) opens on top of this one -- the inner one's cleanup just
-  // hands back the outer one's own locked state, not real scroll.
+  // TEMPORARY -- disabled for one diagnostic round, see BUILD_TAG comment
+  // above. Normally locks the page behind the sheet from scrolling while
+  // it's open: a plain `overflow: hidden` on body doesn't reliably stop
+  // it on iOS Safari (a well-known quirk -- touch-scrolling the backdrop
+  // can still drag the page underneath), so this pins body in place with
+  // `position: fixed` instead and restores the exact scroll position on
+  // close. Each Sheet captures/restores whatever was already on body
+  // when it mounted, not a hardcoded default, so this nests correctly
+  // when a picker sheet (loan, type) opens on top of this one -- the
+  // inner one's cleanup just hands back the outer one's own locked
+  // state, not real scroll. Background scroll-chaining is temporarily
+  // unguarded while this is off -- acceptable for one measurement round,
+  // not for shipping.
   useEffect(() => {
+    if (DISABLE_BODY_LOCK_FOR_DIAGNOSTIC) return
     const scrollY = window.scrollY
     const body = document.body
     const previous = {
