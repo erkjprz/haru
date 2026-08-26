@@ -27,6 +27,21 @@ export function Sheet({
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // A Sheet mounts fresh on every open, not behind a route change --
+  // Navbar's own page-level scroll-nudge (see its file comment on the
+  // same iOS bug) only fires on navigation/resume, so it doesn't
+  // necessarily run again for a sheet opened via local state mid-session.
+  // Nudging here too forces iOS to recompute this sheet's own
+  // `position: fixed` layout against the real current viewport. Declared
+  // (and so committed) before the visualViewport measurement below, so
+  // that measurement reads the just-nudged layout instead of racing it.
+  // Has to run before the body-lock effect further down sets `overflow:
+  // hidden`, or there's nothing left to actually scroll.
+  useEffect(() => {
+    window.scrollTo(0, 1)
+    window.scrollTo(0, 0)
+  }, [])
+
   // `dvh` is still a CSS unit the browser has to calculate on its own, and
   // iOS's installed-home-screen-app display mode has real cases where that
   // calculation doesn't match the actual visible screen. `visualViewport`
@@ -44,25 +59,20 @@ export function Sheet({
       setViewportHeight(vv!.height)
     }
     update()
+    // The very first read above can still land on iOS's stale pre-layout
+    // value in a freshly-launched standalone PWA -- the same inaccuracy
+    // this whole visualViewport switch was meant to route around, just at
+    // t=0 instead of from `dvh`. A follow-up read next frame, once the
+    // browser's actually settled, self-corrects if the immediate one was
+    // wrong; if it wasn't, this is a no-op re-render.
+    const raf = requestAnimationFrame(update)
     vv.addEventListener("resize", update)
     vv.addEventListener("scroll", update)
     return () => {
+      cancelAnimationFrame(raf)
       vv.removeEventListener("resize", update)
       vv.removeEventListener("scroll", update)
     }
-  }, [])
-
-  // A Sheet mounts fresh on every open, not behind a route change --
-  // Navbar's own page-level scroll-nudge (see its file comment on the
-  // same iOS bug) only fires on navigation/resume, so it doesn't
-  // necessarily run again for a sheet opened via local state mid-session.
-  // Nudging here too forces iOS to recompute this sheet's own
-  // `position: fixed` layout against the real current viewport. Has to
-  // run before the body-lock effect below sets `overflow: hidden`, or
-  // there's nothing left to actually scroll.
-  useEffect(() => {
-    window.scrollTo(0, 1)
-    window.scrollTo(0, 0)
   }, [])
 
   // Locks the page behind the sheet from scrolling while it's open. A
