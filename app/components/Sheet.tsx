@@ -176,7 +176,7 @@ export function Sheet({
           {footer && (
             <div
               className="px-4 pt-3 flex-shrink-0 border-t border-hairline"
-              style={{ paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem))" }}
+              style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
             >
               {footer}
             </div>
