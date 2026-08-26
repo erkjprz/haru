@@ -21,7 +21,7 @@ export function Sheet({
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
-  // Forces a tall minimum height instead of shrinking to fit content --
+  // Forces a fixed near-full height instead of shrinking to fit content --
   // for a form-shaped sheet (NewTransactionSheet) whose content length
   // varies a lot by transaction type, so a short type (Contribution)
   // doesn't leave a slab of bare backdrop exposed above a panel that
@@ -87,7 +87,14 @@ export function Sheet({
           onClick={handleClose}
         />
         <div
-          className={`absolute left-0 right-0 bottom-0 ${tall ? "min-h-[75vh] " : ""}max-h-[92vh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          // A fixed height (rather than a min-height) for the tall case --
+          // a min-height still leaves a gap above whenever content falls
+          // short of it, just a smaller one. Pinning the height outright
+          // keeps the panel at a consistent, near-full size no matter which
+          // transaction type is showing, same as when the content
+          // naturally filled it; the content area's own overflow-y-auto
+          // still takes over if a type ever runs long enough to need it.
+          className={`absolute left-0 right-0 bottom-0 ${tall ? "h-[90vh]" : "max-h-[92vh]"} flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             open ? "translate-y-0" : "translate-y-full"
           }`}
         >
