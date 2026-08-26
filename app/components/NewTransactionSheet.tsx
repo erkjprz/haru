@@ -96,12 +96,15 @@ function PersonIcon() {
   )
 }
 
-function PercentIcon() {
+// A growth/trend icon rather than a literal "%" glyph -- this row already
+// has its own % / ₱ toggle right in it, and a percent-shaped icon right
+// next to a percent-labeled button read as two competing %s instead of an
+// icon plus a control.
+function InterestIcon() {
   return (
     <RowIcon>
-      <circle cx="7" cy="7" r="2.5" />
-      <circle cx="17" cy="17" r="2.5" />
-      <path d="M18 6L6 18" strokeLinecap="round" />
+      <path d="M3 17l6-6 4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15 7h6v6" strokeLinecap="round" strokeLinejoin="round" />
     </RowIcon>
   )
 }
@@ -733,7 +736,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                             second full-width input below it) -- the toggle only ever needs
                             two glyphs' worth of width once it's not also carrying "Rate (%)"/
                             "Fixed amount (₱)" as button text. */}
-                        <FieldRow icon={<PercentIcon />}>
+                        <FieldRow icon={<InterestIcon />}>
                           <input
                             className={rowInputClass}
                             type="number"
