@@ -1,8 +1,15 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
 import { NotificationBell } from "@/app/components/NotificationBell"
+
+// Same reduced fraction budget-tracker's BottomNav uses -- a floating pill
+// inset from the edge only needs a little clearance from the home
+// indicator, not the device's full safe-area inset (which is sized for an
+// edge-to-edge bar).
+const DOCK_OFFSET = "calc(env(safe-area-inset-bottom) * 0.4)"
 
 function IconHome({ active }: { active: boolean }) {
   return (
@@ -62,13 +69,49 @@ export default function Navbar() {
   const pathname = usePathname()
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
+  const navRef = useRef<HTMLElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
+  const fabRef = useRef<HTMLButtonElement>(null)
 
   // The transaction forms have their own sticky Amount/Save footer -- a
-  // second fixed bar at the bottom would stack on top of it.
+  // second fixed bar at the bottom would stack on top of it. The FAB (which
+  // replaced the header's "+ New" button) shares this same guard, since it
+  // sits right above the dock and would collide with that same footer.
   const hideDock =
     pathname === "/transactions/new" || (pathname.startsWith("/transactions/") && pathname.endsWith("/edit"))
 
-  const onNewTransactionPage = pathname.startsWith("/transactions/new")
+  // Pages reserve bottom padding (--dock-h) to clear whichever floating
+  // element sticks up furthest from the bottom edge -- the FAB floats above
+  // the pill (see its own `bottom` below) and is taller than the pill
+  // overall, so whenever it's showing, it -- not the pill -- is what a page
+  // needs to clear. Measured (not hardcoded) so existing pages' padding
+  // stays correct without every one of them needing its own update.
+  useEffect(() => {
+    // Measures actual rendered box edges rather than re-deriving the pill's
+    // safe-area padding/gap/height arithmetic by hand -- correct regardless
+    // of how any of those are expressed (env(), calc(), rem) and however
+    // they change.
+    function update() {
+      const tops = [barRef.current?.getBoundingClientRect().top, fabRef.current?.getBoundingClientRect().top].filter(
+        (t): t is number => t != null
+      )
+      if (tops.length === 0) return
+      document.documentElement.style.setProperty("--dock-h", `${window.innerHeight - Math.min(...tops)}px`)
+    }
+    update()
+    const observers = [barRef.current, fabRef.current]
+      .filter((el): el is HTMLDivElement | HTMLButtonElement => !!el)
+      .map((el) => {
+        const o = new ResizeObserver(update)
+        o.observe(el)
+        return o
+      })
+    window.addEventListener("resize", update)
+    return () => {
+      observers.forEach((o) => o.disconnect())
+      window.removeEventListener("resize", update)
+    }
+  }, [hideDock])
 
   // Everything that doesn't get its own docked tab still lives somewhere
   // -- on the Menu page -- so Menu reads as "active" while browsing any of
@@ -96,10 +139,6 @@ export default function Navbar() {
 
   return (
     <>
-      {/* "+ New" lives in the same sticky bar as the wordmark now, instead
-          of being separately `fixed` -- two independently-positioned
-          elements could drift out of sync during scroll/bounce on mobile;
-          one flex row can't. */}
       {/* Installed on iOS with statusBarStyle "black-translucent" (see
           layout.tsx), the status bar overlays web content instead of
           reserving its own space -- without this top safe-area padding,
@@ -113,48 +152,65 @@ export default function Navbar() {
           >
             Est. 2017
           </button>
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            {!onNewTransactionPage && (
-              <button
-                onClick={() => router.push("/transactions/new")}
-                aria-label="New Transaction"
-                className="bg-gold-soft text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-              >
-                <span className="text-lg leading-none">+</span>
-                New
-              </button>
-            )}
-          </div>
+          <NotificationBell />
         </div>
       </nav>
 
       {!hideDock && (
-        <nav
-          className="fixed bottom-0 left-0 right-0 z-40 bg-paper border-t border-hairline"
-          // iOS Safari can flicker/hide a `fixed` element mid-touch-drag
-          // (e.g. swiping Fund Breakdown's member carousel while this dock
-          // sits over a scrollable page) unless it's promoted to its own
-          // GPU compositing layer -- translateZ(0) forces that.
-          style={{ paddingBottom: "env(safe-area-inset-bottom)", transform: "translateZ(0)", willChange: "transform" }}
-        >
-          <div className="max-w-3xl mx-auto flex items-stretch" style={{ height: "var(--dock-h)" }}>
-            {dockItems.map((item) => {
-              const active = isActive(item)
-              const Icon = item.icon
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => router.push(item.path)}
-                  className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
-                    active ? "text-gold" : "text-ink-soft"
-                  }`}
-                >
-                  <Icon active={active} />
-                  <span className={`text-[10px] font-mono ${active ? "font-semibold" : ""}`}>{item.label}</span>
-                </button>
-              )
-            })}
+        <nav ref={navRef} className="fixed inset-x-0 bottom-0 z-40" style={{ paddingBottom: DOCK_OFFSET }}>
+          <div className="relative max-w-3xl mx-auto px-4">
+            <div
+              ref={barRef}
+              // No backdrop-blur here -- `backdrop-filter` combined with
+              // `position: fixed` is a known WebKit bug on iOS where the
+              // element visually detaches and lags behind during momentum
+              // scrolling, snapping back into place once scrolling settles.
+              // bg-paper-2 is opaque enough on its own that the blur wasn't
+              // adding much.
+              className="flex items-stretch bg-paper-2 border border-hairline rounded-full shadow-lg px-1.5 py-1"
+              // iOS Safari can flicker/hide a `fixed` element mid-touch-drag
+              // (e.g. swiping Fund Breakdown's member carousel while this
+              // dock sits over a scrollable page) unless it's promoted to
+              // its own GPU compositing layer -- translateZ(0) forces that.
+              style={{ transform: "translateZ(0)", willChange: "transform" }}
+            >
+              {dockItems.map((item) => {
+                const active = isActive(item)
+                const Icon = item.icon
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => router.push(item.path)}
+                    className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-full transition-colors ${
+                      active ? "bg-gold/10" : ""
+                    }`}
+                  >
+                    <Icon active={active} />
+                    <span className={`text-[10px] font-mono ${active ? "text-gold font-semibold" : "text-ink-soft"}`}>
+                      {item.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Replaces the old header "+ New" button -- floats above the
+                pill (rather than beside it) so it reads as the one
+                emphasized action, not just another dock tab. Gold is
+                already this page's everywhere-accent (active tab, filter
+                border, chips), so a gold FAB read as just one more gold
+                thing instead of standing out -- bg-ink/text-paper plus a
+                gold glow is the same "primary action" language every
+                submit button elsewhere in the app already uses. */}
+            <button
+              ref={fabRef}
+              onClick={() => router.push("/transactions/new")}
+              aria-label="New Transaction"
+              className="absolute right-4 w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center shadow-lg shadow-gold/30 ring-1 ring-gold/40"
+              style={{ bottom: "calc(100% + 0.5rem)", transform: "translateZ(0)", willChange: "transform" }}
+            >
+              <span className="text-3xl leading-none font-light">+</span>
+            </button>
           </div>
         </nav>
       )}

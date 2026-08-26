@@ -219,7 +219,7 @@ const memberSections: FaqSection[] = [
         q: "How do I submit a contribution or withdrawal?",
         a: (
           <ol className="list-decimal list-inside space-y-1">
-            <li>Tap the gold <strong>+ New</strong> button, top right of any page.</li>
+            <li>Tap the gold <strong>+</strong> button floating above the bottom navigation.</li>
             <li>Choose <strong>Contribution</strong> or <strong>Withdrawal</strong>.</li>
             <li>
               For a Contribution, enter the amount and bank, and attach a receipt. For a{" "}

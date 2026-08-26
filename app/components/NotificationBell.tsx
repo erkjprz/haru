@@ -111,9 +111,9 @@ export function NotificationBell() {
 
     // Anchored via getBoundingClientRect + fixed positioning rather than
     // `absolute right-0` off the button's own wrapper -- the bell isn't
-    // always the right-most element in its header (a "+ New" button or
-    // Menu dropdown can sit to its right), so anchoring to the wrapper's
-    // own edge left too little room and pushed the panel off-screen.
+    // always the right-most element in its header (BorrowerHeader's own
+    // Menu dropdown sits to its right), so anchoring to the wrapper's own
+    // edge left too little room and pushed the panel off-screen.
     const rect = buttonRef.current?.getBoundingClientRect()
     if (rect) {
       const width = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2)

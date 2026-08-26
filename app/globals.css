@@ -22,11 +22,17 @@
   --slate: #4d6273;
   --hairline: #e3dccc;
 
-  /* Height of the fixed bottom dock (Navbar), excluding the device's own
-     safe-area inset -- every page that renders the dock adds this on top
-     of its usual bottom padding so content never ends up hidden under it.
-     Pages that hide the dock (transaction forms, which have their own
-     sticky footer) don't reference this. */
+  /* Clearance needed above the fixed bottom dock (Navbar) -- every page
+     that renders the dock adds this on top of its usual bottom padding so
+     content never ends up hidden under it. Pages that hide the dock
+     (transaction forms, which have their own sticky footer) don't
+     reference this, and neither does the borrower-only BorrowerHeader (no
+     dock/FAB at all), so this value has to stay reasonable for both: it's
+     close to the dock pill's own height alone, without the floating "+"
+     FAB's extra clearance above it. Navbar measures and overwrites this at
+     runtime with the taller, FAB-inclusive figure while it's mounted; this
+     is only the fallback for the first paint before that runs, and the
+     permanent value on any page that never mounts Navbar at all. */
   --dock-h: 3.75rem;
 }
 
