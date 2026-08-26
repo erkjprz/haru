@@ -1,0 +1,54 @@
+name: Sheet layout debug
+
+# Manual-only debugging aid for the New Transaction sheet's iOS/PWA layout
+# bugs -- not part of normal CI, never runs on push/PR. Logs in with a
+# throwaway test account (passed as inputs, not stored as a repo secret,
+# since this workflow is dispatched by hand each time it's needed) and
+# captures real DOM metrics + screenshots for both Chromium and WebKit
+# at an iPhone viewport, uploaded as a downloadable artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "Base URL of the deployment to test (no trailing slash)"
+        required: true
+      test_email:
+        description: "Test account email"
+        required: true
+      test_password:
+        description: "Test account password"
+        required: true
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mask credentials in logs
+        run: |
+          echo "::add-mask::${{ inputs.test_email }}"
+          echo "::add-mask::${{ inputs.test_password }}"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@latest
+          npx playwright install --with-deps chromium webkit
+
+      - name: Run sheet debug script
+        env:
+          TARGET_URL: ${{ inputs.target_url }}
+          TEST_EMAIL: ${{ inputs.test_email }}
+          TEST_PASSWORD: ${{ inputs.test_password }}
+        run: node .github/scripts/sheet-debug.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sheet-debug-artifacts
+          path: artifacts/
+          retention-days: 7
