@@ -3,19 +3,15 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
 
-// TEMPORARY -- the "793 is a hard platform ceiling shared by every app"
-// theory turned out to be wrong. Instrumenting a sibling app's own sheet
-// the same way showed its window.innerHeight reads 852 -- the full
-// physical screen -- on this exact device, not 793. So this was never
-// unfixable; something in this app's own config was shrinking
-// innerHeight/visualViewport itself. The one concrete difference found
-// between the two apps' viewport meta config: the sibling app sets
-// `maximumScale: 1`, this one didn't set it at all. Everything else
-// (viewportFit, appleWebApp/black-translucent, manifest display mode)
-// is identical between them. Added it in layout.tsx -- this build keeps
-// the same measurements to confirm whether that's actually what closes
-// the gap.
-const BUILD_TAG = "sheet-debug-9"
+// TEMPORARY -- maximumScale:1 made no difference (still 793, confirmed
+// on a freshly re-added home-screen icon too, ruling out a stale
+// install). Every source-level config comparison against the sibling
+// app that gets the full 852 has come up empty -- appleWebApp.capable
+// defaults to true in Next's own resolver even when unset, so that
+// wasn't a real difference either. Reading the actual rendered <meta>
+// tags directly instead of reasoning from source config, since that's
+// ground truth and source-diffing has been unreliable so far.
+const BUILD_TAG = "sheet-debug-10"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -78,11 +74,18 @@ export function Sheet({
       const safeAreaBottomPx = parseFloat(getComputedStyle(insetProbe).paddingBottom)
       document.body.removeChild(insetProbe)
 
+      const viewportMeta = document.querySelector('meta[name="viewport"]')?.getAttribute("content")
+      const statusBarMeta = document
+        .querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+        ?.getAttribute("content")
+      const capableMeta = document.querySelector('meta[name="apple-mobile-web-app-capable"]')?.getAttribute("content")
+
       setDebugInfo(
         `${BUILD_TAG} scrH:${window.screen.height} innerH:${window.innerHeight} ` +
           `panelBottom:${rect?.bottom.toFixed(0) ?? "?"} ` +
           `submitBottom:${submitRect?.bottom.toFixed(0) ?? "?"} ` +
-          `safeAreaBottomPx:${safeAreaBottomPx.toFixed(1)}`
+          `safeAreaBottomPx:${safeAreaBottomPx.toFixed(1)} ` +
+          `viewport:[${viewportMeta}] statusBar:[${statusBarMeta}] capable:[${capableMeta}]`
       )
     }
     update()
