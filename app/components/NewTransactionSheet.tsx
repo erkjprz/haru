@@ -5,10 +5,9 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { Sheet } from "@/app/components/Sheet"
 import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
-import { TypePickerSheet } from "@/app/components/TypePickerSheet"
+import { TypePickerSheet, TypeBadge } from "@/app/components/TypePickerSheet"
 import {
   AmountHero,
-  FlowBadge,
   StepTrack,
   ReviewRow,
   ReceiptField,
@@ -537,7 +536,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       onClick={() => setShowTypePicker(true)}
       className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
     >
-      <FlowBadge arrow={selectedTypeOption.arrow} tone={selectedTypeOption.tone} />
+      <TypeBadge arrow={selectedTypeOption.arrow} tone={selectedTypeOption.tone} />
       <span className="flex-1 min-w-0 text-sm">
         <span className="text-ink-soft">Type: </span>
         <span className="font-semibold text-ink">{selectedTypeOption.label}</span>
@@ -904,6 +903,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     {showTypePicker && (
       <TypePickerSheet
         options={withFlow(ENTRY_TYPES)}
+        value={selectedType}
         onClose={() => setShowTypePicker(false)}
         onSelect={(key) => {
           handleTypeChange(key)

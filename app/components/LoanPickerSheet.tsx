@@ -47,7 +47,7 @@ export function LoanPickerSheet({
       {loans.length === 0 ? (
         <p className="text-center text-sm text-ink-soft py-6">No active loans to pay against.</p>
       ) : (
-        <div className="bg-paper border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+        <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
           {loans.map((loan) => {
             const remaining = Math.max(
               0,
