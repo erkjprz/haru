@@ -96,6 +96,35 @@ function PersonIcon() {
   )
 }
 
+function PercentIcon() {
+  return (
+    <RowIcon>
+      <circle cx="7" cy="7" r="2.5" />
+      <circle cx="17" cy="17" r="2.5" />
+      <path d="M18 6L6 18" strokeLinecap="round" />
+    </RowIcon>
+  )
+}
+
+function ClockIcon() {
+  return (
+    <RowIcon>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7v5l3.5 2" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+// Same shape as Dashboard's "Repay Loan" shortcut icon.
+function RepeatIcon() {
+  return (
+    <RowIcon>
+      <path d="M4 12a8 8 0 0113.66-5.66M20 12a8 8 0 01-13.66 5.66" strokeLinecap="round" />
+      <path d="M17.5 3.5v3h-3M6.5 20.5v-3h3" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
 // One row of the compact Details card -- icon + inline content, divided
 // from its siblings by the card's own divide-y rather than its own border.
 function FieldRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
@@ -697,117 +726,104 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                       {onBehalfOfNote}
                     </div>
 
-                    <FieldGroup>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                            Interest
-                            <RequiredMark />
-                          </label>
-                          <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
+                    <div className="mt-4">
+                      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Loan Terms</p>
+                      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                        {/* Toggle + value share one row instead of stacking (toggle, then a
+                            second full-width input below it) -- the toggle only ever needs
+                            two glyphs' worth of width once it's not also carrying "Rate (%)"/
+                            "Fixed amount (₱)" as button text. */}
+                        <FieldRow icon={<PercentIcon />}>
+                          <input
+                            className={rowInputClass}
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            step="0.01"
+                            placeholder={interestType === "rate" ? "Interest rate, e.g. 5" : "Interest amount, e.g. 5000"}
+                            value={interestType === "rate" ? interestRate : interestAmount}
+                            onChange={(e) =>
+                              interestType === "rate" ? setInterestRate(e.target.value) : setInterestAmount(e.target.value)
+                            }
+                          />
+                          <div className="flex border border-hairline rounded-sm overflow-hidden shrink-0">
                             <button
                               type="button"
                               onClick={() => setInterestType("rate")}
-                              className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                                interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                              aria-label="Interest as a rate"
+                              className={`w-8 py-1.5 text-xs font-semibold transition-colors ${
+                                interestType === "rate" ? "bg-ink text-paper" : "text-ink-soft"
                               }`}
                             >
-                              Rate (%)
+                              %
                             </button>
                             <button
                               type="button"
                               onClick={() => setInterestType("amount")}
-                              className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                                interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                              aria-label="Interest as a fixed amount"
+                              className={`w-8 py-1.5 text-xs font-semibold border-l border-hairline transition-colors ${
+                                interestType === "amount" ? "bg-ink text-paper" : "text-ink-soft"
                               }`}
                             >
-                              Fixed amount (₱)
+                              ₱
                             </button>
                           </div>
-                          {interestType === "rate" ? (
-                            <input
-                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="e.g. 5"
-                              value={interestRate}
-                              onChange={(e) => setInterestRate(e.target.value)}
-                            />
-                          ) : (
-                            <input
-                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="e.g. 5000"
-                              value={interestAmount}
-                              onChange={(e) => setInterestAmount(e.target.value)}
-                            />
-                          )}
-                        </div>
+                        </FieldRow>
 
-                        <div>
-                          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                            Term (months)
-                            <RequiredMark />
-                          </label>
+                        <FieldRow icon={<ClockIcon />}>
                           <input
-                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                            className={rowInputClass}
                             type="number"
+                            inputMode="numeric"
                             min="1"
                             step="1"
-                            placeholder="e.g. 6"
+                            placeholder="Term, e.g. 6"
                             value={termMonths}
                             onChange={(e) => setTermMonths(e.target.value)}
                           />
-                        </div>
+                          <span className="text-xs text-ink-soft shrink-0">months</span>
+                        </FieldRow>
 
-                        <div>
-                          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Repayment mode</label>
-                          {/* A <select> here read as inconsistent right next to Interest's own
-                              2-button toggle above -- both are a binary either/or choice, so
-                              both get the same control instead of two different ones for the
-                              same kind of decision. */}
-                          <div className="flex border border-hairline rounded-sm overflow-hidden">
+                        <FieldRow icon={<RepeatIcon />}>
+                          <div className="flex-1 flex border border-hairline rounded-sm overflow-hidden">
                             <button
                               type="button"
                               onClick={() => setRepaymentFrequency("monthly")}
-                              className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                                repaymentFrequency === "monthly" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                              className={`flex-1 text-xs font-semibold py-2 transition-colors ${
+                                repaymentFrequency === "monthly" ? "bg-ink text-paper" : "text-ink-soft"
                               }`}
                             >
-                              Monthly installments
+                              Monthly
                             </button>
                             <button
                               type="button"
                               onClick={() => setRepaymentFrequency("lump_sum")}
-                              className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                                repaymentFrequency === "lump_sum" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                              className={`flex-1 text-xs font-semibold py-2 border-l border-hairline transition-colors ${
+                                repaymentFrequency === "lump_sum" ? "bg-ink text-paper" : "text-ink-soft"
                               }`}
                             >
                               Lump sum
                             </button>
                           </div>
-                        </div>
-
-                        {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                          <div className="border border-hairline rounded-md p-4 bg-paper">
-                            <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
-                            <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
-                              <span className="text-ink-soft">Total repayable</span>
-                              <span>₱{fmt(previewTotalRepayable)}</span>
-                            </div>
-                            <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
-                              <span className="text-ink-soft">
-                                {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
-                              </span>
-                              <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
-                            </div>
-                          </div>
-                        )}
+                        </FieldRow>
                       </div>
-                    </FieldGroup>
+
+                      {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
+                        <div className="border border-hairline rounded-md p-4 bg-paper mt-3">
+                          <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
+                          <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
+                            <span className="text-ink-soft">Total repayable</span>
+                            <span>₱{fmt(previewTotalRepayable)}</span>
+                          </div>
+                          <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
+                            <span className="text-ink-soft">
+                              {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
+                            </span>
+                            <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
 
