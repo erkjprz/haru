@@ -8,11 +8,8 @@ import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
 import { TypePickerSheet, TypeBadge } from "@/app/components/TypePickerSheet"
 import {
   AmountHero,
-  StepTrack,
-  ReviewRow,
   ReceiptField,
   RequiredMark,
-  FieldGroup,
   DateField
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
@@ -174,11 +171,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [loanPaymentBankDefault, setLoanPaymentBankDefault] = useState<string | null>(null)
   const [saveAsDefault, setSaveAsDefault] = useState(false)
 
-  // Loan Request is the only type in this reduced set with enough
-  // conditional fields to earn its own Details -> Review sub-flow --
-  // Contribution/Withdrawal/Loan Payment stay a single flowing view.
-  const [formStep, setFormStep] = useState<1 | 2>(1)
-
   async function loadLoansFor(id: string) {
     const { data: borrowerRow } = await supabase
       .from("borrowers")
@@ -283,7 +275,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const isLoanRequest = selectedType === "loan_request"
   const isLoanPayment = selectedType === "loan_payment"
   const isContribution = selectedType === "contribution"
-  const isStepped = isLoanRequest
   const needsReceipt = selectedType !== "withdrawal" && selectedType !== "loan_request"
   const needsBank = isContribution || isLoanPayment
   // Contribution and Loan Payment collect bank + receipt right here, so an
@@ -312,7 +303,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
   async function handleTypeChange(newType: string) {
     setSelectedType(newType)
-    setFormStep(1)
     setMessage("")
     setReceiptFile(null)
     setBankId("")
@@ -358,30 +348,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         if (selectedType === "loan_payment" && loanPayBank) setBankId(loanPayBank)
       }
     }
-  }
-
-  function detailsStepError(): string {
-    if (!isValidPositiveNumber(amount)) return "Enter a valid amount greater than zero."
-    if (isLoanRequest) {
-      if (interestType === "rate" && !isValidPositiveNumber(interestRate, true)) {
-        return "Enter a valid interest rate (0 or higher)."
-      }
-      if (interestType === "amount" && !isValidPositiveNumber(interestAmount, true)) {
-        return "Enter a valid interest amount (0 or higher)."
-      }
-      if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
-    }
-    return ""
-  }
-
-  function handleContinueToReview() {
-    const error = detailsStepError()
-    if (error) {
-      setMessage(error)
-      return
-    }
-    setMessage("")
-    setFormStep(2)
   }
 
   async function handleSubmit() {
@@ -576,25 +542,14 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       footer={
         <>
           {message && <p className="text-sm text-rust mb-3">{message}</p>}
-          <div className="flex items-center gap-3">
-            {isStepped && formStep === 2 && (
-              <button
-                type="button"
-                className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold"
-                onClick={() => setFormStep(1)}
-              >
-                Back
-              </button>
-            )}
-            <button
-              type="button"
-              className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
-              onClick={isStepped && formStep === 1 ? handleContinueToReview : handleSubmit}
-              disabled={submitting || dataLoading}
-            >
-              {submitting ? "Submitting…" : isStepped && formStep === 1 ? "Continue" : "Submit"}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+            onClick={handleSubmit}
+            disabled={submitting || dataLoading}
+          >
+            {submitting ? "Submitting…" : "Submit"}
+          </button>
         </>
       }
     >
@@ -607,284 +562,221 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
           <AmountHero value={amount} onChange={setAmount} />
 
           <div className="space-y-4 mt-4">
-            {!isStepped && (
-              <>
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
-                  <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
-                    {typeField}
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
+              <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                {typeField}
 
-                    <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
+                <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
 
-                    {onBehalfOfField}
+                {onBehalfOfField}
 
-                    {isLoanPayment &&
-                      (activeLoans.length === 0 ? (
-                        // No picker to open, nothing to tap -- a plain notice
-                        // line earns none of the full row's icon/chevron/
-                        // padding weight the tappable state below gets.
-                        <p className="px-4 py-2 text-xs text-rust">No active loans to pay against</p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setShowLoanPicker(true)}
-                          className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
-                        >
-                          <LoanRowIcon />
-                          <span className="flex-1 min-w-0 text-sm">
-                            {selectedLoan ? (
-                              <span className="text-ink">
-                                ₱{fmt(selectedLoan.principal)} from {selectedLoan.start_date}
-                              </span>
-                            ) : (
-                              <span className="text-ink-soft">Which loan</span>
-                            )}
+                {isLoanPayment &&
+                  (activeLoans.length === 0 ? (
+                    // No picker to open, nothing to tap -- a plain notice
+                    // line earns none of the full row's icon/chevron/
+                    // padding weight the tappable state below gets.
+                    <p className="px-4 py-2 text-xs text-rust">No active loans to pay against</p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowLoanPicker(true)}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                    >
+                      <LoanRowIcon />
+                      <span className="flex-1 min-w-0 text-sm">
+                        {selectedLoan ? (
+                          <span className="text-ink">
+                            ₱{fmt(selectedLoan.principal)} from {selectedLoan.start_date}
                           </span>
-                          <span className="text-ink-soft text-xs shrink-0">▾</span>
-                        </button>
+                        ) : (
+                          <span className="text-ink-soft">Which loan</span>
+                        )}
+                      </span>
+                      <span className="text-ink-soft text-xs shrink-0">▾</span>
+                    </button>
+                  ))}
+
+                {needsBank && (
+                  <FieldRow icon={<BankIcon />}>
+                    <select className={rowSelectClass} value={bankId} onChange={(e) => setBankId(e.target.value)}>
+                      <option value="">Select a bank</option>
+                      {banks.map((bank) => (
+                        <option key={bank.id} value={bank.id}>
+                          {bank.account_name || bank.bank_name}
+                        </option>
                       ))}
+                    </select>
+                  </FieldRow>
+                )}
 
-                    {needsBank && (
-                      <FieldRow icon={<BankIcon />}>
-                        <select className={rowSelectClass} value={bankId} onChange={(e) => setBankId(e.target.value)}>
-                          <option value="">Select a bank</option>
-                          {banks.map((bank) => (
-                            <option key={bank.id} value={bank.id}>
-                              {bank.account_name || bank.bank_name}
-                            </option>
-                          ))}
-                        </select>
-                      </FieldRow>
-                    )}
+                <FieldRow icon={<NoteIcon />}>
+                  <input
+                    className={rowInputClass}
+                    placeholder="Add a note"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                </FieldRow>
+              </div>
 
-                    <FieldRow icon={<NoteIcon />}>
-                      <input
-                        className={rowInputClass}
-                        placeholder="Add a note"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                      />
-                    </FieldRow>
-                  </div>
+              {onBehalfOfNote}
 
-                  {onBehalfOfNote}
+              {isLoanPayment &&
+                selectedLoanId &&
+                (() => {
+                  if (!selectedLoan) return null
+                  const remaining =
+                    totalRepayable(
+                      Number(selectedLoan.principal),
+                      selectedLoan.interest_type,
+                      Number(selectedLoan.interest_rate || 0),
+                      Number(selectedLoan.interest_amount || 0)
+                    ) - (loanRepaidTotals[selectedLoan.loan_id] || 0)
+                  return <p className="px-1 pt-2 text-sm text-ink-soft">₱{fmt(Math.max(0, remaining))} left to pay</p>
+                })()}
 
-                  {isLoanPayment &&
-                    selectedLoanId &&
-                    (() => {
-                      if (!selectedLoan) return null
-                      const remaining =
-                        totalRepayable(
-                          Number(selectedLoan.principal),
-                          selectedLoan.interest_type,
-                          Number(selectedLoan.interest_rate || 0),
-                          Number(selectedLoan.interest_amount || 0)
-                        ) - (loanRepaidTotals[selectedLoan.loan_id] || 0)
-                      return <p className="px-1 pt-2 text-sm text-ink-soft">₱{fmt(Math.max(0, remaining))} left to pay</p>
-                    })()}
+              {showSaveAsDefault && isValidPositiveNumber(amount) && (
+                <label className="flex items-start gap-2.5 text-sm text-ink-soft px-1 pt-3">
+                  <input
+                    type="checkbox"
+                    checked={saveAsDefault}
+                    onChange={(e) => setSaveAsDefault(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 shrink-0"
+                  />
+                  Save ₱{fmt(Number(amount))}
+                  {bankId ? ` and ${bankLabel(bankId)}` : ""} as{" "}
+                  {onBehalfOfId ? `${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}'s` : "my"} default{" "}
+                  {isContribution ? "contribution" : "loan payment"} {bankId ? "amount and bank" : "amount"}
+                </label>
+              )}
+            </div>
 
-                  {showSaveAsDefault && isValidPositiveNumber(amount) && (
-                    <label className="flex items-start gap-2.5 text-sm text-ink-soft px-1 pt-3">
-                      <input
-                        type="checkbox"
-                        checked={saveAsDefault}
-                        onChange={(e) => setSaveAsDefault(e.target.checked)}
-                        className="w-4 h-4 mt-0.5 shrink-0"
-                      />
-                      Save ₱{fmt(Number(amount))}
-                      {bankId ? ` and ${bankLabel(bankId)}` : ""} as{" "}
-                      {onBehalfOfId ? `${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}'s` : "my"} default{" "}
-                      {isContribution ? "contribution" : "loan payment"} {bankId ? "amount and bank" : "amount"}
-                    </label>
+            {isLoanRequest && (
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Loan Terms</p>
+                <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                  {/* Toggle + value share one row instead of stacking (toggle, then a
+                      second full-width input below it) -- the toggle only ever needs
+                      two glyphs' worth of width once it's not also carrying "Rate (%)"/
+                      "Fixed amount (₱)" as button text. */}
+                  <FieldRow icon={<InterestIcon />}>
+                    <input
+                      className={rowInputClass}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      placeholder={interestType === "rate" ? "Interest rate, e.g. 5" : "Interest amount, e.g. 5000"}
+                      value={interestType === "rate" ? interestRate : interestAmount}
+                      onChange={(e) =>
+                        interestType === "rate" ? setInterestRate(e.target.value) : setInterestAmount(e.target.value)
+                      }
+                    />
+                    <div className="flex border border-hairline rounded-sm overflow-hidden shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setInterestType("rate")}
+                        aria-label="Interest as a rate"
+                        className={`w-8 py-1.5 text-xs font-semibold transition-colors ${
+                          interestType === "rate" ? "bg-ink text-paper" : "text-ink-soft"
+                        }`}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInterestType("amount")}
+                        aria-label="Interest as a fixed amount"
+                        className={`w-8 py-1.5 text-xs font-semibold border-l border-hairline transition-colors ${
+                          interestType === "amount" ? "bg-ink text-paper" : "text-ink-soft"
+                        }`}
+                      >
+                        ₱
+                      </button>
+                    </div>
+                  </FieldRow>
+
+                  <FieldRow icon={<ClockIcon />}>
+                    <input
+                      className={rowInputClass}
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      step="1"
+                      placeholder="Term, e.g. 6"
+                      value={termMonths}
+                      onChange={(e) => setTermMonths(e.target.value)}
+                    />
+                    <span className="text-xs text-ink-soft shrink-0">months</span>
+                  </FieldRow>
+
+                  <FieldRow icon={<RepeatIcon />}>
+                    <div className="flex-1 flex border border-hairline rounded-sm overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setRepaymentFrequency("monthly")}
+                        className={`flex-1 text-xs font-semibold py-2 transition-colors ${
+                          repaymentFrequency === "monthly" ? "bg-ink text-paper" : "text-ink-soft"
+                        }`}
+                      >
+                        Monthly
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRepaymentFrequency("lump_sum")}
+                        className={`flex-1 text-xs font-semibold py-2 border-l border-hairline transition-colors ${
+                          repaymentFrequency === "lump_sum" ? "bg-ink text-paper" : "text-ink-soft"
+                        }`}
+                      >
+                        Lump sum
+                      </button>
+                    </div>
+                  </FieldRow>
+
+                  {/* Right in the same card, directly under the fields that produce
+                      it -- previously a separate box below the card, easy to miss
+                      without scrolling since nothing here visually tied it to Interest/
+                      Term/Repayment above it. bg-gold/10 is the app's own "highlighted
+                      result" accent (the selected row in a dropdown, the FAB glow)
+                      rather than the plain bg-paper the old box used, which in dark
+                      mode is darker than the card itself and read as dead. */}
+                  {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
+                    <>
+                      <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
+                        <span className="text-sm font-semibold text-ink">Total repayable</span>
+                        <span className="text-sm font-bold font-mono [font-variant-numeric:tabular-nums] text-gold">
+                          ₱{fmt(previewTotalRepayable)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
+                        <span className="text-sm text-ink-soft">
+                          {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
+                        </span>
+                        <span className="text-sm font-semibold font-mono [font-variant-numeric:tabular-nums] text-ink">
+                          ₱{fmt(previewPerInstallment)}
+                        </span>
+                      </div>
+                    </>
                   )}
                 </div>
-
-                {needsReceipt && (
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
-                      Receipt
-                      <RequiredMark />
-                    </p>
-                    <ReceiptField
-                      receipt={receipt}
-                      receiptPreview={receiptPreview}
-                      dragActive={dragActive}
-                      setDragActive={setDragActive}
-                      onFileChange={setReceiptFile}
-                    />
-                  </div>
-                )}
-              </>
+              </div>
             )}
 
-            {isStepped && (
-              <>
-                <StepTrack step={formStep} labels={["Details", "Review"]} />
-
-                {formStep === 1 && (
-                  <>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
-                      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
-                        {typeField}
-
-                        <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
-
-                        {onBehalfOfField}
-
-                        <FieldRow icon={<NoteIcon />}>
-                          <input
-                            className={rowInputClass}
-                            placeholder="Add a note"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                          />
-                        </FieldRow>
-                      </div>
-
-                      {onBehalfOfNote}
-                    </div>
-
-                    <div className="mt-4">
-                      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Loan Terms</p>
-                      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
-                        {/* Toggle + value share one row instead of stacking (toggle, then a
-                            second full-width input below it) -- the toggle only ever needs
-                            two glyphs' worth of width once it's not also carrying "Rate (%)"/
-                            "Fixed amount (₱)" as button text. */}
-                        <FieldRow icon={<InterestIcon />}>
-                          <input
-                            className={rowInputClass}
-                            type="number"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.01"
-                            placeholder={interestType === "rate" ? "Interest rate, e.g. 5" : "Interest amount, e.g. 5000"}
-                            value={interestType === "rate" ? interestRate : interestAmount}
-                            onChange={(e) =>
-                              interestType === "rate" ? setInterestRate(e.target.value) : setInterestAmount(e.target.value)
-                            }
-                          />
-                          <div className="flex border border-hairline rounded-sm overflow-hidden shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => setInterestType("rate")}
-                              aria-label="Interest as a rate"
-                              className={`w-8 py-1.5 text-xs font-semibold transition-colors ${
-                                interestType === "rate" ? "bg-ink text-paper" : "text-ink-soft"
-                              }`}
-                            >
-                              %
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setInterestType("amount")}
-                              aria-label="Interest as a fixed amount"
-                              className={`w-8 py-1.5 text-xs font-semibold border-l border-hairline transition-colors ${
-                                interestType === "amount" ? "bg-ink text-paper" : "text-ink-soft"
-                              }`}
-                            >
-                              ₱
-                            </button>
-                          </div>
-                        </FieldRow>
-
-                        <FieldRow icon={<ClockIcon />}>
-                          <input
-                            className={rowInputClass}
-                            type="number"
-                            inputMode="numeric"
-                            min="1"
-                            step="1"
-                            placeholder="Term, e.g. 6"
-                            value={termMonths}
-                            onChange={(e) => setTermMonths(e.target.value)}
-                          />
-                          <span className="text-xs text-ink-soft shrink-0">months</span>
-                        </FieldRow>
-
-                        <FieldRow icon={<RepeatIcon />}>
-                          <div className="flex-1 flex border border-hairline rounded-sm overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => setRepaymentFrequency("monthly")}
-                              className={`flex-1 text-xs font-semibold py-2 transition-colors ${
-                                repaymentFrequency === "monthly" ? "bg-ink text-paper" : "text-ink-soft"
-                              }`}
-                            >
-                              Monthly
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setRepaymentFrequency("lump_sum")}
-                              className={`flex-1 text-xs font-semibold py-2 border-l border-hairline transition-colors ${
-                                repaymentFrequency === "lump_sum" ? "bg-ink text-paper" : "text-ink-soft"
-                              }`}
-                            >
-                              Lump sum
-                            </button>
-                          </div>
-                        </FieldRow>
-
-                        {/* Right in the same card, directly under the fields that produce
-                            it -- previously a separate box below the card, easy to miss
-                            without scrolling since nothing here visually tied it to Interest/
-                            Term/Repayment above it. bg-gold/10 is the app's own "highlighted
-                            result" accent (StepTrack, the selected row in a dropdown, the FAB
-                            glow) rather than the plain bg-paper the old box used, which in
-                            dark mode is darker than the card itself and read as dead. */}
-                        {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                          <>
-                            <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
-                              <span className="text-sm font-semibold text-ink">Total repayable</span>
-                              <span className="text-sm font-bold font-mono [font-variant-numeric:tabular-nums] text-gold">
-                                ₱{fmt(previewTotalRepayable)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
-                              <span className="text-sm text-ink-soft">
-                                {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
-                              </span>
-                              <span className="text-sm font-semibold font-mono [font-variant-numeric:tabular-nums] text-ink">
-                                ₱{fmt(previewPerInstallment)}
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {formStep === 2 && (
-                  <FieldGroup>
-                    <ReviewRow label="Type" value={ENTRY_TYPES.find((t) => t.key === selectedType)?.label ?? ""} />
-                    <ReviewRow label="Amount to borrow" value={`₱${fmt(isValidPositiveNumber(amount) ? Number(amount) : 0)}`} />
-                    <ReviewRow
-                      label="Date"
-                      value={new Date(`${txnDate}T00:00:00`).toLocaleDateString(undefined, {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric"
-                      })}
-                    />
-                    {onBehalfOfId && (
-                      <ReviewRow label="On behalf of" value={allMembers.find((m) => m.member_id === onBehalfOfId)?.name ?? ""} />
-                    )}
-                    <ReviewRow
-                      label="Interest"
-                      value={interestType === "rate" ? `${interestRate || 0}%` : `₱${fmt(Number(interestAmount) || 0)} fixed`}
-                    />
-                    <ReviewRow label="Term" value={`${termMonths || 0} months`} />
-                    <ReviewRow
-                      label="Repayment"
-                      value={repaymentFrequency === "monthly" ? "Monthly installments" : "Lump sum at end of term"}
-                    />
-                    {previewTotalRepayable > 0 && <ReviewRow label="Est. total repayable" value={`₱${fmt(previewTotalRepayable)}`} />}
-                    {description && <ReviewRow label="Description" value={description} />}
-                  </FieldGroup>
-                )}
-              </>
+            {needsReceipt && (
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
+                  Receipt
+                  <RequiredMark />
+                </p>
+                <ReceiptField
+                  receipt={receipt}
+                  receiptPreview={receiptPreview}
+                  dragActive={dragActive}
+                  setDragActive={setDragActive}
+                  onFileChange={setReceiptFile}
+                />
+              </div>
             )}
           </div>
         </>
