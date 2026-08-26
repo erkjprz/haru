@@ -27,6 +27,42 @@ export function Sheet({
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // Locks the page behind the sheet from scrolling while it's open. A
+  // plain `overflow: hidden` on body doesn't reliably stop it on iOS
+  // Safari (a well-known quirk -- touch-scrolling the backdrop can still
+  // drag the page underneath), so this pins body in place with `position:
+  // fixed` instead and restores the exact scroll position on close. Each
+  // Sheet captures/restores whatever was already on body when it mounted,
+  // not a hardcoded default, so this nests correctly when a picker sheet
+  // (loan, type) opens on top of this one -- the inner one's cleanup just
+  // hands back the outer one's own locked state, not real scroll.
+  useEffect(() => {
+    const scrollY = window.scrollY
+    const body = document.body
+    const previous = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      overflow: body.style.overflow
+    }
+
+    body.style.position = "fixed"
+    body.style.top = `-${scrollY}px`
+    body.style.left = "0"
+    body.style.right = "0"
+    body.style.overflow = "hidden"
+
+    return () => {
+      body.style.position = previous.position
+      body.style.top = previous.top
+      body.style.left = previous.left
+      body.style.right = previous.right
+      body.style.overflow = previous.overflow
+      window.scrollTo(0, scrollY)
+    }
+  }, [])
+
   function handleClose() {
     setOpen(false)
     setTimeout(onClose, 200)
