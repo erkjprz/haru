@@ -3,23 +3,33 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
 
-// TEMPORARY -- the on-device readout showed vpH/innerH pinned at 793
-// against a screen height of 852, with the panel exactly filling that
-// 793px and clipped:false -- i.e. our own JS-measured "viewport" is
-// genuinely 59px short of the physical screen, not a clipping bug. A
-// side-by-side against another installed PWA (Budget) shows its own
-// sheet's Save button sitting flush near the true bottom, well past
-// where our 793px figure would allow. That app isn't fighting iOS for
-// those 59px with JS the way this one was -- it's plain CSS. `dvh` is
-// WebKit's own purpose-built unit for exactly this (a live-tracking
-// viewport height, safe-area aware with viewport-fit=cover already set
-// in layout.tsx), and visualViewport.height/innerHeight are a JS-side
-// figure that on iOS standalone PWAs can under-report versus what CSS
-// dvh resolves to. So this build drops the JS-measured inline height
-// override entirely and goes back to trusting h-dvh/max-h-[92dvh]
-// (pure CSS) the whole way. Remove this readout once a fresh on-device
-// screenshot confirms the panel now reaches the true bottom.
-const BUILD_TAG = "sheet-debug-4"
+// TEMPORARY -- git history shows dvh/svh were already independently
+// diagnosed once before (same as visualViewport/innerHeight): all cap at
+// the same ~793px on this device, 59px short of window.screen.height
+// (852), regardless of which of those four numbers drives the wrapper.
+// So the fix isn't picking a different LENGTH value -- every length-based
+// one agrees. The wrapper is `position:fixed; top:0; height:<length>`,
+// and the panel sits `bottom:0` *inside* that wrapper, so the panel's
+// floor is wherever the wrapper's `height` value lands, always, no
+// matter which of those four numbers it is.
+//
+// The untried lever: don't give the wrapper a `height` at all. Anchor it
+// with `top:0` AND `bottom:0` instead (no explicit length). A
+// position:fixed box sized that way gets its height from the gap between
+// two edges resolved against the containing block directly, not from a
+// `vh`/`dvh`/`innerHeight` *value* -- and iOS has a known standalone-PWA
+// bug where those length values under-report versus the edge-to-edge
+// span (this is likely that exact bug: the missing 59px lines up with
+// the size of the translucent status bar, which those length values
+// still subtract even though `black-translucent` means it's not
+// actually reserving layout space). Standalone-only: the *reason*
+// `top:0;height:dvh` was used over `inset-0` in the first place was a
+// different, real bug in a plain browser TAB (the dynamic toolbar can
+// make edge-anchoring overshoot past what's currently visible) -- that
+// risk doesn't apply here since standalone has no toolbar to hide/show.
+// Remove this readout once a fresh on-device screenshot confirms the
+// panel now reaches the true bottom.
+const BUILD_TAG = "sheet-debug-5"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -42,6 +52,12 @@ export function Sheet({
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const [debugInfo, setDebugInfo] = useState("")
+  // Starts false (the plain-tab-safe layout) until this effect can check --
+  // see BUILD_TAG comment above for why standalone gets a different anchor.
+  const [standalone, setStandalone] = useState(false)
+  useEffect(() => {
+    setStandalone(window.matchMedia("(display-mode: standalone)").matches)
+  }, [])
   useEffect(() => {
     const raf = requestAnimationFrame(() => setOpen(true))
     return () => cancelAnimationFrame(raf)
@@ -129,15 +145,16 @@ export function Sheet({
 
   return (
     <Portal>
-      {/* top-0 + h-dvh instead of inset-0 -- iOS Safari can size a fixed
-          element's containing block against the toolbar-hidden layout
-          viewport, which is taller than what's actually visible while the
-          toolbar is showing, so inset-0's implied 0-to-0 span can reach
-          past the real visible bottom edge. `dvh` tracks the real,
-          currently-visible viewport live (that's its whole purpose), so
-          no JS-measured pixel override on top of it -- see BUILD_TAG
-          comment above for why that override was actually the bug. */}
-      <div className="fixed top-0 left-0 right-0 h-dvh z-50">
+      {/* top-0 + h-dvh in a plain browser tab -- iOS Safari can size a
+          fixed element's containing block against the toolbar-hidden
+          layout viewport, which is taller than what's actually visible
+          while the toolbar is showing, so inset-0's implied 0-to-0 span
+          can reach past the real visible bottom edge there. Standalone
+          has no toolbar to hide/show, so that risk doesn't apply --
+          anchoring both top AND bottom instead of a `height` length
+          value is the untried lever for the installed-PWA gap; see
+          BUILD_TAG comment above. */}
+      <div className={`fixed top-0 left-0 right-0 z-50 ${standalone ? "bottom-0" : "h-dvh"}`}>
         {/* No backdrop-blur -- `backdrop-filter` combined with
             `position: fixed` is a known WebKit bug on iOS (confirmed on a
             sibling app's bottom nav, same combination) where the element's
@@ -153,7 +170,7 @@ export function Sheet({
         />
         <div
           ref={panelRef}
-          className={`absolute left-0 right-0 bottom-0 max-h-[92dvh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          className={`absolute left-0 right-0 bottom-0 ${standalone ? "max-h-[92%]" : "max-h-[92dvh]"} flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             open ? "translate-y-0" : "translate-y-full"
           }`}
         >
