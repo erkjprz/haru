@@ -3,33 +3,28 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
 
-// TEMPORARY -- decoupling the panel from its wrapper (previous build)
-// made no difference at all: panelBottom was still exactly 793, same as
-// every other technique tried (visualViewport, dvh, svh, screen.height,
-// edge-anchoring). That's now six different ways of sizing/anchoring a
-// `position: fixed` element, all landing on the identical number -- this
-// isn't a technique problem, `position: fixed` itself appears to have a
-// hard paint ceiling at 793 in this exact device/standalone context,
-// full stop.
+// TEMPORARY -- the last build's diagnostic answered the question: docH
+// (document.documentElement's own rendered height, nothing to do with
+// position:fixed compositing) was ALSO exactly 793, and so was a plain
+// position:absolute probe anchored straight to <html>. That rules out
+// position:fixed entirely -- the actual HTML document only HAS 793px of
+// layout space to hand out in this exact context (iPhone, installed
+// home-screen app). No CSS technique on our own elements can put content
+// in the remaining 59px, because it was never part of the page's canvas
+// to begin with. That's very likely iOS reserving the status-bar height
+// for the layout viewport even though `black-translucent` makes it look
+// like it's overlaying content -- 59px lines up with the Dynamic Island
+// status bar height on this size of device.
 //
-// Before guessing at a seventh technique, this build adds a real
-// diagnostic instead: docH/bodyH read `document.documentElement` and
-// `document.body`'s own rendered heights (unaffected by fixed-position
-// compositing), and absProbeBottom measures where a plain
-// `position: absolute; bottom: 0` element resolves when appended
-// directly to `<html>` (bypassing `<body>`, which our own scroll-lock
-// effect makes `position: fixed` while the sheet is open, so testing
-// against body would just inherit body's own potential cap). If docH/
-// absProbeBottom read ~852, the *document* isn't capped -- only
-// `position: fixed`'s own containing-block math is -- and the real fix
-// is to stop using `position: fixed` for the panel, since body is
-// already scroll-locked while the sheet is open anyway, so fixed's
-// viewport-pinning behavior isn't even needed here. If they also read
-// ~793, the whole page is capped in this context, matching the sibling
-// app's root-layout finding, and the fix has to be more structural.
-// Remove this readout once we know which one it is and have shipped
-// the real fix.
-const BUILD_TAG = "sheet-debug-7"
+// So the button never was going to reach y:852, and almost certainly
+// neither does Budget's -- same platform, same "standalone" manifest
+// display mode on both. The real difference is likely just how much of
+// the *shared* 793px canvas each app's own footer padding eats up.
+// This build measures that directly: safeAreaBottomPx reads what
+// `env(safe-area-inset-bottom)` actually resolves to here (rather than
+// assuming the usual 34px), and submitBottom reads the Submit button's
+// own bottom edge, not just the panel's.
+const BUILD_TAG = "sheet-debug-8"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -51,6 +46,7 @@ export function Sheet({
 }) {
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
+  const footerRef = useRef<HTMLDivElement>(null)
   const [debugInfo, setDebugInfo] = useState("")
   useEffect(() => {
     const raf = requestAnimationFrame(() => setOpen(true))
@@ -79,28 +75,23 @@ export function Sheet({
   useEffect(() => {
     function update() {
       const rect = panelRef.current?.getBoundingClientRect()
+      const submitRect = footerRef.current?.querySelector("button")?.getBoundingClientRect()
 
-      // Appended directly to <html>, not <body> -- see BUILD_TAG comment
-      // above for why body itself isn't a clean control here.
-      const probe = document.createElement("div")
-      probe.style.position = "absolute"
-      probe.style.left = "0"
-      probe.style.bottom = "0"
-      probe.style.width = "1px"
-      probe.style.height = "1px"
-      probe.style.pointerEvents = "none"
-      probe.style.opacity = "0"
-      document.documentElement.appendChild(probe)
-      const absProbeBottom = probe.getBoundingClientRect().bottom
-      document.documentElement.removeChild(probe)
+      // Probes what `env(safe-area-inset-bottom)` actually resolves to
+      // here, instead of assuming the usual ~34px figure.
+      const insetProbe = document.createElement("div")
+      insetProbe.style.position = "absolute"
+      insetProbe.style.visibility = "hidden"
+      insetProbe.style.paddingBottom = "env(safe-area-inset-bottom)"
+      document.body.appendChild(insetProbe)
+      const safeAreaBottomPx = parseFloat(getComputedStyle(insetProbe).paddingBottom)
+      document.body.removeChild(insetProbe)
 
       setDebugInfo(
         `${BUILD_TAG} scrH:${window.screen.height} innerH:${window.innerHeight} ` +
-          `standalone:${window.matchMedia("(display-mode: standalone)").matches} ` +
-          `panelBottom:${rect?.bottom.toFixed(0) ?? "?"} clipped:${rect ? rect.bottom > window.innerHeight : "?"} ` +
-          `docH:${document.documentElement.getBoundingClientRect().height.toFixed(0)} ` +
-          `bodyH:${document.body.getBoundingClientRect().height.toFixed(0)} ` +
-          `absProbeBottom:${absProbeBottom.toFixed(0)}`
+          `panelBottom:${rect?.bottom.toFixed(0) ?? "?"} ` +
+          `submitBottom:${submitRect?.bottom.toFixed(0) ?? "?"} ` +
+          `safeAreaBottomPx:${safeAreaBottomPx.toFixed(1)}`
       )
     }
     update()
@@ -209,6 +200,7 @@ export function Sheet({
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pb-4">{children}</div>
         {footer && (
           <div
+            ref={footerRef}
             className="px-4 pt-3 flex-shrink-0 border-t border-hairline"
             style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
           >
