@@ -14,21 +14,12 @@ export function Sheet({
   title,
   onClose,
   children,
-  footer,
-  tall
+  footer
 }: {
   title: string
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
-  // Forces a fixed near-full height instead of shrinking to fit content --
-  // for a form-shaped sheet (NewTransactionSheet) whose content length
-  // varies a lot by transaction type, so a short type (Contribution)
-  // doesn't leave a slab of bare backdrop exposed above a panel that
-  // only covers the bottom slice of the screen. A short picker sheet
-  // (Type, Loan) wants the opposite -- hugging its actual handful of
-  // rows like an action sheet -- so this stays opt-in per caller.
-  tall?: boolean
 }) {
   const [open, setOpen] = useState(false)
   useEffect(() => {
@@ -79,13 +70,7 @@ export function Sheet({
 
   return (
     <Portal>
-      {/* top-0 + h-dvh instead of inset-0 -- iOS Safari sizes a fixed
-          element's containing block against the toolbar-hidden layout
-          viewport, which is taller than what's actually on screen while
-          the toolbar is showing, so inset-0's implied 0-to-0 span can
-          reach past the real visible bottom edge. An explicit dvh height
-          tracks the actual visible viewport instead. */}
-      <div className="fixed top-0 left-0 right-0 h-dvh z-50">
+      <div className="fixed inset-0 z-50">
         <div
           className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-200 ${
             open ? "opacity-100" : "opacity-0"
@@ -93,23 +78,7 @@ export function Sheet({
           onClick={handleClose}
         />
         <div
-          // A fixed height (rather than a min-height) for the tall case --
-          // a min-height still leaves a gap above whenever content falls
-          // short of it, just a smaller one. Pinning the height outright
-          // keeps the panel at a consistent, near-full size no matter which
-          // transaction type is showing, same as when the content
-          // naturally filled it; the content area's own overflow-y-auto
-          // still takes over if a type ever runs long enough to need it.
-          //
-          // dvh, not vh -- vh is pinned to the tallest possible viewport
-          // (toolbar hidden), which on iOS Safari is taller than what's
-          // actually visible whenever the address bar/toolbar is showing.
-          // bottom-0 is still anchored to the real visible viewport, so
-          // that mismatch didn't move the panel's top edge up to close a
-          // gap -- it opened a gap at the *bottom* instead, between the
-          // panel and the real edge of the screen. dvh tracks the actual
-          // visible viewport instead, so the two stay in sync.
-          className={`absolute left-0 right-0 bottom-0 ${tall ? "h-[90dvh]" : "max-h-[92dvh]"} flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          className={`absolute left-0 right-0 bottom-0 max-h-[92vh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             open ? "translate-y-0" : "translate-y-full"
           }`}
         >
