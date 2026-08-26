@@ -84,8 +84,15 @@ export function Sheet({
   return (
     <Portal>
       <div className="fixed inset-0 z-50">
+        {/* No backdrop-blur -- `backdrop-filter` combined with
+            `position: fixed` is a known WebKit bug on iOS (confirmed on a
+            sibling app's bottom nav, same combination) where the element's
+            compositing goes wrong, independent of its actual DOM box --
+            layout stays correct but the paint doesn't, which matches how
+            no amount of resizing/repositioning this panel ever changed
+            what rendered. bg-black/80 is opaque enough on its own. */}
         <div
-          className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-200 ${
+          className={`absolute inset-0 bg-black/80 transition-opacity duration-200 ${
             open ? "opacity-100" : "opacity-0"
           }`}
           onClick={handleClose}
