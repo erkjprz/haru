@@ -94,7 +94,13 @@ export function Sheet({
               ×
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-4 pb-4">{children}</div>
+          {/* overscroll-contain stops scroll chaining: without it, dragging
+              past the top/bottom of this list on a touch device hands the
+              rest of the gesture to whatever's behind it (the backdrop, the
+              locked page), which can register as the tap that closes the
+              sheet mid-scroll -- e.g. scrolling back up to reach the Amount
+              field after it's passed off the top of the view. */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">{children}</div>
           {footer && (
             <div
               className="px-4 pt-3 flex-shrink-0 border-t border-hairline"
