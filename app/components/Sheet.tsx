@@ -11,7 +11,7 @@ import { Portal } from "@/app/components/Portal"
 // panel/footer numbers show whether the wrapper/panel math itself is
 // still off, or whether something else is clipping it. Remove once
 // confirmed either way.
-const BUILD_TAG = "sheet-debug-2"
+const BUILD_TAG = "sheet-debug-3"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -54,38 +54,26 @@ export function Sheet({
     window.scrollTo(0, 0)
   }, [])
 
-  // In the installed home-screen app, every viewport-derived number --
-  // `visualViewport.height`, `100dvh`, `100svh`, even a bare
-  // `position: fixed; inset: 0` probe -- independently agreed on a height
-  // some tens of pixels short of `window.screen.height` (confirmed via an
-  // on-device readout: 793 vs. 852 on the reporting device, of which only
-  // the legitimate `env(safe-area-inset-bottom)` accounted for part of the
-  // gap). That ruled out any of those being a measurement bug to swap
-  // around; the browser's *default* sizing for position:fixed content is
-  // just short of the real screen there. `window.screen.height` isn't
-  // derived from viewport/fixed-position layout at all, and forcing it as
-  // an explicit override was confirmed (same on-device check) to actually
-  // render at the full physical height instead of getting clipped back
-  // down -- so the default was the only thing short, not a hard ceiling.
-  // Standalone-only: in a plain browser tab, `screen.height` would wrongly
-  // claim space the browser's own chrome (address bar, toolbar) is using,
-  // which visualViewport correctly excludes there.
+  // `visualViewport.height` (== `window.innerHeight` in this context) is
+  // the real, hard boundary of what the browser can actually paint into --
+  // NOT `window.screen.height`, the raw physical panel size. An on-device
+  // readout caught this the hard way: forcing the wrapper's height to
+  // screen.height made `getBoundingClientRect()` report the panel really
+  // did reach the physical bottom (852), which looked like confirmation --
+  // but that's just where the CSS box *is*, not whether the browser can
+  // paint there. `innerHeight` stayed at 793 the whole time, and content
+  // laid out past it (the footer, in this case) is invisible: outside the
+  // real viewport, not merely covered by something. iOS reserves that gap
+  // for something -- the home indicator accounts for only part of it --
+  // that web content can't render into no matter what CSS claims. Trusting
+  // `visualViewport.height` unconditionally (no standalone-mode override)
+  // keeps content inside the boundary that's actually paintable.
   const [viewportHeight, setViewportHeight] = useState<number | null>(null)
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
-    // Re-checked inside update() on every call, not captured once outside
-    // it -- `display-mode: standalone` can still read false on the very
-    // first synchronous check of a freshly-launched app, before the
-    // browser's actually settled into standalone rendering. Capturing it
-    // once up front let that early false stick for the sheet's whole
-    // lifetime, silently falling back to the shorter visualViewport height
-    // and reopening the exact gap this override exists to close. Checking
-    // fresh each time lets the same follow-up-frame/resize/scroll calls
-    // below self-correct a wrong first read here too.
     function update() {
-      const standalone = window.matchMedia("(display-mode: standalone)").matches
-      setViewportHeight(standalone ? window.screen.height : vv!.height)
+      setViewportHeight(vv!.height)
     }
     update()
     // The very first read above can still land on a stale pre-layout value
