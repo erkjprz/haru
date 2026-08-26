@@ -809,23 +809,32 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                             </button>
                           </div>
                         </FieldRow>
-                      </div>
 
-                      {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                        <div className="border border-hairline rounded-md p-4 bg-paper mt-3">
-                          <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
-                          <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
-                            <span className="text-ink-soft">Total repayable</span>
-                            <span>₱{fmt(previewTotalRepayable)}</span>
-                          </div>
-                          <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
-                            <span className="text-ink-soft">
-                              {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
-                            </span>
-                            <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
-                          </div>
-                        </div>
-                      )}
+                        {/* Right in the same card, directly under the fields that produce
+                            it -- previously a separate box below the card, easy to miss
+                            without scrolling since nothing here visually tied it to Interest/
+                            Term/Repayment above it. bg-paper (the card itself is bg-paper-2)
+                            is the one thing distinguishing "computed" rows from the editable
+                            ones above, same shade the old standalone box used. */}
+                        {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
+                          <>
+                            <div className="flex items-center justify-between px-4 py-3 bg-paper">
+                              <span className="text-sm text-ink-soft">Total repayable</span>
+                              <span className="text-sm font-semibold font-mono [font-variant-numeric:tabular-nums] text-ink">
+                                ₱{fmt(previewTotalRepayable)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between px-4 py-3 bg-paper">
+                              <span className="text-sm text-ink-soft">
+                                {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
+                              </span>
+                              <span className="text-sm font-semibold font-mono [font-variant-numeric:tabular-nums] text-ink">
+                                ₱{fmt(previewPerInstallment)}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
