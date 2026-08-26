@@ -37,6 +37,21 @@ async function run(engine, label) {
   page.on("console", (msg) => consoleLines.push(`[console] ${msg.text()}`));
   page.on("pageerror", (err) => consoleLines.push(`[pageerror] ${err.message}`));
 
+  // The `.text-rust` DOM read in an earlier version printed a bare "{}"
+  // instead of a real message -- ambiguous whether that's a genuinely
+  // empty error, a different element matching the class, or something
+  // else. Reading the actual HTTP response from Supabase's own auth
+  // endpoint is unambiguous: it's the literal reason the request was
+  // rejected, straight from the source, not a guess at which DOM node
+  // holds it.
+  let authResponseLog = "(no auth/v1/token response observed)";
+  page.on("response", async (res) => {
+    if (res.url().includes("/auth/v1/token")) {
+      const body = await res.text().catch((e) => `(could not read body: ${e.message})`);
+      authResponseLog = `${res.status()} ${res.url()}\n${body}`;
+    }
+  });
+
   try {
     await page.goto(`${TARGET_URL}/login`, { waitUntil: "networkidle" });
     console.log(`[${label}] login page URL: ${page.url()}`);
@@ -49,14 +64,8 @@ async function run(engine, label) {
 
     console.log(`[${label}] post-login URL: ${page.url()}`);
 
-    // Login can fail (bad creds, a captcha check, rate limiting, etc.)
-    // without ever navigating away from /login -- the app shows the
-    // reason in a `.text-rust` paragraph rather than throwing, so read
-    // it directly instead of only inferring failure from the FAB never
-    // appearing three steps later.
     if (page.url().includes("/login")) {
-      const loginError = await page.locator(".text-rust").first().textContent().catch(() => null);
-      console.log(`[${label}] still on /login -- on-page error: ${loginError ?? "(none shown)"}`);
+      console.log(`[${label}] still on /login -- auth endpoint response:\n${authResponseLog}`);
     }
 
     // Open the FAB's quick-entry sheet.
