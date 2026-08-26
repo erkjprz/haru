@@ -38,17 +38,21 @@ export function FlowBadge({
 export function AmountHero({
   value,
   onChange,
-  label = "Amount",
+  label,
   helper
 }: {
   value: string
   onChange: (v: string) => void
+  // Both optional and only rendered when given -- the number itself is
+  // already the biggest thing on screen, so a caller with no real label/
+  // helper to add (see NewTransactionSheet) isn't stuck reserving a blank
+  // line's worth of space for either.
   label?: string
   helper?: string
 }) {
   return (
     <div className="text-center pt-2 pb-5">
-      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">{label}</p>
+      {label && <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">{label}</p>}
       <div className="flex items-center justify-center gap-1.5">
         <span className="font-mono text-3xl font-bold text-ink-soft">₱</span>
         <input

@@ -5,9 +5,10 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { Sheet } from "@/app/components/Sheet"
 import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
+import { TypePickerSheet } from "@/app/components/TypePickerSheet"
 import {
   AmountHero,
-  TypeDropdown,
+  FlowBadge,
   StepTrack,
   ReviewRow,
   ReceiptField,
@@ -48,13 +49,6 @@ function isValidPositiveNumber(value: string, allowZero = false): boolean {
 
 function withFlow(options: typeof ENTRY_TYPES) {
   return options.map((o) => ({ ...o, ...(FLOW[o.key] ?? { arrow: "•", tone: "neutral" as const }) }))
-}
-
-const helperText: Record<string, string> = {
-  contribution: "You've already sent this money. Attach proof of deposit.",
-  withdrawal: "You're requesting money to be sent to you. No receipt needed yet.",
-  loan_request: "You're requesting to borrow from the fund. No receipt needed yet.",
-  loan_payment: "You've already sent this repayment. Attach proof of deposit."
 }
 
 // Plain metadata icons for the compact row layout below -- matching how
@@ -155,6 +149,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [loanRepaidTotals, setLoanRepaidTotals] = useState<Record<string, number>>({})
 
   const [selectedType, setSelectedType] = useState("contribution")
+  const [showTypePicker, setShowTypePicker] = useState(false)
   const [onBehalfOfId, setOnBehalfOfId] = useState("")
   const [bankId, setBankId] = useState("")
   const [amount, setAmount] = useState("")
@@ -528,6 +523,29 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     return bank ? bank.account_name || bank.bank_name : "Bank"
   }
 
+  const selectedTypeOption = withFlow(ENTRY_TYPES).find((o) => o.key === selectedType)!
+
+  // First row of the Details card, matching budget-tracker's own Category
+  // row -- same "Label: value" shape, same colored flow-tone badge instead
+  // of a bare icon (the one row here with real per-value styling to show,
+  // same reasoning FlowBadge already got when TypeDropdown was still a
+  // standalone dropdown), and opens a picker sheet on tap instead of the
+  // old inline-expanding list.
+  const typeField = (
+    <button
+      type="button"
+      onClick={() => setShowTypePicker(true)}
+      className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+    >
+      <FlowBadge arrow={selectedTypeOption.arrow} tone={selectedTypeOption.tone} />
+      <span className="flex-1 min-w-0 text-sm">
+        <span className="text-ink-soft">Type: </span>
+        <span className="font-semibold text-ink">{selectedTypeOption.label}</span>
+      </span>
+      <span className="text-ink-soft text-xs shrink-0">▾</span>
+    </button>
+  )
+
   const onBehalfOfField = isAdmin && (
     <FieldRow icon={<PersonIcon />}>
       <select className={rowSelectClass} value={onBehalfOfId} onChange={(e) => handleOnBehalfChange(e.target.value)}>
@@ -587,14 +605,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         <p className="py-12 text-center text-sm text-rust">Couldn&apos;t load: {loadError}</p>
       ) : (
         <>
-          <AmountHero
-            value={amount}
-            onChange={setAmount}
-            label={isLoanRequest ? "Amount to borrow" : "Amount"}
-            helper={helperText[selectedType]}
-          />
-
-          <TypeDropdown options={withFlow(ENTRY_TYPES)} value={selectedType} onChange={handleTypeChange} />
+          <AmountHero value={amount} onChange={setAmount} />
 
           <div className="space-y-4 mt-4">
             {!isStepped && (
@@ -602,6 +613,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
                   <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                    {typeField}
+
                     <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
 
                     {onBehalfOfField}
@@ -712,6 +725,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                     <div>
                       <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
                       <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                        {typeField}
+
                         <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
 
                         {onBehalfOfField}
@@ -882,6 +897,17 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         onSelect={(loan) => {
           setSelectedLoanId(loan.loan_id)
           setShowLoanPicker(false)
+        }}
+      />
+    )}
+
+    {showTypePicker && (
+      <TypePickerSheet
+        options={withFlow(ENTRY_TYPES)}
+        onClose={() => setShowTypePicker(false)}
+        onSelect={(key) => {
+          handleTypeChange(key)
+          setShowTypePicker(false)
         }}
       />
     )}
