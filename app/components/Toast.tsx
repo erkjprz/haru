@@ -6,11 +6,15 @@ import { Portal } from "@/app/components/Portal"
 const VISIBLE_MS = 3000
 const EXIT_MS = 200
 
-// Brief bottom-anchored confirmation, e.g. after submitting a transaction
+// Brief top-anchored confirmation, e.g. after submitting a transaction
 // through the FAB's sheet instead of a full-page confirmation screen.
-// Sits above the dock (see --dock-h) so it never collides with the pill
-// nav/FAB. Owns its own show-then-dismiss timing -- the caller just holds
-// a message in state and clears it via onDone once this has fully
+// Was bottom-anchored above the dock originally, but that put it right
+// where a backgrounded-scroll glitch (iOS scrolling the page behind a
+// closed sheet into view, on a page whose focused input had triggered
+// it) was most visible -- top-anchored, overlaying the navbar (z-50 vs
+// its z-40), sidesteps that regardless of the scroll bug's own fix.
+// Owns its own show-then-dismiss timing -- the caller just holds a
+// message in state and clears it via onDone once this has fully
 // animated out.
 export function Toast({ message, onDone }: { message: string; onDone: () => void }) {
   const [visible, setVisible] = useState(false)
@@ -35,9 +39,9 @@ export function Toast({ message, onDone }: { message: string; onDone: () => void
       <div
         className="fixed inset-x-4 z-50 flex justify-center transition-all duration-200"
         style={{
-          bottom: "calc(var(--dock-h) + 1rem)",
+          top: "calc(env(safe-area-inset-top) + 0.75rem)",
           opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0)" : "translateY(0.5rem)"
+          transform: visible ? "translateY(0)" : "translateY(-0.5rem)"
         }}
       >
         <div className="max-w-[26rem] bg-ink text-paper rounded-full px-5 py-3 text-sm font-medium shadow-lg text-center">

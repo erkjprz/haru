@@ -1,23 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
-
-// TEMPORARY -- overflow:hidden + overscroll-behavior:none (the fix that
-// closed the standalone-PWA viewport-shrink bug) turned out to only
-// cover touch-drag scroll-chaining, not a separate iOS quirk: focusing a
-// text input inside the sheet can still make iOS scroll the page BEHIND
-// it into view, since that native "scroll focused element into view"
-// behavior is known to bypass a plain `overflow: hidden` on iOS Safari
-// -- position:fixed on body used to block this as a side effect, which
-// is exactly why removing it reopened it. This build locks
-// `document.documentElement` (<html>) with position:fixed instead of
-// `document.body` -- same "remove it from flow, nothing to scroll"
-// reliability, but confirmed-different element than the one that caused
-// the viewport shrink. Needs on-device confirmation on both counts
-// (button position AND no background-scroll-on-focus) before this
-// readout comes out.
-const BUILD_TAG = "sheet-debug-13"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -38,8 +22,6 @@ export function Sheet({
   footer?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const [debugInfo, setDebugInfo] = useState("")
   useEffect(() => {
     const raf = requestAnimationFrame(() => setOpen(true))
     return () => cancelAnimationFrame(raf)
@@ -60,60 +42,43 @@ export function Sheet({
     window.scrollTo(0, 0)
   }, [])
 
-  // TEMPORARY -- see BUILD_TAG comment above.
-  useEffect(() => {
-    function update() {
-      const rect = panelRef.current?.getBoundingClientRect()
-      setDebugInfo(`${BUILD_TAG} innerH:${window.innerHeight} panelBottom:${rect?.bottom.toFixed(0) ?? "?"}`)
-    }
-    update()
-    const raf = requestAnimationFrame(update)
-    const t = setTimeout(update, 500)
-    window.addEventListener("resize", update)
-    return () => {
-      cancelAnimationFrame(raf)
-      clearTimeout(t)
-      window.removeEventListener("resize", update)
-    }
-  }, [])
-
-  // TEMPORARY -- locks <html> instead of <body> this round, see BUILD_TAG
-  // comment above. Locks the page behind the sheet from scrolling while
-  // it's open, including iOS's native "scroll the focused input into
-  // view" behavior when a text field inside the sheet gets focus (a
-  // plain overflow:hidden doesn't reliably stop either on iOS Safari --
-  // touch-dragging the backdrop, or that focus behavior). Each Sheet
-  // captures/restores whatever was already on the element when it
+  // Locks the page behind the sheet from scrolling while it's open --
+  // overflow:hidden alone can still let a touch-drag on the backdrop
+  // chain into scrolling the page underneath on iOS Safari, so
+  // overscroll-behavior:none backs it up. Deliberately NOT `position:
+  // fixed`: setting the page root to position:fixed while the sheet is
+  // open (tried on both document.body and document.documentElement)
+  // makes WebKit recompute a visualViewport ~59px shorter than the real
+  // screen in the installed home-screen app -- confirmed on-device on
+  // both elements. A sibling app's own sheet never touches the page
+  // root's position at all and never had the bug.
+  //
+  // Known remaining gap: iOS's native "scroll the focused input into
+  // view" behavior can still scroll the page behind the sheet when a
+  // text field inside it gets focus -- overflow:hidden doesn't reliably
+  // block that specific behavior the way position:fixed used to (as a
+  // side effect, at the cost of the viewport bug above). Toast.tsx was
+  // moved to a top anchor to keep that glitch from landing right where
+  // a bottom-anchored toast used to appear; the underlying scroll-on-
+  // focus behavior itself is still open.
+  //
+  // Each Sheet captures/restores whatever was already on body when it
   // mounted, not a hardcoded default, so this nests correctly when a
   // picker sheet (loan, type) opens on top of this one -- the inner
   // one's cleanup just hands back the outer one's own locked state.
   useEffect(() => {
-    const scrollY = window.scrollY
-    const el = document.documentElement
+    const body = document.body
     const previous = {
-      position: el.style.position,
-      top: el.style.top,
-      left: el.style.left,
-      right: el.style.right,
-      width: el.style.width,
-      overflow: el.style.overflow
+      overflow: body.style.overflow,
+      overscrollBehavior: body.style.overscrollBehavior
     }
 
-    el.style.position = "fixed"
-    el.style.top = `-${scrollY}px`
-    el.style.left = "0"
-    el.style.right = "0"
-    el.style.width = "100%"
-    el.style.overflow = "hidden"
+    body.style.overflow = "hidden"
+    body.style.overscrollBehavior = "none"
 
     return () => {
-      el.style.position = previous.position
-      el.style.top = previous.top
-      el.style.left = previous.left
-      el.style.right = previous.right
-      el.style.width = previous.width
-      el.style.overflow = previous.overflow
-      window.scrollTo(0, scrollY)
+      body.style.overflow = previous.overflow
+      body.style.overscrollBehavior = previous.overscrollBehavior
     }
   }, [])
 
@@ -146,13 +111,11 @@ export function Sheet({
           `absolute` inside a full-height wrapper -- see the comment on
           the backdrop above. */}
       <div
-        ref={panelRef}
         className={`fixed left-0 right-0 bottom-0 z-50 max-h-[92dvh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
       >
         <div className="w-9 h-1 rounded-full bg-hairline mx-auto mt-2.5 flex-shrink-0" />
-        <div className="text-[9px] font-mono text-rust text-center flex-shrink-0 break-all px-1">{debugInfo}</div>
         <div className="relative flex items-center justify-center px-4 pt-3 pb-4 flex-shrink-0">
           <h2 className="font-display text-lg font-medium text-ink">{title}</h2>
           <button
