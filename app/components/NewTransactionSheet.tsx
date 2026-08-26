@@ -539,6 +539,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     <Sheet
       title="New Transaction"
       onClose={onClose}
+      tall
       footer={
         <>
           {message && <p className="text-sm text-rust mb-3">{message}</p>}

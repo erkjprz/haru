@@ -14,12 +14,21 @@ export function Sheet({
   title,
   onClose,
   children,
-  footer
+  footer,
+  tall
 }: {
   title: string
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
+  // Forces a tall minimum height instead of shrinking to fit content --
+  // for a form-shaped sheet (NewTransactionSheet) whose content length
+  // varies a lot by transaction type, so a short type (Contribution)
+  // doesn't leave a slab of bare backdrop exposed above a panel that
+  // only covers the bottom slice of the screen. A short picker sheet
+  // (Type, Loan) wants the opposite -- hugging its actual handful of
+  // rows like an action sheet -- so this stays opt-in per caller.
+  tall?: boolean
 }) {
   const [open, setOpen] = useState(false)
   useEffect(() => {
@@ -78,7 +87,7 @@ export function Sheet({
           onClick={handleClose}
         />
         <div
-          className={`absolute left-0 right-0 bottom-0 max-h-[92vh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          className={`absolute left-0 right-0 bottom-0 ${tall ? "min-h-[75vh] " : ""}max-h-[92vh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             open ? "translate-y-0" : "translate-y-full"
           }`}
         >
