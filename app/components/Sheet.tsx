@@ -169,6 +169,13 @@ export function Sheet({
           style={viewportHeight ? { maxHeight: `${viewportHeight * 0.92}px` } : undefined}
         >
           <div className="w-9 h-1 rounded-full bg-hairline mx-auto mt-2.5 flex-shrink-0" />
+          {/* TEMPORARY -- confirms whether viewportHeight state itself is
+              landing on the intended screen.height value this time, or
+              whether the gap survives even when it does (two different
+              bugs, two different fixes). Remove once confirmed either way. */}
+          <div className="text-[10px] font-mono text-rust text-center flex-shrink-0">
+            vpH:{viewportHeight ?? "null"} scrH:{typeof window !== "undefined" ? window.screen.height : "?"}
+          </div>
           <div className="relative flex items-center justify-center px-4 pt-3 pb-4 flex-shrink-0">
             <h2 className="font-display text-lg font-medium text-ink">{title}</h2>
             <button
