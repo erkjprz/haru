@@ -62,20 +62,34 @@ export function Sheet({
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
-    const standalone = window.matchMedia("(display-mode: standalone)").matches
+    // Re-checked inside update() on every call, not captured once outside
+    // it -- `display-mode: standalone` can still read false on the very
+    // first synchronous check of a freshly-launched app, before the
+    // browser's actually settled into standalone rendering. Capturing it
+    // once up front let that early false stick for the sheet's whole
+    // lifetime, silently falling back to the shorter visualViewport height
+    // and reopening the exact gap this override exists to close. Checking
+    // fresh each time lets the same follow-up-frame/resize/scroll calls
+    // below self-correct a wrong first read here too.
     function update() {
+      const standalone = window.matchMedia("(display-mode: standalone)").matches
       setViewportHeight(standalone ? window.screen.height : vv!.height)
     }
     update()
     // The very first read above can still land on a stale pre-layout value
     // in a freshly-launched standalone PWA. A follow-up read next frame,
     // once the browser's actually settled, self-corrects if the immediate
-    // one was wrong; if it wasn't, this is a no-op re-render.
+    // one was wrong; if it wasn't, this is a no-op re-render. The extra
+    // timeout covers a static form with no resize/scroll of its own to
+    // trigger a recheck in the meantime -- next frame is usually enough,
+    // but this is cheap insurance against a slower cold-launch settle.
     const raf = requestAnimationFrame(update)
+    const t = setTimeout(update, 300)
     vv.addEventListener("resize", update)
     vv.addEventListener("scroll", update)
     return () => {
       cancelAnimationFrame(raf)
+      clearTimeout(t)
       vv.removeEventListener("resize", update)
       vv.removeEventListener("scroll", update)
     }
