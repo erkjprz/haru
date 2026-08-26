@@ -118,6 +118,39 @@ export default function Navbar() {
     }
   }, [hideDock])
 
+  // iOS can leave a `position: fixed` element positioned against a stale
+  // layout viewport on a page too short to ever scroll on its own (a
+  // loading screen, a short list) -- WebKit only recomputes fixed-position
+  // layout in response to an actual scroll event, which a non-scrollable
+  // page never fires. Nudging the scroll position by a pixel and
+  // immediately back forces that recompute regardless of whether this
+  // particular page happens to be tall enough to scroll by itself (see
+  // layout.tsx's spacer div, which guarantees it always has somewhere to
+  // nudge into). Fires on every navigation (below), and also on resuming
+  // from the background (screen lock, app switch, home-screen icon
+  // relaunch without a full process kill) -- a case with no route change
+  // at all, but the same layout can just as easily go stale across it.
+  useEffect(() => {
+    function nudge() {
+      window.scrollTo(0, 1)
+      requestAnimationFrame(() => window.scrollTo(0, 0))
+    }
+    function onVisible() {
+      if (document.visibilityState === "visible") nudge()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("pageshow", nudge)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("pageshow", nudge)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.scrollTo(0, 1)
+    requestAnimationFrame(() => window.scrollTo(0, 0))
+  }, [pathname])
+
   // Everything that doesn't get its own docked tab still lives somewhere
   // -- on the Menu page -- so Menu reads as "active" while browsing any of
   // it, the same way Transactions stays active on a transaction's own
