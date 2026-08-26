@@ -3,15 +3,23 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
 
-// TEMPORARY -- CI (Chromium + WebKit, real login) confirmed no clipping
-// with min-h-0 in place, but only in a plain browser tab; a live device
-// screenshot afterward still showed the Submit button cut off in the
-// installed PWA. This readout has two jobs: BUILD tag rules out a stale
-// cached bundle before chasing a code theory further, and the live
-// panel/footer numbers show whether the wrapper/panel math itself is
-// still off, or whether something else is clipping it. Remove once
-// confirmed either way.
-const BUILD_TAG = "sheet-debug-3"
+// TEMPORARY -- the on-device readout showed vpH/innerH pinned at 793
+// against a screen height of 852, with the panel exactly filling that
+// 793px and clipped:false -- i.e. our own JS-measured "viewport" is
+// genuinely 59px short of the physical screen, not a clipping bug. A
+// side-by-side against another installed PWA (Budget) shows its own
+// sheet's Save button sitting flush near the true bottom, well past
+// where our 793px figure would allow. That app isn't fighting iOS for
+// those 59px with JS the way this one was -- it's plain CSS. `dvh` is
+// WebKit's own purpose-built unit for exactly this (a live-tracking
+// viewport height, safe-area aware with viewport-fit=cover already set
+// in layout.tsx), and visualViewport.height/innerHeight are a JS-side
+// figure that on iOS standalone PWAs can under-report versus what CSS
+// dvh resolves to. So this build drops the JS-measured inline height
+// override entirely and goes back to trusting h-dvh/max-h-[92dvh]
+// (pure CSS) the whole way. Remove this readout once a fresh on-device
+// screenshot confirms the panel now reaches the true bottom.
+const BUILD_TAG = "sheet-debug-4"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -54,53 +62,15 @@ export function Sheet({
     window.scrollTo(0, 0)
   }, [])
 
-  // `visualViewport.height` (== `window.innerHeight` in this context) is
-  // the real, hard boundary of what the browser can actually paint into --
-  // NOT `window.screen.height`, the raw physical panel size. An on-device
-  // readout caught this the hard way: forcing the wrapper's height to
-  // screen.height made `getBoundingClientRect()` report the panel really
-  // did reach the physical bottom (852), which looked like confirmation --
-  // but that's just where the CSS box *is*, not whether the browser can
-  // paint there. `innerHeight` stayed at 793 the whole time, and content
-  // laid out past it (the footer, in this case) is invisible: outside the
-  // real viewport, not merely covered by something. iOS reserves that gap
-  // for something -- the home indicator accounts for only part of it --
-  // that web content can't render into no matter what CSS claims. Trusting
-  // `visualViewport.height` unconditionally (no standalone-mode override)
-  // keeps content inside the boundary that's actually paintable.
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null)
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    function update() {
-      setViewportHeight(vv!.height)
-    }
-    update()
-    // The very first read above can still land on a stale pre-layout value
-    // in a freshly-launched standalone PWA. A follow-up read next frame,
-    // once the browser's actually settled, self-corrects if the immediate
-    // one was wrong; if it wasn't, this is a no-op re-render. The extra
-    // timeout covers a static form with no resize/scroll of its own to
-    // trigger a recheck in the meantime -- next frame is usually enough,
-    // but this is cheap insurance against a slower cold-launch settle.
-    const raf = requestAnimationFrame(update)
-    const t = setTimeout(update, 300)
-    vv.addEventListener("resize", update)
-    vv.addEventListener("scroll", update)
-    return () => {
-      cancelAnimationFrame(raf)
-      clearTimeout(t)
-      vv.removeEventListener("resize", update)
-      vv.removeEventListener("scroll", update)
-    }
-  }, [])
-
-  // TEMPORARY -- see BUILD_TAG comment above.
+  // TEMPORARY -- see BUILD_TAG comment above. No more JS-measured height
+  // state to key off of; this just samples the same numbers once layout
+  // has settled so a device screenshot can compare CSS dvh's actual
+  // paintable result against the old 793 figure.
   useEffect(() => {
     function update() {
       const rect = panelRef.current?.getBoundingClientRect()
       setDebugInfo(
-        `${BUILD_TAG} vpH:${viewportHeight ?? "null"} scrH:${window.screen.height} innerH:${window.innerHeight} ` +
+        `${BUILD_TAG} scrH:${window.screen.height} innerH:${window.innerHeight} ` +
           `standalone:${window.matchMedia("(display-mode: standalone)").matches} ` +
           `panelBottom:${rect?.bottom.toFixed(0) ?? "?"} clipped:${rect ? rect.bottom > window.innerHeight : "?"}`
       )
@@ -114,7 +84,7 @@ export function Sheet({
       clearTimeout(t)
       window.removeEventListener("resize", update)
     }
-  }, [viewportHeight])
+  }, [])
 
   // Locks the page behind the sheet from scrolling while it's open. A
   // plain `overflow: hidden` on body doesn't reliably stop it on iOS
@@ -163,13 +133,11 @@ export function Sheet({
           element's containing block against the toolbar-hidden layout
           viewport, which is taller than what's actually visible while the
           toolbar is showing, so inset-0's implied 0-to-0 span can reach
-          past the real visible bottom edge. The inline height (once
-          visualViewport has reported) overrides h-dvh with the actual
-          measured pixel value -- see the hook above for why. */}
-      <div
-        className="fixed top-0 left-0 right-0 h-dvh z-50"
-        style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
-      >
+          past the real visible bottom edge. `dvh` tracks the real,
+          currently-visible viewport live (that's its whole purpose), so
+          no JS-measured pixel override on top of it -- see BUILD_TAG
+          comment above for why that override was actually the bug. */}
+      <div className="fixed top-0 left-0 right-0 h-dvh z-50">
         {/* No backdrop-blur -- `backdrop-filter` combined with
             `position: fixed` is a known WebKit bug on iOS (confirmed on a
             sibling app's bottom nav, same combination) where the element's
@@ -188,7 +156,6 @@ export function Sheet({
           className={`absolute left-0 right-0 bottom-0 max-h-[92dvh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             open ? "translate-y-0" : "translate-y-full"
           }`}
-          style={viewportHeight ? { maxHeight: `${viewportHeight * 0.92}px` } : undefined}
         >
           <div className="w-9 h-1 rounded-full bg-hairline mx-auto mt-2.5 flex-shrink-0" />
           <div className="text-[9px] font-mono text-rust text-center flex-shrink-0 break-all px-1">{debugInfo}</div>
