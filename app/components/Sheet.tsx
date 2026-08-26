@@ -27,6 +27,19 @@ export function Sheet({
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // A Sheet mounts fresh on every open, not behind a route change --
+  // Navbar's own page-level scroll-nudge (see its file comment on the
+  // same iOS bug) only fires on navigation/resume, so it doesn't
+  // necessarily run again for a sheet opened via local state mid-session.
+  // Nudging here too forces iOS to recompute this sheet's own
+  // `position: fixed` layout against the real current viewport. Has to
+  // run before the body-lock effect below sets `overflow: hidden`, or
+  // there's nothing left to actually scroll.
+  useEffect(() => {
+    window.scrollTo(0, 1)
+    window.scrollTo(0, 0)
+  }, [])
+
   // Locks the page behind the sheet from scrolling while it's open. A
   // plain `overflow: hidden` on body doesn't reliably stop it on iOS
   // Safari (a well-known quirk -- touch-scrolling the backdrop can still
