@@ -765,14 +765,30 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Repayment mode</label>
-                          <select
-                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                            value={repaymentFrequency}
-                            onChange={(e) => setRepaymentFrequency(e.target.value)}
-                          >
-                            <option value="monthly">Monthly installments</option>
-                            <option value="lump_sum">One lump sum at end of term</option>
-                          </select>
+                          {/* A <select> here read as inconsistent right next to Interest's own
+                              2-button toggle above -- both are a binary either/or choice, so
+                              both get the same control instead of two different ones for the
+                              same kind of decision. */}
+                          <div className="flex border border-hairline rounded-sm overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => setRepaymentFrequency("monthly")}
+                              className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                                repaymentFrequency === "monthly" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                              }`}
+                            >
+                              Monthly installments
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRepaymentFrequency("lump_sum")}
+                              className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
+                                repaymentFrequency === "lump_sum" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
+                              }`}
+                            >
+                              Lump sum
+                            </button>
+                          </div>
                         </div>
 
                         {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
