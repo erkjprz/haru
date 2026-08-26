@@ -3,29 +3,33 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
 
-// TEMPORARY -- the real answer was sitting in a sibling app's shipped
-// code, not another viewport-measurement theory. That app's root layout
-// carries this exact comment: "Both `dvh` and `position: fixed; inset: 0`
-// on the shell turned out to size short of the real screen specifically
-// in the installed iOS home-screen app... uses plain document scrolling
-// (no fixed shell) with a `position: fixed` bottom nav instead, confirmed
-// working in that exact standalone context." Every length value we tried
-// here (visualViewport, dvh, svh, screen.height) and even edge-anchoring
-// (top+bottom, no height) all drive a full-viewport-spanning `fixed`
-// WRAPPER, with the panel positioned `bottom:0` *inside* it -- so the
-// panel's floor is always wherever that wrapper's bottom edge lands, and
-// per the sibling app's own finding, a full-height fixed shell's bottom
-// edge is what's short in this exact context, no matter how it's sized.
-// The fix: stop nesting the panel inside a full-height fixed wrapper at
-// all. The panel is now its own independent `position: fixed; bottom: 0`
-// element, sibling to the backdrop rather than a child of it -- matching
-// the sibling app's own bottom nav, which is confirmed working. The
-// backdrop stays a separate full-screen fixed layer; if its own bottom
-// edge is a few px short in standalone, that's invisible on a decorative
-// overlay with nothing interactive at its very edge. Remove this readout
-// once a fresh on-device screenshot confirms the panel now reaches the
-// true bottom.
-const BUILD_TAG = "sheet-debug-6"
+// TEMPORARY -- decoupling the panel from its wrapper (previous build)
+// made no difference at all: panelBottom was still exactly 793, same as
+// every other technique tried (visualViewport, dvh, svh, screen.height,
+// edge-anchoring). That's now six different ways of sizing/anchoring a
+// `position: fixed` element, all landing on the identical number -- this
+// isn't a technique problem, `position: fixed` itself appears to have a
+// hard paint ceiling at 793 in this exact device/standalone context,
+// full stop.
+//
+// Before guessing at a seventh technique, this build adds a real
+// diagnostic instead: docH/bodyH read `document.documentElement` and
+// `document.body`'s own rendered heights (unaffected by fixed-position
+// compositing), and absProbeBottom measures where a plain
+// `position: absolute; bottom: 0` element resolves when appended
+// directly to `<html>` (bypassing `<body>`, which our own scroll-lock
+// effect makes `position: fixed` while the sheet is open, so testing
+// against body would just inherit body's own potential cap). If docH/
+// absProbeBottom read ~852, the *document* isn't capped -- only
+// `position: fixed`'s own containing-block math is -- and the real fix
+// is to stop using `position: fixed` for the panel, since body is
+// already scroll-locked while the sheet is open anyway, so fixed's
+// viewport-pinning behavior isn't even needed here. If they also read
+// ~793, the whole page is capped in this context, matching the sibling
+// app's root-layout finding, and the fix has to be more structural.
+// Remove this readout once we know which one it is and have shipped
+// the real fix.
+const BUILD_TAG = "sheet-debug-7"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -75,10 +79,28 @@ export function Sheet({
   useEffect(() => {
     function update() {
       const rect = panelRef.current?.getBoundingClientRect()
+
+      // Appended directly to <html>, not <body> -- see BUILD_TAG comment
+      // above for why body itself isn't a clean control here.
+      const probe = document.createElement("div")
+      probe.style.position = "absolute"
+      probe.style.left = "0"
+      probe.style.bottom = "0"
+      probe.style.width = "1px"
+      probe.style.height = "1px"
+      probe.style.pointerEvents = "none"
+      probe.style.opacity = "0"
+      document.documentElement.appendChild(probe)
+      const absProbeBottom = probe.getBoundingClientRect().bottom
+      document.documentElement.removeChild(probe)
+
       setDebugInfo(
         `${BUILD_TAG} scrH:${window.screen.height} innerH:${window.innerHeight} ` +
           `standalone:${window.matchMedia("(display-mode: standalone)").matches} ` +
-          `panelBottom:${rect?.bottom.toFixed(0) ?? "?"} clipped:${rect ? rect.bottom > window.innerHeight : "?"}`
+          `panelBottom:${rect?.bottom.toFixed(0) ?? "?"} clipped:${rect ? rect.bottom > window.innerHeight : "?"} ` +
+          `docH:${document.documentElement.getBoundingClientRect().height.toFixed(0)} ` +
+          `bodyH:${document.body.getBoundingClientRect().height.toFixed(0)} ` +
+          `absProbeBottom:${absProbeBottom.toFixed(0)}`
       )
     }
     update()
