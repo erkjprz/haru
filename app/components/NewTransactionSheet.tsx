@@ -56,6 +56,69 @@ const helperText: Record<string, string> = {
   loan_payment: "You've already sent this repayment. Attach proof of deposit."
 }
 
+// Plain metadata icons for the compact row layout below -- matching how
+// budget-tracker's own TransactionModal treats its Note/Date/Recurrence
+// rows: a bare muted icon inline, no colored circle (that's reserved for
+// TypeDropdown's flow-tone badge, the one row here with real per-value
+// styling to show).
+function RowIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-5 h-5 text-ink-soft flex-shrink-0">
+      {children}
+    </svg>
+  )
+}
+
+function BankIcon() {
+  return (
+    <RowIcon>
+      <path d="M3 10l9-6 9 6M4 10v9M20 10v9M8 10v9M16 10v9M2 21h20" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+function NoteIcon() {
+  return (
+    <RowIcon>
+      <path d="M6 3h9l5 5v13a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 12h6M9 16h6" strokeLinecap="round" />
+    </RowIcon>
+  )
+}
+
+function PersonIcon() {
+  return (
+    <RowIcon>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M4.5 20c1.5-4 4.5-6 7.5-6s6 2 7.5 6" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+// Same shape as Dashboard's "Request Loan" shortcut icon.
+function LoanIcon() {
+  return (
+    <RowIcon>
+      <rect x="3.5" y="7" width="17" height="12" rx="1.5" />
+      <path d="M3.5 11h17M8 7V5.5a1.5 1.5 0 011.5-1.5h5a1.5 1.5 0 011.5 1.5V7" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+// One row of the compact Details card -- icon + inline content, divided
+// from its siblings by the card's own divide-y rather than its own border.
+function FieldRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3.5">
+      {icon}
+      {children}
+    </div>
+  )
+}
+
+const rowSelectClass = "flex-1 min-w-0 bg-transparent text-sm text-ink outline-none"
+const rowInputClass = "flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft"
+
 export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (message: string) => void }) {
   const { member } = useAuth()
   const memberId = member?.member_id ?? null
@@ -439,13 +502,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   }
 
   const onBehalfOfField = isAdmin && (
-    <div>
-      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">On behalf of</label>
-      <select
-        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-        value={onBehalfOfId}
-        onChange={(e) => handleOnBehalfChange(e.target.value)}
-      >
+    <FieldRow icon={<PersonIcon />}>
+      <select className={rowSelectClass} value={onBehalfOfId} onChange={(e) => handleOnBehalfChange(e.target.value)}>
         <option value="">Myself</option>
         {allMembers
           .filter((m) => m.member_id !== memberId)
@@ -455,14 +513,15 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
             </option>
           ))}
       </select>
-      {onBehalfOfId && (
-        <p className="text-sm text-gold mt-2">
-          {willAutoApproveOnBehalf
-            ? `This will be recorded as approved immediately for ${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.`
-            : `This still goes through the normal approval process for ${allMembers.find((m) => m.member_id === onBehalfOfId)?.name} -- it isn't approved immediately.`}
-        </p>
-      )}
-    </div>
+    </FieldRow>
+  )
+
+  const onBehalfOfNote = isAdmin && onBehalfOfId && (
+    <p className="px-1 pt-2 text-sm text-gold">
+      {willAutoApproveOnBehalf
+        ? `This will be recorded as approved immediately for ${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.`
+        : `This still goes through the normal approval process for ${allMembers.find((m) => m.member_id === onBehalfOfId)?.name} -- it isn't approved immediately.`}
+    </p>
   )
 
   return (
@@ -512,32 +571,19 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
           <div className="space-y-4 mt-4">
             {!isStepped && (
               <>
-                <FieldGroup label="Details">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                        Date
-                        <RequiredMark />
-                      </label>
-                      <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" />
-                    </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
+                  <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                    <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
 
                     {onBehalfOfField}
 
                     {isLoanPayment && (
-                      <div>
-                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                          Which loan
-                          <RequiredMark />
-                        </label>
+                      <FieldRow icon={<LoanIcon />}>
                         {myLoans.filter((l) => l.status === "active").length === 0 ? (
-                          <p className="text-sm text-rust">No active loans to pay against.</p>
+                          <p className="flex-1 text-sm text-rust">No active loans to pay against.</p>
                         ) : (
-                          <select
-                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                            value={selectedLoanId}
-                            onChange={(e) => setSelectedLoanId(e.target.value)}
-                          >
+                          <select className={rowSelectClass} value={selectedLoanId} onChange={(e) => setSelectedLoanId(e.target.value)}>
                             <option value="">Select a loan</option>
                             {myLoans
                               .filter((l) => l.status === "active")
@@ -548,33 +594,12 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                               ))}
                           </select>
                         )}
-                        {selectedLoanId &&
-                          (() => {
-                            const loan = myLoans.find((l) => l.loan_id === selectedLoanId)
-                            if (!loan) return null
-                            const remaining =
-                              totalRepayable(
-                                Number(loan.principal),
-                                loan.interest_type,
-                                Number(loan.interest_rate || 0),
-                                Number(loan.interest_amount || 0)
-                              ) - (loanRepaidTotals[loan.loan_id] || 0)
-                            return <p className="mt-2 text-sm text-ink-soft">₱{fmt(Math.max(0, remaining))} left to pay</p>
-                          })()}
-                      </div>
+                      </FieldRow>
                     )}
 
                     {needsBank && (
-                      <div>
-                        <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                          Bank
-                          <RequiredMark />
-                        </label>
-                        <select
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                          value={bankId}
-                          onChange={(e) => setBankId(e.target.value)}
-                        >
+                      <FieldRow icon={<BankIcon />}>
+                        <select className={rowSelectClass} value={bankId} onChange={(e) => setBankId(e.target.value)}>
                           <option value="">Select a bank</option>
                           {banks.map((bank) => (
                             <option key={bank.id} value={bank.id}>
@@ -582,35 +607,51 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                             </option>
                           ))}
                         </select>
-                      </div>
+                      </FieldRow>
                     )}
 
-                    <div>
-                      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Description</label>
+                    <FieldRow icon={<NoteIcon />}>
                       <input
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                        className={rowInputClass}
                         placeholder="Add a note"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                       />
-                    </div>
-
-                    {showSaveAsDefault && isValidPositiveNumber(amount) && (
-                      <label className="flex items-start gap-2.5 text-sm text-ink-soft">
-                        <input
-                          type="checkbox"
-                          checked={saveAsDefault}
-                          onChange={(e) => setSaveAsDefault(e.target.checked)}
-                          className="w-4 h-4 mt-0.5 shrink-0"
-                        />
-                        Save ₱{fmt(Number(amount))}
-                        {bankId ? ` and ${bankLabel(bankId)}` : ""} as{" "}
-                        {onBehalfOfId ? `${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}'s` : "my"} default{" "}
-                        {isContribution ? "contribution" : "loan payment"} {bankId ? "amount and bank" : "amount"}
-                      </label>
-                    )}
+                    </FieldRow>
                   </div>
-                </FieldGroup>
+
+                  {onBehalfOfNote}
+
+                  {isLoanPayment &&
+                    selectedLoanId &&
+                    (() => {
+                      const loan = myLoans.find((l) => l.loan_id === selectedLoanId)
+                      if (!loan) return null
+                      const remaining =
+                        totalRepayable(
+                          Number(loan.principal),
+                          loan.interest_type,
+                          Number(loan.interest_rate || 0),
+                          Number(loan.interest_amount || 0)
+                        ) - (loanRepaidTotals[loan.loan_id] || 0)
+                      return <p className="px-1 pt-2 text-sm text-ink-soft">₱{fmt(Math.max(0, remaining))} left to pay</p>
+                    })()}
+
+                  {showSaveAsDefault && isValidPositiveNumber(amount) && (
+                    <label className="flex items-start gap-2.5 text-sm text-ink-soft px-1 pt-3">
+                      <input
+                        type="checkbox"
+                        checked={saveAsDefault}
+                        onChange={(e) => setSaveAsDefault(e.target.checked)}
+                        className="w-4 h-4 mt-0.5 shrink-0"
+                      />
+                      Save ₱{fmt(Number(amount))}
+                      {bankId ? ` and ${bankLabel(bankId)}` : ""} as{" "}
+                      {onBehalfOfId ? `${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}'s` : "my"} default{" "}
+                      {isContribution ? "contribution" : "loan payment"} {bankId ? "amount and bank" : "amount"}
+                    </label>
+                  )}
+                </div>
 
                 {needsReceipt && (
                   <FieldGroup label="Proof">
@@ -638,18 +679,28 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
                 {formStep === 1 && (
                   <>
-                    <FieldGroup>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                            Date
-                            <RequiredMark />
-                          </label>
-                          <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" />
-                        </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
+                      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                        <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
 
                         {onBehalfOfField}
 
+                        <FieldRow icon={<NoteIcon />}>
+                          <input
+                            className={rowInputClass}
+                            placeholder="Add a note"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                          />
+                        </FieldRow>
+                      </div>
+
+                      {onBehalfOfNote}
+                    </div>
+
+                    <FieldGroup>
+                      <div className="space-y-4">
                         <div>
                           <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
                             Interest
@@ -741,16 +792,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                             </div>
                           </div>
                         )}
-
-                        <div>
-                          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Description</label>
-                          <input
-                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                            placeholder="Add a note"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                          />
-                        </div>
                       </div>
                     </FieldGroup>
                   </>
