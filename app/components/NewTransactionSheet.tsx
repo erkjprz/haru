@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { Sheet } from "@/app/components/Sheet"
+import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
 import {
   AmountHero,
   TypeDropdown,
@@ -95,16 +96,6 @@ function PersonIcon() {
   )
 }
 
-// Same shape as Dashboard's "Request Loan" shortcut icon.
-function LoanIcon() {
-  return (
-    <RowIcon>
-      <rect x="3.5" y="7" width="17" height="12" rx="1.5" />
-      <path d="M3.5 11h17M8 7V5.5a1.5 1.5 0 011.5-1.5h5a1.5 1.5 0 011.5 1.5V7" strokeLinecap="round" strokeLinejoin="round" />
-    </RowIcon>
-  )
-}
-
 // One row of the compact Details card -- icon + inline content, divided
 // from its siblings by the card's own divide-y rather than its own border.
 function FieldRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
@@ -149,6 +140,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [termMonths, setTermMonths] = useState("")
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
   const [selectedLoanId, setSelectedLoanId] = useState("")
+  const [showLoanPicker, setShowLoanPicker] = useState(false)
 
   const [contributionDefault, setContributionDefault] = useState<number | null>(null)
   const [contributionBankDefault, setContributionBankDefault] = useState<string | null>(null)
@@ -258,6 +250,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
   const effectiveMemberId = isAdmin && onBehalfOfId ? onBehalfOfId : memberId
   const submittedByForOnBehalf = isAdmin && onBehalfOfId ? memberId : null
+
+  const activeLoans = myLoans.filter((l) => l.status === "active")
+  const selectedLoan = activeLoans.find((l) => l.loan_id === selectedLoanId) ?? null
 
   const isLoanRequest = selectedType === "loan_request"
   const isLoanPayment = selectedType === "loan_payment"
@@ -525,6 +520,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   )
 
   return (
+    <>
     <Sheet
       title="New Transaction"
       onClose={onClose}
@@ -579,22 +575,25 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                     {onBehalfOfField}
 
                     {isLoanPayment && (
-                      <FieldRow icon={<LoanIcon />}>
-                        {myLoans.filter((l) => l.status === "active").length === 0 ? (
-                          <p className="flex-1 text-sm text-rust">No active loans to pay against.</p>
-                        ) : (
-                          <select className={rowSelectClass} value={selectedLoanId} onChange={(e) => setSelectedLoanId(e.target.value)}>
-                            <option value="">Select a loan</option>
-                            {myLoans
-                              .filter((l) => l.status === "active")
-                              .map((loan) => (
-                                <option key={loan.loan_id} value={loan.loan_id}>
-                                  ₱{fmt(loan.principal)} from {loan.start_date}
-                                </option>
-                              ))}
-                          </select>
-                        )}
-                      </FieldRow>
+                      <button
+                        type="button"
+                        onClick={() => activeLoans.length > 0 && setShowLoanPicker(true)}
+                        className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                      >
+                        <LoanRowIcon />
+                        <span className="flex-1 min-w-0 text-sm">
+                          {selectedLoan ? (
+                            <span className="text-ink">
+                              ₱{fmt(selectedLoan.principal)} from {selectedLoan.start_date}
+                            </span>
+                          ) : (
+                            <span className={activeLoans.length === 0 ? "text-rust" : "text-ink-soft"}>
+                              {activeLoans.length === 0 ? "No active loans to pay against" : "Which loan"}
+                            </span>
+                          )}
+                        </span>
+                        {activeLoans.length > 0 && <span className="text-ink-soft text-xs shrink-0">▾</span>}
+                      </button>
                     )}
 
                     {needsBank && (
@@ -625,15 +624,14 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                   {isLoanPayment &&
                     selectedLoanId &&
                     (() => {
-                      const loan = myLoans.find((l) => l.loan_id === selectedLoanId)
-                      if (!loan) return null
+                      if (!selectedLoan) return null
                       const remaining =
                         totalRepayable(
-                          Number(loan.principal),
-                          loan.interest_type,
-                          Number(loan.interest_rate || 0),
-                          Number(loan.interest_amount || 0)
-                        ) - (loanRepaidTotals[loan.loan_id] || 0)
+                          Number(selectedLoan.principal),
+                          selectedLoan.interest_type,
+                          Number(selectedLoan.interest_rate || 0),
+                          Number(selectedLoan.interest_amount || 0)
+                        ) - (loanRepaidTotals[selectedLoan.loan_id] || 0)
                       return <p className="px-1 pt-2 text-sm text-ink-soft">₱{fmt(Math.max(0, remaining))} left to pay</p>
                     })()}
 
@@ -831,5 +829,18 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         </>
       )}
     </Sheet>
+
+    {showLoanPicker && (
+      <LoanPickerSheet
+        loans={activeLoans}
+        repaidTotals={loanRepaidTotals}
+        onClose={() => setShowLoanPicker(false)}
+        onSelect={(loan) => {
+          setSelectedLoanId(loan.loan_id)
+          setShowLoanPicker(false)
+        }}
+      />
+    )}
+    </>
   )
 }
