@@ -827,18 +827,19 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                         {/* Right in the same card, directly under the fields that produce
                             it -- previously a separate box below the card, easy to miss
                             without scrolling since nothing here visually tied it to Interest/
-                            Term/Repayment above it. bg-paper (the card itself is bg-paper-2)
-                            is the one thing distinguishing "computed" rows from the editable
-                            ones above, same shade the old standalone box used. */}
+                            Term/Repayment above it. bg-gold/10 is the app's own "highlighted
+                            result" accent (StepTrack, the selected row in a dropdown, the FAB
+                            glow) rather than the plain bg-paper the old box used, which in
+                            dark mode is darker than the card itself and read as dead. */}
                         {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
                           <>
-                            <div className="flex items-center justify-between px-4 py-3 bg-paper">
-                              <span className="text-sm text-ink-soft">Total repayable</span>
-                              <span className="text-sm font-semibold font-mono [font-variant-numeric:tabular-nums] text-ink">
+                            <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
+                              <span className="text-sm font-semibold text-ink">Total repayable</span>
+                              <span className="text-sm font-bold font-mono [font-variant-numeric:tabular-nums] text-gold">
                                 ₱{fmt(previewTotalRepayable)}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between px-4 py-3 bg-paper">
+                            <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
                               <span className="text-sm text-ink-soft">
                                 {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
                               </span>
