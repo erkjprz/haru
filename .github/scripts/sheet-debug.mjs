@@ -49,6 +49,16 @@ async function run(engine, label) {
 
     console.log(`[${label}] post-login URL: ${page.url()}`);
 
+    // Login can fail (bad creds, a captcha check, rate limiting, etc.)
+    // without ever navigating away from /login -- the app shows the
+    // reason in a `.text-rust` paragraph rather than throwing, so read
+    // it directly instead of only inferring failure from the FAB never
+    // appearing three steps later.
+    if (page.url().includes("/login")) {
+      const loginError = await page.locator(".text-rust").first().textContent().catch(() => null);
+      console.log(`[${label}] still on /login -- on-page error: ${loginError ?? "(none shown)"}`);
+    }
+
     // Open the FAB's quick-entry sheet.
     const fab = page.getByRole("button", { name: "New Transaction" });
     await fab.click({ timeout: 10000 }).catch(async () => {
