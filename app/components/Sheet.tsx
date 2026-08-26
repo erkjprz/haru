@@ -83,7 +83,17 @@ export function Sheet({
 
   return (
     <Portal>
-      <div className="fixed inset-0 z-50">
+      {/* top-0 + h-dvh instead of inset-0 -- iOS Safari can size a fixed
+          element's containing block against the toolbar-hidden layout
+          viewport, which is taller than what's actually visible while the
+          toolbar is showing, so inset-0's implied 0-to-0 span can reach
+          past the real visible bottom edge. dvh tracks the actual visible
+          viewport instead. (Tried this once before and reverted it when it
+          seemed to make no difference -- but backdrop-blur's WebKit
+          compositing bug was still present on the backdrop at the time,
+          which could just as easily have been masking whether this
+          actually helped. Worth a clean retest now that it's gone.) */}
+      <div className="fixed top-0 left-0 right-0 h-dvh z-50">
         {/* No backdrop-blur -- `backdrop-filter` combined with
             `position: fixed` is a known WebKit bug on iOS (confirmed on a
             sibling app's bottom nav, same combination) where the element's
@@ -98,7 +108,7 @@ export function Sheet({
           onClick={handleClose}
         />
         <div
-          className={`absolute left-0 right-0 bottom-0 max-h-[92vh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          className={`absolute left-0 right-0 bottom-0 max-h-[92dvh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             open ? "translate-y-0" : "translate-y-full"
           }`}
         >
