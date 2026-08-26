@@ -1,7 +1,67 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
+
+// TEMPORARY diagnostic readout -- the gap-below-the-sheet bug has survived
+// several rounds of fixes (vh -> dvh -> visualViewport) and now reproduces
+// in a plain Chrome tab too, not just the installed PWA, so guessing at
+// another CSS unit isn't productive. This renders the actual numbers the
+// browser is reporting directly on the sheet so they can be read off a
+// screenshot instead of guessed at. Remove once the real cause is found.
+function DebugReadout({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | null> }) {
+  const [info, setInfo] = useState<Record<string, string>>({})
+  const safeAreaRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function update() {
+      const vv = window.visualViewport
+      const panelRect = panelRef.current?.getBoundingClientRect()
+      setInfo({
+        vvH: vv ? vv.height.toFixed(1) : "n/a",
+        vvOffTop: vv ? vv.offsetTop.toFixed(1) : "n/a",
+        innerH: String(window.innerHeight),
+        docClientH: String(document.documentElement.clientHeight),
+        screenH: String(window.screen.height),
+        dpr: String(window.devicePixelRatio),
+        safeBottom: safeAreaRef.current ? String(safeAreaRef.current.offsetHeight) : "n/a",
+        panelBottom: panelRect ? panelRect.bottom.toFixed(1) : "n/a",
+        panelTop: panelRect ? panelRect.top.toFixed(1) : "n/a",
+        scrollY: String(window.scrollY),
+        standalone: String(window.matchMedia("(display-mode: standalone)").matches)
+      })
+    }
+    update()
+    const raf1 = requestAnimationFrame(update)
+    const t = setTimeout(update, 500)
+    window.visualViewport?.addEventListener("resize", update)
+    window.visualViewport?.addEventListener("scroll", update)
+    window.addEventListener("resize", update)
+    return () => {
+      cancelAnimationFrame(raf1)
+      clearTimeout(t)
+      window.visualViewport?.removeEventListener("resize", update)
+      window.visualViewport?.removeEventListener("scroll", update)
+      window.removeEventListener("resize", update)
+    }
+  }, [panelRef])
+
+  return (
+    <>
+      <div ref={safeAreaRef} style={{ position: "absolute", width: 0, paddingBottom: "env(safe-area-inset-bottom)" }} />
+      <div
+        className="fixed top-2 left-2 z-[9999] bg-black text-yellow-300 text-[10px] leading-tight font-mono px-2 py-1.5 rounded pointer-events-none"
+        style={{ maxWidth: "90vw" }}
+      >
+        {Object.entries(info).map(([k, v]) => (
+          <div key={k}>
+            {k}: {v}
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -22,6 +82,7 @@ export function Sheet({
   footer?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const raf = requestAnimationFrame(() => setOpen(true))
     return () => cancelAnimationFrame(raf)
@@ -143,6 +204,7 @@ export function Sheet({
           onClick={handleClose}
         />
         <div
+          ref={panelRef}
           className={`absolute left-0 right-0 bottom-0 max-h-[92dvh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             open ? "translate-y-0" : "translate-y-full"
           }`}
@@ -177,6 +239,7 @@ export function Sheet({
           )}
         </div>
       </div>
+      <DebugReadout panelRef={panelRef} />
     </Portal>
   )
 }
