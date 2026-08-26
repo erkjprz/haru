@@ -196,12 +196,17 @@ export default function Navbar() {
 
             {/* Replaces the old header "+ New" button -- floats above the
                 pill (rather than beside it) so it reads as the one
-                emphasized action, not just another dock tab. */}
+                emphasized action, not just another dock tab. Gold is
+                already this page's everywhere-accent (active tab, filter
+                border, chips), so a gold FAB read as just one more gold
+                thing instead of standing out -- bg-ink/text-paper plus a
+                gold glow is the same "primary action" language every
+                submit button elsewhere in the app already uses. */}
             <button
               ref={fabRef}
               onClick={() => router.push("/transactions/new")}
               aria-label="New Transaction"
-              className="absolute right-4 w-14 h-14 rounded-full bg-gold-soft text-ink flex items-center justify-center shadow-lg"
+              className="absolute right-4 w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center shadow-lg shadow-gold/30 ring-1 ring-gold/40"
               style={{ bottom: "calc(100% + 0.5rem)", transform: "translateZ(0)", willChange: "transform" }}
             >
               <span className="text-3xl leading-none font-light">+</span>
