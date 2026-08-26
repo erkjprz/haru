@@ -1,22 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
-
-// TEMPORARY -- root cause confirmed: disabling the body-lock effect
-// (which set document.body to `position: fixed` while the sheet was
-// open) took innerHeight from 793 to 852 -- matching the sibling app,
-// which never touches body's position at all. Setting body itself to
-// position:fixed was making WebKit recompute a shorter visualViewport
-// in this exact standalone-PWA context, and every measurement taken
-// this whole session had that lock active, which is why it showed up
-// no matter what else changed. Replaced the lock below with
-// overflow:hidden + overscroll-behavior:none instead -- blocks
-// background scroll-chaining without ever touching `position`, so it
-// shouldn't trigger the same WebKit behavior. This build keeps a
-// trimmed readout for one more round to confirm that on-device before
-// removing it for good.
-const BUILD_TAG = "sheet-debug-12"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
@@ -37,9 +22,6 @@ export function Sheet({
   footer?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
-  const panelRef = useRef<HTMLDivElement>(null)
-  const footerRef = useRef<HTMLDivElement>(null)
-  const [debugInfo, setDebugInfo] = useState("")
   useEffect(() => {
     const raf = requestAnimationFrame(() => setOpen(true))
     return () => cancelAnimationFrame(raf)
@@ -60,40 +42,20 @@ export function Sheet({
     window.scrollTo(0, 0)
   }, [])
 
-  // TEMPORARY -- see BUILD_TAG comment above.
-  useEffect(() => {
-    function update() {
-      const rect = panelRef.current?.getBoundingClientRect()
-      const submitRect = footerRef.current?.querySelector("button")?.getBoundingClientRect()
-      setDebugInfo(
-        `${BUILD_TAG} innerH:${window.innerHeight} ` +
-          `panelBottom:${rect?.bottom.toFixed(0) ?? "?"} ` +
-          `submitBottom:${submitRect?.bottom.toFixed(0) ?? "?"}`
-      )
-    }
-    update()
-    const raf = requestAnimationFrame(update)
-    const t = setTimeout(update, 500)
-    window.addEventListener("resize", update)
-    return () => {
-      cancelAnimationFrame(raf)
-      clearTimeout(t)
-      window.removeEventListener("resize", update)
-    }
-  }, [])
-
   // Locks the page behind the sheet from scrolling while it's open --
   // overflow:hidden alone can still let a touch-drag on the backdrop
   // chain into scrolling the page underneath on iOS Safari, so
   // overscroll-behavior:none backs it up. Deliberately NOT `position:
-  // fixed` (what this used before): setting body to position:fixed
-  // while the sheet is open is what was making WebKit recompute a
-  // shorter visualViewport in this exact standalone-PWA context --
-  // confirmed by disabling it -- see BUILD_TAG comment above. Each Sheet
-  // captures/restores whatever was already on body when it mounted, not
-  // a hardcoded default, so this nests correctly when a picker sheet
-  // (loan, type) opens on top of this one -- the inner one's cleanup
-  // just hands back the outer one's own locked state.
+  // fixed`: setting body to position:fixed while the sheet is open (what
+  // this used to do) makes WebKit recompute a visualViewport ~59px
+  // shorter than the real screen in the installed home-screen app --
+  // confirmed by disabling it and watching the sheet's Submit/Save
+  // button reach the true bottom for the first time. A sibling app's own
+  // sheet never touches body's position at all and never had the bug.
+  // Each Sheet captures/restores whatever was already on body when it
+  // mounted, not a hardcoded default, so this nests correctly when a
+  // picker sheet (loan, type) opens on top of this one -- the inner
+  // one's cleanup just hands back the outer one's own locked state.
   useEffect(() => {
     const body = document.body
     const previous = {
@@ -118,10 +80,14 @@ export function Sheet({
   return (
     <Portal>
       {/* Its own full-screen fixed layer, not a wrapper the panel sits
-          inside of -- see BUILD_TAG comment above for why that nesting was
-          the actual bug. No backdrop-blur -- `backdrop-filter` combined
-          with `position: fixed` is a known WebKit bug on iOS (confirmed on
-          a sibling app's bottom nav, same combination) where the element's
+          inside of -- a bottom sheet used to be structured as a full-
+          height `fixed` wrapper with the panel `absolute bottom:0`
+          inside it, but nesting it that way meant the panel's floor was
+          always wherever the wrapper's own bottom edge landed, which was
+          short of the real screen in the installed home-screen app. No
+          backdrop-blur -- `backdrop-filter` combined with `position:
+          fixed` is a known WebKit bug on iOS (confirmed on a sibling
+          app's bottom nav, same combination) where the element's
           compositing goes wrong, independent of its actual DOM box --
           layout stays correct but the paint doesn't. bg-black/80 is opaque
           enough on its own. */}
@@ -131,17 +97,15 @@ export function Sheet({
         }`}
         onClick={handleClose}
       />
-      {/* Its own independent `position: fixed; bottom: 0` element (not
-          `absolute` inside a full-height wrapper) -- see BUILD_TAG comment
-          above. */}
+      {/* Its own independent `position: fixed; bottom: 0` element, not
+          `absolute` inside a full-height wrapper -- see the comment on
+          the backdrop above. */}
       <div
-        ref={panelRef}
         className={`fixed left-0 right-0 bottom-0 z-50 max-h-[92dvh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
       >
         <div className="w-9 h-1 rounded-full bg-hairline mx-auto mt-2.5 flex-shrink-0" />
-        <div className="text-[9px] font-mono text-rust text-center flex-shrink-0 break-all px-1">{debugInfo}</div>
         <div className="relative flex items-center justify-center px-4 pt-3 pb-4 flex-shrink-0">
           <h2 className="font-display text-lg font-medium text-ink">{title}</h2>
           <button
@@ -169,7 +133,6 @@ export function Sheet({
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pb-4">{children}</div>
         {footer && (
           <div
-            ref={footerRef}
             className="px-4 pt-3 flex-shrink-0 border-t border-hairline"
             style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
           >
