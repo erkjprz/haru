@@ -192,8 +192,15 @@ export function Sheet({
               rest of the gesture to whatever's behind it (the backdrop, the
               locked page), which can register as the tap that closes the
               sheet mid-scroll -- e.g. scrolling back up to reach the Amount
-              field after it's passed off the top of the view. */}
-          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">{children}</div>
+              field after it's passed off the top of the view. min-h-0 is
+              load-bearing here, not decorative -- a flex child with
+              overflow-y-auto defaults its minimum height to its own
+              content size (a WebKit quirk), not 0, which can push this
+              panel's flex column past its own max-height cap and squeeze
+              the footer below out from under `overflow-hidden` on the
+              panel, clipping the Submit/Save button even though the
+              numbers on paper say everything should fit. */}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pb-4">{children}</div>
           {footer && (
             <div
               className="px-4 pt-3 flex-shrink-0 border-t border-hairline"
