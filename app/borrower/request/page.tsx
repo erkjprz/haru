@@ -277,7 +277,7 @@ export default function BorrowerRequestLoanPage() {
                   </label>
                   <input
                     className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    placeholder="Add a note"
+                    placeholder="Additional notes"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
