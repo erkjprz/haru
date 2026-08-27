@@ -3,7 +3,7 @@
 import { Sheet } from "@/app/components/Sheet"
 
 type Tone = "in" | "out" | "neutral"
-type TypeOption = { key: string; label: string; arrow: string; tone: Tone }
+type TypeOption = { key: string; label: string; arrow: string; tone: Tone; adminOnly: boolean }
 
 // Bold solid-fill badge, local to the type picker and its trigger row --
 // distinct from the shared FlowBadge (a faint /10 tint tuned for the dense
@@ -37,10 +37,10 @@ export function TypePickerSheet({
   onSelect: (key: string) => void
   onClose: () => void
 }) {
-  return (
-    <Sheet title="Transaction type" onClose={onClose}>
+  function renderList(items: TypeOption[]) {
+    return (
       <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
-        {options.map((o) => (
+        {items.map((o) => (
           <button
             key={o.key}
             onClick={() => onSelect(o.key)}
@@ -53,6 +53,34 @@ export function TypePickerSheet({
           </button>
         ))}
       </div>
+    )
+  }
+
+  const memberOptions = options.filter((o) => !o.adminOnly)
+  const adminOptions = options.filter((o) => o.adminOnly)
+  // A section header only earns its keep when there's a second section to
+  // separate it from -- a member never sees the admin-only group at all
+  // (filtered out before this even renders), so their list stays a plain
+  // flat list exactly as before instead of a lone, pointless "Member"
+  // header over the only group present.
+  const grouped = memberOptions.length > 0 && adminOptions.length > 0
+
+  return (
+    <Sheet title="Transaction type" onClose={onClose}>
+      {grouped ? (
+        <div className="space-y-5">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Member</p>
+            {renderList(memberOptions)}
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Admin</p>
+            {renderList(adminOptions)}
+          </div>
+        </div>
+      ) : (
+        renderList(options)
+      )}
     </Sheet>
   )
 }
