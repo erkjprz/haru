@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { Sheet } from "@/app/components/Sheet"
 import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
+import { InvestmentPickerSheet, InvestmentRowIcon } from "@/app/components/InvestmentPickerSheet"
 import { TypePickerSheet, TypeBadge } from "@/app/components/TypePickerSheet"
 import {
   AmountHero,
@@ -128,16 +129,6 @@ function ClockIcon() {
   )
 }
 
-// Same shape as Dashboard's "Investment" shortcut icon.
-function InvestmentIcon() {
-  return (
-    <RowIcon>
-      <path d="M4 19V9M9.5 19V5M15 19v-7" strokeLinecap="round" />
-      <path d="M4 19h16" strokeLinecap="round" />
-    </RowIcon>
-  )
-}
-
 // Same shape as Dashboard's "Repay Loan" shortcut icon.
 function RepeatIcon() {
   return (
@@ -205,6 +196,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
   const [selectedLoanId, setSelectedLoanId] = useState("")
   const [showLoanPicker, setShowLoanPicker] = useState(false)
+  const [showInvestmentPicker, setShowInvestmentPicker] = useState(false)
 
   const [contributionDefault, setContributionDefault] = useState<number | null>(cached?.contributionDefault ?? null)
   const [contributionBankDefault, setContributionBankDefault] = useState<string | null>(cached?.contributionBankDefault ?? null)
@@ -323,6 +315,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
   const activeLoans = myLoans.filter((l) => l.status === "active")
   const selectedLoan = activeLoans.find((l) => l.loan_id === selectedLoanId) ?? null
+  const selectedInvestment = investmentsList.find((inv) => inv.investment_id === investmentId) ?? null
 
   const isLoanRequest = selectedType === "loan_request"
   const isLoanPayment = selectedType === "loan_payment"
@@ -752,16 +745,25 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   )
 
   const investmentField = isInvestmentEntry && (
-    <FieldRow icon={<InvestmentIcon />}>
-      <select className={rowSelectClass} value={investmentId} onChange={(e) => setInvestmentId(e.target.value)}>
-        <option value="">Which investment</option>
-        {investmentsList.map((inv) => (
-          <option key={inv.investment_id} value={inv.investment_id}>
-            {inv.name}
-          </option>
-        ))}
-      </select>
-    </FieldRow>
+    // Same tappable-row pattern as the Loan Payment field below -- both are
+    // just "pick one of a short list," and InvestmentPickerSheet already
+    // has its own graceful "No open investments" empty state, same as
+    // LoanPickerSheet does.
+    <button
+      type="button"
+      onClick={() => setShowInvestmentPicker(true)}
+      className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+    >
+      <InvestmentRowIcon />
+      <span className="flex-1 min-w-0 text-sm">
+        {selectedInvestment ? (
+          <span className="text-ink">{selectedInvestment.name}</span>
+        ) : (
+          <span className="text-ink-soft">Which investment</span>
+        )}
+      </span>
+      <span className="text-ink-soft text-xs shrink-0">▾</span>
+    </button>
   )
 
   const toBankField = isBankTransfer && (
@@ -1120,6 +1122,17 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         onSelect={(loan) => {
           setSelectedLoanId(loan.loan_id)
           setShowLoanPicker(false)
+        }}
+      />
+    )}
+
+    {showInvestmentPicker && (
+      <InvestmentPickerSheet
+        investments={investmentsList}
+        onClose={() => setShowInvestmentPicker(false)}
+        onSelect={(investment) => {
+          setInvestmentId(investment.investment_id)
+          setShowInvestmentPicker(false)
         }}
       />
     )}
