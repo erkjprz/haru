@@ -302,61 +302,6 @@ export default function DashboardPage() {
             <ScanToPayCard />
           </div>
 
-          {/* Member-facing types (Contribution, Withdrawal, Loan Request,
-              Loan Payment, Investment Return) used to have their own
-              shortcuts here too, deep-linking into /transactions/new --
-              dropped now that the FAB's quick-entry sheet covers all five
-              of those directly, so this section is admin-only bookkeeping
-              types the FAB never needed to cover in the first place. */}
-          {isAdmin && (
-            <>
-              <h2 className="font-display text-[17px] font-medium text-ink mt-2 mb-2.5">Admin Transactions</h2>
-              <div className="grid grid-cols-4 gap-2">
-                <Shortcut
-                  label="Bank Interest"
-                  onClick={() => router.push("/transactions/new?type=bank_interest")}
-                  icon={
-                    <>
-                      <rect x="3.5" y="7" width="17" height="12" rx="1.5" />
-                      <path d="M3.5 11h17M8 7V5.5a1.5 1.5 0 011.5-1.5h5a1.5 1.5 0 011.5 1.5V7" />
-                      <path d="M9.5 16.5l5-5M9.75 14a.25.25 0 100-.5.25.25 0 000 .5zM14.25 15.5a.25.25 0 100-.5.25.25 0 000 .5z" />
-                    </>
-                  }
-                />
-                <Shortcut
-                  label="Expense"
-                  onClick={() => router.push("/transactions/new?type=expense")}
-                  icon={
-                    <>
-                      <path d="M6 3.5h9l3 3V19a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 016 19V3.5z" />
-                      <path d="M9 8.5h6M9 12h6M9 15.5h3.5" strokeLinecap="round" />
-                    </>
-                  }
-                />
-                <Shortcut
-                  label="Bank Transfer"
-                  onClick={() => router.push("/transactions/new?type=bank_transfer")}
-                  icon={
-                    <>
-                      <path d="M4 8h13.5M17.5 8l-3.5-3.5M17.5 8L14 11.5" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M20 16H6.5M6.5 16L10 12.5M6.5 16L10 19.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </>
-                  }
-                />
-                <Shortcut
-                  label="Investment"
-                  onClick={() => router.push("/transactions/new?type=investment")}
-                  icon={
-                    <>
-                      <path d="M4 19V9M9.5 19V5M15 19v-7M20 19v-3" strokeLinecap="round" />
-                      <path d="M4 19h16" strokeLinecap="round" />
-                    </>
-                  }
-                />
-              </div>
-            </>
-          )}
-
           <div className="flex items-baseline justify-between gap-3 mt-6 mb-2.5">
             <h2 className="font-display text-[17px] font-medium text-ink">Recent Transactions</h2>
             <button onClick={() => router.push("/transactions")} className="shrink-0 text-[13px] font-medium text-gold">
@@ -404,19 +349,5 @@ export default function DashboardPage() {
         </div>
       </main>
     </>
-  )
-}
-
-function Shortcut({ label, onClick, icon }: { label: string; onClick: () => void; icon: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center gap-2 bg-paper-2 border border-hairline rounded-md px-1.5 pt-3.5 pb-2.5 hover:bg-paper transition-colors"
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-[22px] h-[22px] text-gold">
-        {icon}
-      </svg>
-      <span className="text-[10.5px] leading-tight text-ink-soft text-center">{label}</span>
-    </button>
   )
 }
