@@ -6,6 +6,8 @@ import { useAuth } from "@/app/auth-context"
 import { Sheet } from "@/app/components/Sheet"
 import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
 import { InvestmentPickerSheet, InvestmentRowIcon } from "@/app/components/InvestmentPickerSheet"
+import { InterestRatePickerSheet } from "@/app/components/InterestRatePickerSheet"
+import { TermPickerSheet } from "@/app/components/TermPickerSheet"
 import { TypePickerSheet, TypeBadge } from "@/app/components/TypePickerSheet"
 import {
   AmountHero,
@@ -197,6 +199,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [selectedLoanId, setSelectedLoanId] = useState("")
   const [showLoanPicker, setShowLoanPicker] = useState(false)
   const [showInvestmentPicker, setShowInvestmentPicker] = useState(false)
+  const [showInterestRatePicker, setShowInterestRatePicker] = useState(false)
+  const [showTermPicker, setShowTermPicker] = useState(false)
 
   const [contributionDefault, setContributionDefault] = useState<number | null>(cached?.contributionDefault ?? null)
   const [contributionBankDefault, setContributionBankDefault] = useState<string | null>(cached?.contributionBankDefault ?? null)
@@ -833,9 +837,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                   <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
                     {typeField}
 
-                    <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
-
                     {onBehalfOfField}
+
+                    <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
 
                     {investmentField}
 
@@ -951,9 +955,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                       <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
                         {typeField}
 
-                        <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
-
                         {onBehalfOfField}
+
+                        <DateField value={txnDate} onChange={setTxnDate} placeholder="Date" bare />
 
                         <FieldRow icon={<NoteIcon />}>
                           <input
@@ -1010,6 +1014,20 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                               ₱
                             </button>
                           </div>
+                          {/* Fixed peso amounts have no sensible universal
+                              presets, so the picker shortcut only applies
+                              to the rate side -- the input itself stays the
+                              only way to enter a fixed amount either way. */}
+                          {interestType === "rate" && (
+                            <button
+                              type="button"
+                              onClick={() => setShowInterestRatePicker(true)}
+                              aria-label="Choose a common interest rate"
+                              className="text-ink-soft text-xs shrink-0 px-1"
+                            >
+                              ▾
+                            </button>
+                          )}
                         </FieldRow>
 
                         <FieldRow icon={<ClockIcon />}>
@@ -1024,6 +1042,14 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                             onChange={(e) => setTermMonths(e.target.value)}
                           />
                           <span className="text-xs text-ink-soft shrink-0">months</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowTermPicker(true)}
+                            aria-label="Choose a common payment term"
+                            className="text-ink-soft text-xs shrink-0 px-1"
+                          >
+                            ▾
+                          </button>
                         </FieldRow>
 
                         <FieldRow icon={<RepeatIcon />}>
@@ -1133,6 +1159,28 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         onSelect={(investment) => {
           setInvestmentId(investment.investment_id)
           setShowInvestmentPicker(false)
+        }}
+      />
+    )}
+
+    {showInterestRatePicker && (
+      <InterestRatePickerSheet
+        value={interestRate}
+        onClose={() => setShowInterestRatePicker(false)}
+        onSelect={(rate) => {
+          setInterestRate(String(rate))
+          setShowInterestRatePicker(false)
+        }}
+      />
+    )}
+
+    {showTermPicker && (
+      <TermPickerSheet
+        value={termMonths}
+        onClose={() => setShowTermPicker(false)}
+        onSelect={(months) => {
+          setTermMonths(String(months))
+          setShowTermPicker(false)
         }}
       />
     )}
