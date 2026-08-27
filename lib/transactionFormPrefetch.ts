@@ -22,10 +22,23 @@ export type TransactionFormData = {
 // right one to reuse. Reset (never read) across a full page reload,
 // which is fine: the whole point is covering the FAB tap that follows an
 // already-open page, not surviving a reload.
-let cache: { forMemberId: string; data: TransactionFormData } | null = null
+//
+// Keyed on isAdmin as well as memberId -- auth-context.tsx can seed
+// `member` from a stale session cache before the real Supabase check
+// corrects it (see its own comment), so a role flip (or a plain stale
+// cached role from an earlier session) can mean this fires once with the
+// wrong isAdmin before firing again with the right one moments later.
+// Without isAdmin in the key, that first wrong-shaped fetch (e.g.
+// allMembers left empty for a not-yet-known admin) would satisfy the
+// cache check for the corrected render too, and NewTransactionSheet
+// would never re-fetch to pick up the correction -- it only seeds state
+// once at mount and bails on any fetch of its own if *something* is
+// already cached, not specifically something cached for the current
+// isAdmin.
+let cache: { forMemberId: string; forIsAdmin: boolean; data: TransactionFormData } | null = null
 
-export function getCachedTransactionFormData(memberId: string): TransactionFormData | null {
-  return cache && cache.forMemberId === memberId ? cache.data : null
+export function getCachedTransactionFormData(memberId: string, isAdmin: boolean): TransactionFormData | null {
+  return cache && cache.forMemberId === memberId && cache.forIsAdmin === isAdmin ? cache.data : null
 }
 
 // Callable from both Navbar (fire-and-forget, to warm the cache early)
@@ -111,6 +124,6 @@ export async function loadTransactionFormData(
     loanPaymentBankDefault: prefs?.default_loan_payment_bank_id ?? null
   }
 
-  cache = { forMemberId: memberId, data }
+  cache = { forMemberId: memberId, forIsAdmin: isAdmin, data }
   return { data, error: null }
 }

@@ -173,7 +173,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   // whatever's cached (possibly nothing, on a very fast tap) means
   // dataLoading only starts true when there's genuinely nothing to show
   // yet, instead of unconditionally flashing "Loading..." every time.
-  const cached = memberId ? getCachedTransactionFormData(memberId) : null
+  const cached = memberId ? getCachedTransactionFormData(memberId, isAdmin) : null
 
   const [dataLoading, setDataLoading] = useState(!cached)
   const [loadError, setLoadError] = useState("")
