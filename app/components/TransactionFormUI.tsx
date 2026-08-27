@@ -31,10 +31,36 @@ export function FlowBadge({
   )
 }
 
+// Thousands-comma display for AmountHero -- a plain type="number" input
+// can't show commas at all (browsers reject non-digit characters in its
+// value), so this only formats the integer part for display; the decimal
+// part is left exactly as typed, uncapped, so typing isn't fought mid-edit.
+function formatAmountDisplay(raw: string): string {
+  if (!raw) return ""
+  const dotIndex = raw.indexOf(".")
+  const intPart = dotIndex === -1 ? raw : raw.slice(0, dotIndex)
+  const decPart = dotIndex === -1 ? "" : raw.slice(dotIndex)
+  return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + decPart
+}
+
+// Reverses formatAmountDisplay on every keystroke so the value handed to
+// onChange (and everywhere else that reads this same amount -- Number()
+// parsing, validation) stays the same plain digit string it always was,
+// commas never part of the contract.
+function stripAmountFormatting(raw: string): string {
+  const cleaned = raw.replace(/[^\d.]/g, "")
+  const firstDot = cleaned.indexOf(".")
+  if (firstDot === -1) return cleaned
+  return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "")
+}
+
 // Amount-first entry point -- the hero of the redesigned form. A real
-// number input (not a display-only readout) so typing, pasting, and the
+// text input (not a display-only readout) so typing, pasting, and the
 // mobile numeric keypad all work exactly like the old plain field did;
-// only the styling makes it the first, biggest thing on the screen.
+// only the styling makes it the first, biggest thing on the screen. Not
+// type="number" -- that can't display comma-formatted digits at all, so
+// this sanitizes input by hand instead of leaning on native number
+// parsing/validation.
 export function AmountHero({
   value,
   onChange,
@@ -56,14 +82,12 @@ export function AmountHero({
       <div className="flex items-center justify-center gap-1.5">
         <span className="font-mono text-3xl font-bold text-ink-soft">₱</span>
         <input
-          type="number"
+          type="text"
           inputMode="decimal"
-          min="0.01"
-          step="0.01"
           placeholder="0.00"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="text-size-intentional font-mono [font-variant-numeric:tabular-nums] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-4xl font-bold text-ink bg-transparent text-center w-full max-w-[220px] focus:outline-none placeholder:text-ink-soft/30"
+          value={formatAmountDisplay(value)}
+          onChange={(e) => onChange(stripAmountFormatting(e.target.value))}
+          className="text-size-intentional font-mono [font-variant-numeric:tabular-nums] text-4xl font-bold text-ink bg-transparent text-center w-full max-w-[220px] focus:outline-none placeholder:text-ink-soft/30"
         />
       </div>
       {helper && <p className="text-sm text-ink-soft mt-2.5 max-w-xs mx-auto">{helper}</p>}
