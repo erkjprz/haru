@@ -6,7 +6,11 @@
 import { chromium, webkit, devices } from "playwright";
 import { writeFileSync, mkdirSync } from "node:fs";
 
-const TARGET_URL = process.env.TARGET_URL;
+// Strips any trailing slash(es) -- a URL pasted with one (the input's
+// "no trailing slash" hint is easy to miss) would otherwise produce
+// `${TARGET_URL}/login` as a double slash, which some hosts don't route
+// to the actual login page, leaving the password field to never appear.
+const TARGET_URL = process.env.TARGET_URL?.replace(/\/+$/, "");
 const EMAIL = process.env.TEST_EMAIL;
 const PASSWORD = process.env.TEST_PASSWORD;
 
@@ -19,6 +23,11 @@ mkdirSync("artifacts", { recursive: true });
 
 const device = devices["iPhone 14"];
 
+// One engine's failure shouldn't stop the other from running, and a
+// failure with no screenshot/HTML to show for it just repeats last
+// time's problem (a bare timeout, no idea what page was actually on
+// screen) -- so every step is wrapped to always leave a diagnostic trail
+// in artifacts/ even when something goes wrong.
 async function run(engine, label) {
   const browser = await engine.launch();
   const context = await browser.newContext({ ...device });
@@ -28,47 +37,74 @@ async function run(engine, label) {
   page.on("console", (msg) => consoleLines.push(`[console] ${msg.text()}`));
   page.on("pageerror", (err) => consoleLines.push(`[pageerror] ${err.message}`));
 
-  await page.goto(`${TARGET_URL}/login`, { waitUntil: "networkidle" });
-  await page.fill('input[type="email"]', EMAIL);
-  await page.fill('input[type="password"]', PASSWORD);
-  await page.click('button:has-text("Sign In")');
-  await page.waitForURL(/dashboard/, { timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(1000);
-
-  console.log(`[${label}] post-login URL: ${page.url()}`);
-
-  // Open the FAB's quick-entry sheet.
-  const fab = page.getByRole("button", { name: "New Transaction" });
-  await fab.click({ timeout: 10000 }).catch(async () => {
-    // Fallback if aria-label lookup fails for any reason.
-    await page.locator('button[aria-label="New Transaction"]').click();
-  });
-  await page.waitForTimeout(800);
-
-  const metrics = await page.evaluate(() => {
-    const vv = window.visualViewport;
-    const panel = document.querySelector(".rounded-t-2xl");
-    const submit = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.trim() === "Submit");
-    const panelRect = panel?.getBoundingClientRect();
-    const submitRect = submit?.getBoundingClientRect();
-    return {
-      innerWidth: window.innerWidth,
-      innerHeight: window.innerHeight,
-      screenHeight: window.screen.height,
-      vvHeight: vv?.height,
-      standalone: window.matchMedia("(display-mode: standalone)").matches,
-      panelRect: panelRect ? { top: panelRect.top, bottom: panelRect.bottom, height: panelRect.height } : null,
-      submitRect: submitRect ? { top: submitRect.top, bottom: submitRect.bottom } : null,
-      submitClippedPastViewport: submitRect ? submitRect.bottom > window.innerHeight : null
-    };
+  // The `.text-rust` DOM read in an earlier version printed a bare "{}"
+  // instead of a real message -- ambiguous whether that's a genuinely
+  // empty error, a different element matching the class, or something
+  // else. Reading the actual HTTP response from Supabase's own auth
+  // endpoint is unambiguous: it's the literal reason the request was
+  // rejected, straight from the source, not a guess at which DOM node
+  // holds it.
+  let authResponseLog = "(no auth/v1/token response observed)";
+  page.on("response", async (res) => {
+    if (res.url().includes("/auth/v1/token")) {
+      const body = await res.text().catch((e) => `(could not read body: ${e.message})`);
+      authResponseLog = `${res.status()} ${res.url()}\n${body}`;
+    }
   });
 
-  console.log(`[${label}] metrics:`, JSON.stringify(metrics, null, 2));
-  writeFileSync(`artifacts/${label}-metrics.json`, JSON.stringify(metrics, null, 2));
-  writeFileSync(`artifacts/${label}-console.log`, consoleLines.join("\n"));
-  await page.screenshot({ path: `artifacts/${label}-sheet.png` });
+  try {
+    await page.goto(`${TARGET_URL}/login`, { waitUntil: "networkidle" });
+    console.log(`[${label}] login page URL: ${page.url()}`);
 
-  await browser.close();
+    await page.fill('input[type="email"]', EMAIL);
+    await page.fill('input[type="password"]', PASSWORD);
+    await page.click('button:has-text("Sign In")');
+    await page.waitForURL(/dashboard/, { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1000);
+
+    console.log(`[${label}] post-login URL: ${page.url()}`);
+
+    if (page.url().includes("/login")) {
+      console.log(`[${label}] still on /login -- auth endpoint response:\n${authResponseLog}`);
+    }
+
+    // Open the FAB's quick-entry sheet.
+    const fab = page.getByRole("button", { name: "New Transaction" });
+    await fab.click({ timeout: 10000 }).catch(async () => {
+      // Fallback if aria-label lookup fails for any reason.
+      await page.locator('button[aria-label="New Transaction"]').click();
+    });
+    await page.waitForTimeout(800);
+
+    const metrics = await page.evaluate(() => {
+      const vv = window.visualViewport;
+      const panel = document.querySelector(".rounded-t-2xl");
+      const submit = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.trim() === "Submit");
+      const panelRect = panel?.getBoundingClientRect();
+      const submitRect = submit?.getBoundingClientRect();
+      return {
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        screenHeight: window.screen.height,
+        vvHeight: vv?.height,
+        standalone: window.matchMedia("(display-mode: standalone)").matches,
+        panelRect: panelRect ? { top: panelRect.top, bottom: panelRect.bottom, height: panelRect.height } : null,
+        submitRect: submitRect ? { top: submitRect.top, bottom: submitRect.bottom } : null,
+        submitClippedPastViewport: submitRect ? submitRect.bottom > window.innerHeight : null
+      };
+    });
+
+    console.log(`[${label}] metrics:`, JSON.stringify(metrics, null, 2));
+    writeFileSync(`artifacts/${label}-metrics.json`, JSON.stringify(metrics, null, 2));
+  } catch (err) {
+    console.error(`[${label}] failed:`, err.message);
+    writeFileSync(`artifacts/${label}-error.txt`, `${err.message}\n\nPage URL at failure: ${page.url()}`);
+    writeFileSync(`artifacts/${label}-page.html`, await page.content().catch(() => "(could not read page content)"));
+  } finally {
+    writeFileSync(`artifacts/${label}-console.log`, consoleLines.join("\n"));
+    await page.screenshot({ path: `artifacts/${label}-sheet.png` }).catch(() => {});
+    await browser.close();
+  }
 }
 
 await run(chromium, "chromium");
