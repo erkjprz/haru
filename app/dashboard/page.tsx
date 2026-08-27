@@ -302,67 +302,16 @@ export default function DashboardPage() {
             <ScanToPayCard />
           </div>
 
-          <h2 className="font-display text-[17px] font-medium text-ink mt-2 mb-2.5">Shortcuts</h2>
-          <div className="grid grid-cols-4 gap-2">
-            <Shortcut
-              label="Add Contribution"
-              onClick={() => router.push("/transactions/new?type=contribution")}
-              icon={
-                <path d="M12 19V5M12 5l-5 5M12 5l5 5" strokeLinecap="round" strokeLinejoin="round" />
-              }
-            />
-            <Shortcut
-              label="Request Withdrawal"
-              onClick={() => router.push("/transactions/new?type=withdrawal")}
-              icon={
-                <path d="M12 5v14M12 19l-5-5M12 19l5-5" strokeLinecap="round" strokeLinejoin="round" />
-              }
-            />
-            <Shortcut
-              label="Request Loan"
-              onClick={() => router.push("/transactions/new?type=loan_request")}
-              icon={
-                <>
-                  <rect x="3.5" y="7" width="17" height="12" rx="1.5" />
-                  <path d="M3.5 11h17M8 7V5.5a1.5 1.5 0 011.5-1.5h5a1.5 1.5 0 011.5 1.5V7" />
-                </>
-              }
-            />
-            <Shortcut
-              label="Repay Loan"
-              onClick={() => router.push("/transactions/new?type=loan_payment")}
-              icon={
-                <>
-                  <path d="M4 12a8 8 0 0113.66-5.66M20 12a8 8 0 01-13.66 5.66" strokeLinecap="round" />
-                  <path d="M17.5 3.5v3h-3M6.5 20.5v-3h3" strokeLinecap="round" strokeLinejoin="round" />
-                </>
-              }
-            />
-            {/* Not adminOnly in ENTRY_TYPES (any member can log getting
-                investment capital back), so this sits with the always-
-                visible shortcuts above rather than the isAdmin-gated block
-                below -- it had the same missing-entry-point gap as those,
-                just for a different reason (no shortcut at all, not an
-                admin restriction). */}
-            <Shortcut
-              label="Investment Return"
-              onClick={() => router.push("/transactions/new?type=investment_return")}
-              icon={
-                <>
-                  <path d="M4 19V9M9.5 19V5M15 19v-7" strokeLinecap="round" />
-                  <path d="M4 19h11.5" strokeLinecap="round" />
-                  <path d="M20 5v6.5M20 11.5l-3-3M20 11.5l3-3" strokeLinecap="round" strokeLinejoin="round" />
-                </>
-              }
-            />
-            {isAdmin && (
-              <>
-                {/* The rarer bookkeeping entry types (Bank Interest, Expense,
-                    Bank Transfer, Investment) only had an entry point via
-                    /transactions/new's own in-page type dropdown, reachable
-                    only by first landing on the page through one of the
-                    member-facing shortcuts above and then switching the
-                    dropdown -- these give admins a direct one. */}
+          {/* Member-facing types (Contribution, Withdrawal, Loan Request,
+              Loan Payment, Investment Return) used to have their own
+              shortcuts here too, deep-linking into /transactions/new --
+              dropped now that the FAB's quick-entry sheet covers all five
+              of those directly, so this section is admin-only bookkeeping
+              types the FAB never needed to cover in the first place. */}
+          {isAdmin && (
+            <>
+              <h2 className="font-display text-[17px] font-medium text-ink mt-2 mb-2.5">Admin Transactions</h2>
+              <div className="grid grid-cols-4 gap-2">
                 <Shortcut
                   label="Bank Interest"
                   onClick={() => router.push("/transactions/new?type=bank_interest")}
@@ -404,9 +353,9 @@ export default function DashboardPage() {
                     </>
                   }
                 />
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
 
           <div className="flex items-baseline justify-between gap-3 mt-6 mb-2.5">
             <h2 className="font-display text-[17px] font-medium text-ink">Recent Transactions</h2>
