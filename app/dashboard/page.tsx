@@ -338,6 +338,23 @@ export default function DashboardPage() {
                 </>
               }
             />
+            {/* Not adminOnly in ENTRY_TYPES (any member can log getting
+                investment capital back), so this sits with the always-
+                visible shortcuts above rather than the isAdmin-gated block
+                below -- it had the same missing-entry-point gap as those,
+                just for a different reason (no shortcut at all, not an
+                admin restriction). */}
+            <Shortcut
+              label="Investment Return"
+              onClick={() => router.push("/transactions/new?type=investment_return")}
+              icon={
+                <>
+                  <path d="M4 19V9M9.5 19V5M15 19v-7" strokeLinecap="round" />
+                  <path d="M4 19h11.5" strokeLinecap="round" />
+                  <path d="M20 5v6.5M20 11.5l-3-3M20 11.5l3-3" strokeLinecap="round" strokeLinejoin="round" />
+                </>
+              }
+            />
             {isAdmin && (
               <>
                 {/* The rarer bookkeeping entry types (Bank Interest, Expense,
