@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
+import { readCache, writeCache } from "@/lib/cache"
 
 type AuthMember = {
   member_id: string
@@ -19,12 +20,29 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState>({ loading: true, user: null, member: null })
 
+const MEMBER_CACHE_KEY = "auth:member"
+
 // Fetches the logged-in user's member row once per session (on sign-in,
 // sign-out, or first load) instead of every page re-querying it on every
 // navigation. onAuthStateChange fires immediately with the current session
 // when subscribed, so no separate getUser() call is needed up front.
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<AuthState>({ loading: true, user: null, member: null })
+  // `loading` still starts true and only flips once the real check
+  // resolves -- every page gating a redirect on it (root, /login,
+  // /waiting, /account, etc.) keeps working exactly as before. `member`
+  // alone seeds from last session's cache so consumers that don't wait on
+  // `loading` (Navbar's dock/FAB prefetch, dashboard's own per-member
+  // cache lookup, which needs a member id to even find its cache key) can
+  // paint the right thing on the very first frame instead of flickering
+  // in once the live round trip finishes. A stale role here is corrected
+  // within one network round trip same as any other stale cache in this
+  // app -- nothing security-sensitive reads `member` without also
+  // checking `loading`.
+  const [state, setState] = useState<AuthState>(() => ({
+    loading: true,
+    user: null,
+    member: readCache<AuthMember>(MEMBER_CACHE_KEY) ?? null
+  }))
 
   useEffect(() => {
     let lastEmail: string | null = null
@@ -34,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!user) {
         lastEmail = null
+        writeCache(MEMBER_CACHE_KEY, null)
         setState({ loading: false, user: null, member: null })
         return
       }
@@ -58,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
+      writeCache(MEMBER_CACHE_KEY, member ?? null)
       setState({ loading: false, user, member: member ?? null })
     })
 
