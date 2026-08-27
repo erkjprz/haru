@@ -6,10 +6,23 @@ import { Portal } from "@/app/components/Portal"
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
 // opened a tick later so the transform actually has a starting point to
 // animate away from (otherwise the browser paints it already-open and
-// there's nothing to transition). Close button/backdrop tap play the same
-// slide-down-then-unmount transition; a child's own action (e.g. a form's
-// Submit) closes by calling onClose directly instead, so it just
-// disappears immediately rather than replaying this animation.
+// there's nothing to transition). The × button plays the slide-down-then-
+// unmount transition; a child's own action (e.g. a form's Submit) closes
+// by calling onClose directly instead, so it just disappears immediately
+// rather than replaying this animation.
+//
+// No tap-to-dismiss on the backdrop -- confirmed on-device (screen
+// recording) that a plain swipe-down starting at rest, or scrolling this
+// sheet's own content to either edge and continuing the drag, could still
+// reach the backdrop underneath despite overscroll-contain on the
+// scrollable div (see that div's own comment): iOS Safari doesn't
+// reliably contain the gesture at a `position: fixed` overlay's edges,
+// so the drag ends up registering as a tap on whatever's behind it,
+// silently closing the sheet and discarding the entire form. A
+// pointerdown/pointerup distance guard on the backdrop (tried first)
+// didn't fully close the gap -- some of these drags never even reach the
+// backdrop element itself before dismissing something. The × button is
+// the only way to close now; unambiguous regardless of gesture nuances.
 export function Sheet({
   title,
   onClose,
@@ -62,23 +75,42 @@ export function Sheet({
   // a bottom-anchored toast used to appear; the underlying scroll-on-
   // focus behavior itself is still open.
   //
-  // Each Sheet captures/restores whatever was already on body when it
-  // mounted, not a hardcoded default, so this nests correctly when a
+  // Each Sheet captures/restores whatever was already on body/html when
+  // it mounted, not a hardcoded default, so this nests correctly when a
   // picker sheet (loan, type) opens on top of this one -- the inner
   // one's cleanup just hands back the outer one's own locked state.
+  //
+  // Locks <html> too, not just <body> -- reported still closing (and the
+  // whole app appearing to reload) on a plain swipe-down even after the
+  // backdrop lost every dismiss handler it had, which points at iOS
+  // Safari's native pull-to-refresh firing instead of anything in this
+  // component: that gesture is governed by the root scrolling element's
+  // own overscroll behavior, and which element WebKit treats as "root"
+  // for that purpose hasn't been consistent all session (the position:
+  // fixed viewport bug above needed checking on both body and
+  // documentElement too). globals.css already sets overscroll-behavior-y:
+  // contain on body permanently; this locks both elements harder while a
+  // sheet is open specifically, on top of that.
   useEffect(() => {
     const body = document.body
+    const html = document.documentElement
     const previous = {
-      overflow: body.style.overflow,
-      overscrollBehavior: body.style.overscrollBehavior
+      bodyOverflow: body.style.overflow,
+      bodyOverscrollBehavior: body.style.overscrollBehavior,
+      htmlOverflow: html.style.overflow,
+      htmlOverscrollBehavior: html.style.overscrollBehavior
     }
 
     body.style.overflow = "hidden"
     body.style.overscrollBehavior = "none"
+    html.style.overflow = "hidden"
+    html.style.overscrollBehavior = "none"
 
     return () => {
-      body.style.overflow = previous.overflow
-      body.style.overscrollBehavior = previous.overscrollBehavior
+      body.style.overflow = previous.bodyOverflow
+      body.style.overscrollBehavior = previous.bodyOverscrollBehavior
+      html.style.overflow = previous.htmlOverflow
+      html.style.overscrollBehavior = previous.htmlOverscrollBehavior
     }
   }, [])
 
@@ -105,7 +137,6 @@ export function Sheet({
         className={`fixed inset-0 z-50 bg-black/80 transition-opacity duration-200 ${
           open ? "opacity-100" : "opacity-0"
         }`}
-        onClick={handleClose}
       />
       {/* Its own independent `position: fixed; bottom: 0` element, not
           `absolute` inside a full-height wrapper -- see the comment on
@@ -130,9 +161,9 @@ export function Sheet({
         {/* overscroll-contain stops scroll chaining: without it, dragging
             past the top/bottom of this list on a touch device hands the
             rest of the gesture to whatever's behind it (the backdrop, the
-            locked page), which can register as the tap that closes the
-            sheet mid-scroll -- e.g. scrolling back up to reach the Amount
-            field after it's passed off the top of the view. min-h-0 is
+            locked page), which iOS Safari doesn't always keep contained
+            here even with this in place -- see the backdrop's own comment
+            on why closing no longer depends on that being reliable. min-h-0 is
             load-bearing here, not decorative -- a flex child with
             overflow-y-auto defaults its minimum height to its own
             content size (a WebKit quirk), not 0, which can push this
