@@ -14,7 +14,16 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     function onTouchStart(e: TouchEvent) {
-      if (refreshing || window.scrollY > 0) {
+      // Sheet.tsx is the only thing in the app that sets body.overflow to
+      // "hidden" -- it does so for the full lifetime of any open sheet
+      // (New Transaction, its Loan/Investment/Type/Interest/Term
+      // pickers, etc). Without this check, a swipe-down starting on an
+      // open sheet still reached this component's own window-level
+      // listeners -- window.scrollY stays 0 while a sheet is open (the
+      // page behind it is locked), so the only existing guard never
+      // caught it, and a real window.location.reload() below could fire
+      // mid-form, discarding whatever was filled in.
+      if (refreshing || window.scrollY > 0 || document.body.style.overflow === "hidden") {
         touchStartY.current = null
         return
       }
