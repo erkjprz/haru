@@ -311,7 +311,7 @@ export default function BorrowerRepayPage() {
                       </label>
                       <input
                         className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                        placeholder="Additional notes (name and date already captured)"
+                        placeholder="Notes (name & date already saved)"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                       />
