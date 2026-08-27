@@ -7,6 +7,7 @@ import { NotificationBell } from "@/app/components/NotificationBell"
 import { NewTransactionSheet } from "@/app/components/NewTransactionSheet"
 import { Toast } from "@/app/components/Toast"
 import { notifyTransactionsChanged } from "@/lib/transactionEvents"
+import { loadTransactionFormData } from "@/lib/transactionFormPrefetch"
 
 // Same reduced fraction budget-tracker's BottomNav uses -- a floating pill
 // inset from the edge only needs a little clearance from the home
@@ -77,6 +78,18 @@ export default function Navbar() {
   const fabRef = useRef<HTMLButtonElement>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+
+  // Warms NewTransactionSheet's data cache the moment this page has a
+  // signed-in member, well before the FAB is ever tapped -- without
+  // this, the sheet only starts fetching banks/loans/investments/etc.
+  // once it mounts on tap, showing a "Loading..." state every single
+  // time. Fire-and-forget: the sheet itself still awaits the same
+  // function as a fallback if it gets opened before this finishes (e.g.
+  // tapping the FAB within the first instant of a page load).
+  useEffect(() => {
+    if (!member) return
+    loadTransactionFormData(member.member_id, member.role === "admin")
+  }, [member])
 
   // The transaction forms have their own sticky Amount/Save footer -- a
   // second fixed bar at the bottom would stack on top of it. The FAB (which
