@@ -837,31 +837,31 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
                     {investmentField}
 
-                    {isLoanPayment &&
-                      (activeLoans.length === 0 ? (
-                        // No picker to open, nothing to tap -- a plain notice
-                        // line earns none of the full row's icon/chevron/
-                        // padding weight the tappable state below gets.
-                        <p className="px-4 py-2 text-xs text-rust">No active loans to pay against</p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setShowLoanPicker(true)}
-                          className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
-                        >
-                          <LoanRowIcon />
-                          <span className="flex-1 min-w-0 text-sm">
-                            {selectedLoan ? (
-                              <span className="text-ink">
-                                ₱{fmt(selectedLoan.principal)} from {selectedLoan.start_date}
-                              </span>
-                            ) : (
-                              <span className="text-ink-soft">Which loan</span>
-                            )}
-                          </span>
-                          <span className="text-ink-soft text-xs shrink-0">▾</span>
-                        </button>
-                      ))}
+                    {isLoanPayment && (
+                      // Same pattern as investmentField -- always render the
+                      // tappable row regardless of whether there's anything
+                      // to pick; LoanPickerSheet already shows its own
+                      // graceful "No active loans" empty state, so a second,
+                      // redder version of that same message here was
+                      // redundant.
+                      <button
+                        type="button"
+                        onClick={() => setShowLoanPicker(true)}
+                        className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                      >
+                        <LoanRowIcon />
+                        <span className="flex-1 min-w-0 text-sm">
+                          {selectedLoan ? (
+                            <span className="text-ink">
+                              ₱{fmt(selectedLoan.principal)} from {selectedLoan.start_date}
+                            </span>
+                          ) : (
+                            <span className="text-ink-soft">Which loan</span>
+                          )}
+                        </span>
+                        <span className="text-ink-soft text-xs shrink-0">▾</span>
+                      </button>
+                    )}
 
                     {needsBank && (
                       <FieldRow icon={<BankIcon />}>
