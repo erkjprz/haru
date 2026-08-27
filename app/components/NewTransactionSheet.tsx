@@ -1126,7 +1126,23 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
     {showTypePicker && (
       <TypePickerSheet
-        options={withFlow(isAdmin ? ENTRY_TYPES : ENTRY_TYPES.filter((t) => !t.adminOnly))}
+        options={withFlow(
+          ENTRY_TYPES.filter((t) => {
+            if (t.adminOnly && !isAdmin) return false
+            // Loan Payment is only hidden for a member picking for
+            // themselves -- an admin's own activeLoans here is *their own*
+            // loans, not whichever member they might pick on-behalf-of a
+            // moment later (that field only appears after the type is
+            // already chosen), so hiding it for admins could block a
+            // payment for a member who does have one.
+            if (t.key === "loan_payment" && !isAdmin && activeLoans.length === 0) return false
+            // Investments are fund-level, not owned by any one member --
+            // if there's nothing open fund-wide, there's genuinely nothing
+            // for anyone, admin included, to pick.
+            if (t.key === "investment_return" && investmentsList.length === 0) return false
+            return true
+          })
+        )}
         value={selectedType}
         onClose={() => setShowTypePicker(false)}
         onSelect={(key) => {
