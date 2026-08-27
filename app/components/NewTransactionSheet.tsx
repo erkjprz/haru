@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { Sheet } from "@/app/components/Sheet"
 import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
+import { InvestmentPickerSheet, InvestmentRowIcon } from "@/app/components/InvestmentPickerSheet"
 import { TypePickerSheet, TypeBadge } from "@/app/components/TypePickerSheet"
 import {
   AmountHero,
@@ -128,16 +129,6 @@ function ClockIcon() {
   )
 }
 
-// Same shape as Dashboard's "Investment" shortcut icon.
-function InvestmentIcon() {
-  return (
-    <RowIcon>
-      <path d="M4 19V9M9.5 19V5M15 19v-7" strokeLinecap="round" />
-      <path d="M4 19h16" strokeLinecap="round" />
-    </RowIcon>
-  )
-}
-
 // Same shape as Dashboard's "Repay Loan" shortcut icon.
 function RepeatIcon() {
   return (
@@ -173,7 +164,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   // whatever's cached (possibly nothing, on a very fast tap) means
   // dataLoading only starts true when there's genuinely nothing to show
   // yet, instead of unconditionally flashing "Loading..." every time.
-  const cached = memberId ? getCachedTransactionFormData(memberId) : null
+  const cached = memberId ? getCachedTransactionFormData(memberId, isAdmin) : null
 
   const [dataLoading, setDataLoading] = useState(!cached)
   const [loadError, setLoadError] = useState("")
@@ -205,6 +196,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
   const [selectedLoanId, setSelectedLoanId] = useState("")
   const [showLoanPicker, setShowLoanPicker] = useState(false)
+  const [showInvestmentPicker, setShowInvestmentPicker] = useState(false)
 
   const [contributionDefault, setContributionDefault] = useState<number | null>(cached?.contributionDefault ?? null)
   const [contributionBankDefault, setContributionBankDefault] = useState<string | null>(cached?.contributionBankDefault ?? null)
@@ -323,6 +315,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
   const activeLoans = myLoans.filter((l) => l.status === "active")
   const selectedLoan = activeLoans.find((l) => l.loan_id === selectedLoanId) ?? null
+  const selectedInvestment = investmentsList.find((inv) => inv.investment_id === investmentId) ?? null
 
   const isLoanRequest = selectedType === "loan_request"
   const isLoanPayment = selectedType === "loan_payment"
@@ -752,16 +745,25 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   )
 
   const investmentField = isInvestmentEntry && (
-    <FieldRow icon={<InvestmentIcon />}>
-      <select className={rowSelectClass} value={investmentId} onChange={(e) => setInvestmentId(e.target.value)}>
-        <option value="">Which investment</option>
-        {investmentsList.map((inv) => (
-          <option key={inv.investment_id} value={inv.investment_id}>
-            {inv.name}
-          </option>
-        ))}
-      </select>
-    </FieldRow>
+    // Same tappable-row pattern as the Loan Payment field below -- both are
+    // just "pick one of a short list," and InvestmentPickerSheet already
+    // has its own graceful "No open investments" empty state, same as
+    // LoanPickerSheet does.
+    <button
+      type="button"
+      onClick={() => setShowInvestmentPicker(true)}
+      className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+    >
+      <InvestmentRowIcon />
+      <span className="flex-1 min-w-0 text-sm">
+        {selectedInvestment ? (
+          <span className="text-ink">{selectedInvestment.name}</span>
+        ) : (
+          <span className="text-ink-soft">Which investment</span>
+        )}
+      </span>
+      <span className="text-ink-soft text-xs shrink-0">▾</span>
+    </button>
   )
 
   const toBankField = isBankTransfer && (
@@ -837,31 +839,31 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
                     {investmentField}
 
-                    {isLoanPayment &&
-                      (activeLoans.length === 0 ? (
-                        // No picker to open, nothing to tap -- a plain notice
-                        // line earns none of the full row's icon/chevron/
-                        // padding weight the tappable state below gets.
-                        <p className="px-4 py-2 text-xs text-rust">No active loans to pay against</p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setShowLoanPicker(true)}
-                          className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
-                        >
-                          <LoanRowIcon />
-                          <span className="flex-1 min-w-0 text-sm">
-                            {selectedLoan ? (
-                              <span className="text-ink">
-                                ₱{fmt(selectedLoan.principal)} from {selectedLoan.start_date}
-                              </span>
-                            ) : (
-                              <span className="text-ink-soft">Which loan</span>
-                            )}
-                          </span>
-                          <span className="text-ink-soft text-xs shrink-0">▾</span>
-                        </button>
-                      ))}
+                    {isLoanPayment && (
+                      // Same pattern as investmentField -- always render the
+                      // tappable row regardless of whether there's anything
+                      // to pick; LoanPickerSheet already shows its own
+                      // graceful "No active loans" empty state, so a second,
+                      // redder version of that same message here was
+                      // redundant.
+                      <button
+                        type="button"
+                        onClick={() => setShowLoanPicker(true)}
+                        className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                      >
+                        <LoanRowIcon />
+                        <span className="flex-1 min-w-0 text-sm">
+                          {selectedLoan ? (
+                            <span className="text-ink">
+                              ₱{fmt(selectedLoan.principal)} from {selectedLoan.start_date}
+                            </span>
+                          ) : (
+                            <span className="text-ink-soft">Which loan</span>
+                          )}
+                        </span>
+                        <span className="text-ink-soft text-xs shrink-0">▾</span>
+                      </button>
+                    )}
 
                     {needsBank && (
                       <FieldRow icon={<BankIcon />}>
@@ -1124,9 +1126,36 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       />
     )}
 
+    {showInvestmentPicker && (
+      <InvestmentPickerSheet
+        investments={investmentsList}
+        onClose={() => setShowInvestmentPicker(false)}
+        onSelect={(investment) => {
+          setInvestmentId(investment.investment_id)
+          setShowInvestmentPicker(false)
+        }}
+      />
+    )}
+
     {showTypePicker && (
       <TypePickerSheet
-        options={withFlow(isAdmin ? ENTRY_TYPES : ENTRY_TYPES.filter((t) => !t.adminOnly))}
+        options={withFlow(
+          ENTRY_TYPES.filter((t) => {
+            if (t.adminOnly && !isAdmin) return false
+            // Loan Payment is only hidden for a member picking for
+            // themselves -- an admin's own activeLoans here is *their own*
+            // loans, not whichever member they might pick on-behalf-of a
+            // moment later (that field only appears after the type is
+            // already chosen), so hiding it for admins could block a
+            // payment for a member who does have one.
+            if (t.key === "loan_payment" && !isAdmin && activeLoans.length === 0) return false
+            // Investments are fund-level, not owned by any one member --
+            // if there's nothing open fund-wide, there's genuinely nothing
+            // for anyone, admin included, to pick.
+            if (t.key === "investment_return" && investmentsList.length === 0) return false
+            return true
+          })
+        )}
         value={selectedType}
         onClose={() => setShowTypePicker(false)}
         onSelect={(key) => {
