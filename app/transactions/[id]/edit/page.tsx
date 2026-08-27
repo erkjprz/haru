@@ -880,7 +880,7 @@ export default function EditTransactionPage() {
                       </label>
                       <input
                         className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                        placeholder="Additional notes"
+                        placeholder="Additional notes (name and date already captured)"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                       />
@@ -1019,7 +1019,7 @@ export default function EditTransactionPage() {
                         </label>
                         <input
                           className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                          placeholder="Additional notes"
+                          placeholder="Additional notes (name and date already captured)"
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
                         />

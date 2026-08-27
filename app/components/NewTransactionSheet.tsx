@@ -892,7 +892,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                     <FieldRow icon={<NoteIcon />}>
                       <input
                         className={rowInputClass}
-                        placeholder="Additional notes"
+                        placeholder="Additional notes (name and date already captured)"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                       />
@@ -967,7 +967,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                         <FieldRow icon={<NoteIcon />}>
                           <input
                             className={rowInputClass}
-                            placeholder="Additional notes"
+                            placeholder="Additional notes (name and date already captured)"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                           />

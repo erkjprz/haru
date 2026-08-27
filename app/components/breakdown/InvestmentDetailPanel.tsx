@@ -688,7 +688,7 @@ function DistributeForm({
           </label>
           <input
             className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-            placeholder="Additional notes"
+            placeholder="Additional notes (name and date already captured)"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
