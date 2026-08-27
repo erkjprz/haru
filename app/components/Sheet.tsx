@@ -75,23 +75,42 @@ export function Sheet({
   // a bottom-anchored toast used to appear; the underlying scroll-on-
   // focus behavior itself is still open.
   //
-  // Each Sheet captures/restores whatever was already on body when it
-  // mounted, not a hardcoded default, so this nests correctly when a
+  // Each Sheet captures/restores whatever was already on body/html when
+  // it mounted, not a hardcoded default, so this nests correctly when a
   // picker sheet (loan, type) opens on top of this one -- the inner
   // one's cleanup just hands back the outer one's own locked state.
+  //
+  // Locks <html> too, not just <body> -- reported still closing (and the
+  // whole app appearing to reload) on a plain swipe-down even after the
+  // backdrop lost every dismiss handler it had, which points at iOS
+  // Safari's native pull-to-refresh firing instead of anything in this
+  // component: that gesture is governed by the root scrolling element's
+  // own overscroll behavior, and which element WebKit treats as "root"
+  // for that purpose hasn't been consistent all session (the position:
+  // fixed viewport bug above needed checking on both body and
+  // documentElement too). globals.css already sets overscroll-behavior-y:
+  // contain on body permanently; this locks both elements harder while a
+  // sheet is open specifically, on top of that.
   useEffect(() => {
     const body = document.body
+    const html = document.documentElement
     const previous = {
-      overflow: body.style.overflow,
-      overscrollBehavior: body.style.overscrollBehavior
+      bodyOverflow: body.style.overflow,
+      bodyOverscrollBehavior: body.style.overscrollBehavior,
+      htmlOverflow: html.style.overflow,
+      htmlOverscrollBehavior: html.style.overscrollBehavior
     }
 
     body.style.overflow = "hidden"
     body.style.overscrollBehavior = "none"
+    html.style.overflow = "hidden"
+    html.style.overscrollBehavior = "none"
 
     return () => {
-      body.style.overflow = previous.overflow
-      body.style.overscrollBehavior = previous.overscrollBehavior
+      body.style.overflow = previous.bodyOverflow
+      body.style.overscrollBehavior = previous.bodyOverscrollBehavior
+      html.style.overflow = previous.htmlOverflow
+      html.style.overscrollBehavior = previous.htmlOverscrollBehavior
     }
   }, [])
 
