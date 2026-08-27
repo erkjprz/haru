@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
@@ -87,6 +87,30 @@ export function Sheet({
     setTimeout(onClose, 200)
   }
 
+  // Confirmed on-device (screen recording): scrolling this sheet's own
+  // content to either edge and continuing the drag can still reach the
+  // backdrop underneath despite overscroll-contain on the scrollable div
+  // (see that div's own comment) -- iOS Safari doesn't reliably contain
+  // the gesture at a `position: fixed` overlay's edges, so the drag's
+  // release ends up registering as a tap on the backdrop, silently
+  // closing the sheet (and discarding whatever was filled in) mid-scroll.
+  // Tracking pointerdown/pointerup distance here means the backdrop only
+  // closes on an actual tap -- a real drag, wherever it started or ended,
+  // never counts as one.
+  const backdropPointerStart = useRef<{ x: number; y: number } | null>(null)
+
+  function handleBackdropPointerDown(e: React.PointerEvent) {
+    backdropPointerStart.current = { x: e.clientX, y: e.clientY }
+  }
+
+  function handleBackdropPointerUp(e: React.PointerEvent) {
+    const start = backdropPointerStart.current
+    backdropPointerStart.current = null
+    if (!start) return
+    const movedTooFar = Math.abs(e.clientX - start.x) > 10 || Math.abs(e.clientY - start.y) > 10
+    if (!movedTooFar) handleClose()
+  }
+
   return (
     <Portal>
       {/* Its own full-screen fixed layer, not a wrapper the panel sits
@@ -105,7 +129,8 @@ export function Sheet({
         className={`fixed inset-0 z-50 bg-black/80 transition-opacity duration-200 ${
           open ? "opacity-100" : "opacity-0"
         }`}
-        onClick={handleClose}
+        onPointerDown={handleBackdropPointerDown}
+        onPointerUp={handleBackdropPointerUp}
       />
       {/* Its own independent `position: fixed; bottom: 0` element, not
           `absolute` inside a full-height wrapper -- see the comment on
