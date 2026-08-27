@@ -18,23 +18,30 @@ import {
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { dateOnly } from "@/lib/currentValue"
 import { getCachedTransactionFormData, loadTransactionFormData } from "@/lib/transactionFormPrefetch"
+import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 
 // The FAB's quick-entry sheet covers the types every member reaches for
-// constantly (Contribution/Withdrawal/Loan Request/Loan Payment) plus
-// Investment Return, open to every member same as those four -- unlike
-// them it has two different shapes depending on who submits it (see the
-// isInvestmentReturn branch in handleSubmit): a member's own return is a
-// pending, self-attributed row same as a Contribution, but an admin's is
-// a fund-level entry (member_id null, approved immediately), mirroring
-// how /transactions/new treats it. Bank Interest/Expense/Bank Transfer/
-// Investment stay admin-only, rare, fund-level types that only make
-// sense from that full page, reachable from a Dashboard shortcut.
+// constantly (Contribution/Withdrawal/Loan Request/Loan Payment), plus
+// Investment Return open to every member the same way, plus the
+// admin-only fund-level bookkeeping types (Bank Interest/Expense/Bank
+// Transfer/Investment) -- all mirroring /transactions/new's own
+// isAdminEntry shape (member_id null, approved immediately, no
+// on-behalf-of -- these aren't attributed to any one member). Investment
+// Return is the one type with two different shapes depending on who
+// submits it (see the isInvestmentReturn branch in handleSubmit): a
+// member's own return is a pending, self-attributed row like a
+// Contribution, but an admin's is fund-level like the four adminOnly
+// types below it.
 const ENTRY_TYPES = [
   { key: "contribution", label: "Contribution", adminOnly: false },
   { key: "withdrawal", label: "Withdrawal", adminOnly: false },
   { key: "loan_request", label: "Loan Request", adminOnly: false },
   { key: "loan_payment", label: "Loan Payment", adminOnly: false },
-  { key: "investment_return", label: "Investment Return", adminOnly: false }
+  { key: "investment_return", label: "Investment Return", adminOnly: false },
+  { key: "bank_interest", label: "Bank Interest", adminOnly: true },
+  { key: "expense", label: "Expense", adminOnly: true },
+  { key: "bank_transfer", label: "Bank Transfer", adminOnly: true },
+  { key: "investment", label: "Investment", adminOnly: true }
 ]
 
 const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = {
@@ -42,7 +49,11 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
   withdrawal: { arrow: "↓", tone: "out" },
   loan_request: { arrow: "↓", tone: "out" },
   loan_payment: { arrow: "↑", tone: "in" },
-  investment_return: { arrow: "↑", tone: "in" }
+  investment_return: { arrow: "↑", tone: "in" },
+  bank_interest: { arrow: "↑", tone: "in" },
+  expense: { arrow: "↓", tone: "out" },
+  bank_transfer: { arrow: "⇄", tone: "neutral" },
+  investment: { arrow: "↓", tone: "out" }
 }
 
 function isValidPositiveNumber(value: string, allowZero = false): boolean {
@@ -176,6 +187,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [showTypePicker, setShowTypePicker] = useState(false)
   const [onBehalfOfId, setOnBehalfOfId] = useState("")
   const [bankId, setBankId] = useState(cached?.contributionBankDefault ?? "")
+  const [toBankId, setToBankId] = useState("")
   const [investmentId, setInvestmentId] = useState("")
   const [amount, setAmount] = useState(cached?.contributionDefault != null ? String(cached.contributionDefault) : "")
   const [txnDate, setTxnDate] = useState(() => dateOnly(new Date()))
@@ -316,9 +328,24 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const isLoanPayment = selectedType === "loan_payment"
   const isContribution = selectedType === "contribution"
   const isInvestmentReturn = selectedType === "investment_return"
+  const isBankInterest = selectedType === "bank_interest"
+  const isExpense = selectedType === "expense"
+  const isBankTransfer = selectedType === "bank_transfer"
+  const isInvestment = selectedType === "investment"
+  // Both Investment and Investment Return need the same investment picker
+  // and the same affects_cash mirroring of the selected investment -- see
+  // the two admin-fund-level branches in handleSubmit.
+  const isInvestmentEntry = isInvestment || isInvestmentReturn
+  // The four adminOnly types are fund-level entries, not attributed to
+  // any one member -- no on-behalf-of concept, same as Investment Return
+  // when an admin submits it (see the isInvestmentReturn branch in
+  // handleSubmit). Only the original four member-facing types support
+  // picking who a submission is "for".
+  const isAdminFundEntry = isBankInterest || isExpense || isBankTransfer || isInvestment
+  const supportsOnBehalfOf = isContribution || selectedType === "withdrawal" || isLoanRequest || isLoanPayment
   const isStepped = isLoanRequest
   const needsReceipt = selectedType !== "withdrawal" && selectedType !== "loan_request"
-  const needsBank = isContribution || isLoanPayment || isInvestmentReturn
+  const needsBank = isContribution || isLoanPayment || isInvestmentEntry || isBankInterest || isExpense || isBankTransfer
   // Contribution and Loan Payment collect bank + receipt right here, so an
   // on-behalf-of submission can safely skip the queue -- see the longer
   // explanation on this same flag in /transactions/new.
@@ -349,6 +376,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     setMessage("")
     setReceiptFile(null)
     setBankId("")
+    setToBankId("")
     setAmount("")
     setInterestType("rate")
     setInterestRate("")
@@ -453,8 +481,12 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       setMessage("Select which loan you're paying.")
       return
     }
-    if (isInvestmentReturn && !investmentId) {
-      setMessage("Select which investment this is returning from.")
+    if (isInvestmentEntry && !investmentId) {
+      setMessage(isInvestment ? "Select which investment this funds." : "Select which investment this is returning from.")
+      return
+    }
+    if (isBankTransfer && !toBankId) {
+      setMessage("Select the destination bank.")
       return
     }
 
@@ -530,6 +562,87 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         return
       }
       onSaved(`Investment return ${status === "pending" ? "submitted" : "recorded"}`)
+      return
+    }
+
+    // Cash-neutral: affects_cash 0 keeps it out of the cash ledger; the
+    // per-bank balances use bank_account_id / to_bank_account_id instead.
+    // Mirrors /transactions/new's own isBankTransfer branch exactly.
+    if (isBankTransfer) {
+      const { error } = await supabase.from("transactions").insert({
+        member_id: null,
+        bank_account_id: bankId,
+        to_bank_account_id: toBankId,
+        classification: "Internal Transfer",
+        affects_cash: 0,
+        amount: Number(amount),
+        txn_date: txnDate,
+        description,
+        receipt_url: receiptUrl,
+        status: "approved",
+        submitted_by: memberId
+      })
+
+      setSubmitting(false)
+      if (error) {
+        if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
+        setMessage(error.message)
+        return
+      }
+      onSaved("Bank transfer recorded")
+      return
+    }
+
+    // Bank Interest, Expense, and new Investment outflows -- fund-level
+    // entries same shape as Investment Return's own admin path above,
+    // just always approved immediately (no member-submitted pending
+    // version of these exists). Mirrors /transactions/new's isAdminEntry
+    // branch: Expense and new Investment capital are cash going out, so
+    // the ledger stores them negative (matches v_investment_summary,
+    // which reads "invested" as -amount on Investment rows). Bank
+    // Interest rows default to interest_distributed = false and sit
+    // there until an admin manually distributes them from /admin.
+    if (isBankInterest || isExpense || isInvestment) {
+      const classification = isBankInterest ? "Bank Interest" : isExpense ? "Expense" : "Investment"
+      const selectedInvestment = isInvestment ? investmentsList.find((inv) => inv.investment_id === investmentId) : null
+
+      const { error } = await supabase.from("transactions").insert({
+        member_id: null,
+        bank_account_id: bankId || null,
+        investment_id: isInvestment ? investmentId : null,
+        classification,
+        amount: isExpense || isInvestment ? -Number(amount) : Number(amount),
+        txn_date: txnDate,
+        description,
+        receipt_url: receiptUrl,
+        status: "approved",
+        submitted_by: memberId,
+        ...(isInvestment ? { affects_cash: selectedInvestment?.affects_cash ? 1 : 0 } : {})
+      })
+
+      if (error) {
+        setSubmitting(false)
+        if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
+        setMessage(error.message)
+        return
+      }
+
+      // New capital into an investment changes who's staking it, so
+      // re-snapshot the pool's shares for this investment's hold
+      // tracking -- same as /transactions/new does. The transaction
+      // itself already succeeded, so a failure here shouldn't block the
+      // confirmation or invite a duplicate resubmit, just surface it.
+      let holdWarning = ""
+      if (isInvestment) {
+        try {
+          await snapshotInvestmentHold(investmentId, dateOnly(new Date()))
+        } catch (err) {
+          holdWarning = ` (hold recompute failed: ${err instanceof Error ? err.message : "unknown error"} -- an admin should retry)`
+        }
+      }
+
+      setSubmitting(false)
+      onSaved(`${classification} recorded${holdWarning}`)
       return
     }
 
@@ -618,11 +731,12 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     </button>
   )
 
-  // Investment Return has no on-behalf-of concept -- an admin's own
-  // submission is a fund-level entry attributed to no one member (see
-  // the isInvestmentReturn branch in handleSubmit), not something done
-  // "for" a specific member the way a Contribution can be.
-  const onBehalfOfField = isAdmin && !isInvestmentReturn && (
+  // Only the original four member-facing types support on-behalf-of --
+  // Investment Return (as an admin) and the four adminOnly fund-level
+  // types are all entries attributed to no one member (see handleSubmit),
+  // not something done "for" a specific member the way a Contribution can
+  // be.
+  const onBehalfOfField = isAdmin && supportsOnBehalfOf && (
     <FieldRow icon={<PersonIcon />}>
       <select className={rowSelectClass} value={onBehalfOfId} onChange={(e) => handleOnBehalfChange(e.target.value)}>
         <option value="">Myself</option>
@@ -637,7 +751,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     </FieldRow>
   )
 
-  const investmentField = isInvestmentReturn && (
+  const investmentField = isInvestmentEntry && (
     <FieldRow icon={<InvestmentIcon />}>
       <select className={rowSelectClass} value={investmentId} onChange={(e) => setInvestmentId(e.target.value)}>
         <option value="">Which investment</option>
@@ -650,7 +764,20 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     </FieldRow>
   )
 
-  const onBehalfOfNote = isAdmin && !isInvestmentReturn && onBehalfOfId && (
+  const toBankField = isBankTransfer && (
+    <FieldRow icon={<BankIcon />}>
+      <select className={rowSelectClass} value={toBankId} onChange={(e) => setToBankId(e.target.value)}>
+        <option value="">To which bank</option>
+        {banks.map((bank) => (
+          <option key={bank.id} value={bank.id}>
+            {bank.account_name || bank.bank_name}
+          </option>
+        ))}
+      </select>
+    </FieldRow>
+  )
+
+  const onBehalfOfNote = isAdmin && supportsOnBehalfOf && onBehalfOfId && (
     <p className="px-1 pt-2 text-sm text-gold">
       {willAutoApproveOnBehalf
         ? `This will be recorded as approved immediately for ${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}.`
@@ -739,7 +866,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                     {needsBank && (
                       <FieldRow icon={<BankIcon />}>
                         <select className={rowSelectClass} value={bankId} onChange={(e) => setBankId(e.target.value)}>
-                          <option value="">Select a bank</option>
+                          <option value="">{isBankTransfer ? "From which bank" : "Select a bank"}</option>
                           {banks.map((bank) => (
                             <option key={bank.id} value={bank.id}>
                               {bank.account_name || bank.bank_name}
@@ -748,6 +875,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                         </select>
                       </FieldRow>
                     )}
+
+                    {toBankField}
 
                     <FieldRow icon={<NoteIcon />}>
                       <input
@@ -997,7 +1126,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
     {showTypePicker && (
       <TypePickerSheet
-        options={withFlow(ENTRY_TYPES)}
+        options={withFlow(isAdmin ? ENTRY_TYPES : ENTRY_TYPES.filter((t) => !t.adminOnly))}
         value={selectedType}
         onClose={() => setShowTypePicker(false)}
         onSelect={(key) => {
