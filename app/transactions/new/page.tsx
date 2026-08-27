@@ -983,7 +983,7 @@ function NewTransactionForm() {
                     </label>
                     <input
                       className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      placeholder="Add a note"
+                      placeholder="Notes (name & date already saved)"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                     />
@@ -1202,7 +1202,7 @@ function NewTransactionForm() {
                         </label>
                         <input
                           className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                          placeholder="Add a note"
+                          placeholder="Notes (name & date already saved)"
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
                         />
