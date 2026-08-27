@@ -2,19 +2,21 @@
 
 import { Sheet } from "@/app/components/Sheet"
 
-// Common repayment terms this fund actually uses -- a fast-path shortcut
-// layered on top of the plain number input next to it, which stays
-// available at all times for anything outside this list. Selecting a
-// preset just fills the same input's own value.
+// Common repayment terms this fund actually uses -- the default way to
+// fill Payment term, with "Custom" as the escape hatch for anything
+// outside this list rather than a separate mode someone has to think to
+// reach for.
 const PRESET_TERMS = [1, 3, 6, 12, 18, 24, 36]
 
 export function TermPickerSheet({
   value,
   onSelect,
+  onCustom,
   onClose
 }: {
   value: string
   onSelect: (months: number) => void
+  onCustom: () => void
   onClose: () => void
 }) {
   const selected = value.trim() !== "" ? Number(value) : null
@@ -34,6 +36,13 @@ export function TermPickerSheet({
           </button>
         ))}
       </div>
+
+      <button
+        onClick={onCustom}
+        className="w-full mt-3 px-4 py-3.5 text-left text-sm font-semibold text-gold bg-paper-2 border border-hairline rounded-md"
+      >
+        Custom term…
+      </button>
     </Sheet>
   )
 }

@@ -201,6 +201,11 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [showInvestmentPicker, setShowInvestmentPicker] = useState(false)
   const [showInterestRatePicker, setShowInterestRatePicker] = useState(false)
   const [showTermPicker, setShowTermPicker] = useState(false)
+  // Picker is the default interaction for both -- these only flip to true
+  // when someone explicitly picks "Custom" from the sheet, swapping the
+  // row over to the plain number input for direct typing.
+  const [interestRateCustom, setInterestRateCustom] = useState(false)
+  const [termCustom, setTermCustom] = useState(false)
 
   const [contributionDefault, setContributionDefault] = useState<number | null>(cached?.contributionDefault ?? null)
   const [contributionBankDefault, setContributionBankDefault] = useState<string | null>(cached?.contributionBankDefault ?? null)
@@ -980,18 +985,36 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                             two glyphs' worth of width once it's not also carrying "Rate (%)"/
                             "Fixed amount (₱)" as button text. */}
                         <FieldRow icon={<InterestIcon />}>
-                          <input
-                            className={rowInputClass}
-                            type="number"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.01"
-                            placeholder={interestType === "rate" ? "Interest rate, e.g. 5" : "Interest amount, e.g. 5000"}
-                            value={interestType === "rate" ? interestRate : interestAmount}
-                            onChange={(e) =>
-                              interestType === "rate" ? setInterestRate(e.target.value) : setInterestAmount(e.target.value)
-                            }
-                          />
+                          {interestType === "rate" && !interestRateCustom ? (
+                            // Picker is the default way in -- tapping the
+                            // value area itself opens the same sheet the
+                            // trailing ▾ does, not just a narrow target.
+                            <button
+                              type="button"
+                              onClick={() => setShowInterestRatePicker(true)}
+                              className="flex-1 min-w-0 text-left text-sm"
+                            >
+                              {interestRate ? (
+                                <span className="text-ink">{interestRate}%</span>
+                              ) : (
+                                <span className="text-ink-soft">Interest rate, e.g. 5</span>
+                              )}
+                            </button>
+                          ) : (
+                            <input
+                              className={rowInputClass}
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              step="0.01"
+                              placeholder={interestType === "rate" ? "Interest rate, e.g. 5" : "Interest amount, e.g. 5000"}
+                              value={interestType === "rate" ? interestRate : interestAmount}
+                              onChange={(e) =>
+                                interestType === "rate" ? setInterestRate(e.target.value) : setInterestAmount(e.target.value)
+                              }
+                              autoFocus={interestType === "rate" && interestRateCustom}
+                            />
+                          )}
                           <div className="flex border border-hairline rounded-sm overflow-hidden shrink-0">
                             <button
                               type="button"
@@ -1031,17 +1054,36 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                         </FieldRow>
 
                         <FieldRow icon={<ClockIcon />}>
-                          <input
-                            className={rowInputClass}
-                            type="number"
-                            inputMode="numeric"
-                            min="1"
-                            step="1"
-                            placeholder="Term, e.g. 6"
-                            value={termMonths}
-                            onChange={(e) => setTermMonths(e.target.value)}
-                          />
-                          <span className="text-xs text-ink-soft shrink-0">months</span>
+                          {!termCustom ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowTermPicker(true)}
+                              className="flex-1 min-w-0 text-left text-sm"
+                            >
+                              {termMonths ? (
+                                <span className="text-ink">
+                                  {termMonths} {termMonths === "1" ? "month" : "months"}
+                                </span>
+                              ) : (
+                                <span className="text-ink-soft">Term, e.g. 6</span>
+                              )}
+                            </button>
+                          ) : (
+                            <>
+                              <input
+                                className={rowInputClass}
+                                type="number"
+                                inputMode="numeric"
+                                min="1"
+                                step="1"
+                                placeholder="Term, e.g. 6"
+                                value={termMonths}
+                                onChange={(e) => setTermMonths(e.target.value)}
+                                autoFocus
+                              />
+                              <span className="text-xs text-ink-soft shrink-0">months</span>
+                            </>
+                          )}
                           <button
                             type="button"
                             onClick={() => setShowTermPicker(true)}
@@ -1169,6 +1211,11 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         onClose={() => setShowInterestRatePicker(false)}
         onSelect={(rate) => {
           setInterestRate(String(rate))
+          setInterestRateCustom(false)
+          setShowInterestRatePicker(false)
+        }}
+        onCustom={() => {
+          setInterestRateCustom(true)
           setShowInterestRatePicker(false)
         }}
       />
@@ -1180,6 +1227,11 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         onClose={() => setShowTermPicker(false)}
         onSelect={(months) => {
           setTermMonths(String(months))
+          setTermCustom(false)
+          setShowTermPicker(false)
+        }}
+        onCustom={() => {
+          setTermCustom(true)
           setShowTermPicker(false)
         }}
       />
