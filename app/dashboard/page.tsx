@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
@@ -9,6 +9,7 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
 import { readCache, writeCache } from "@/lib/cache"
+import { TRANSACTIONS_CHANGED_EVENT } from "@/lib/transactionEvents"
 
 type RecentTransaction = {
   transaction_id: string
@@ -49,25 +50,11 @@ export default function DashboardPage() {
   const isAdmin = member?.role === "admin"
   const checkingAccess = authLoading || dataLoading
 
-  useEffect(() => {
-    if (authLoading) return
-
-    if (!member) {
-      router.push("/login")
-      return
-    }
-
-    if (member.status !== "approved") {
-      router.push("/waiting")
-      return
-    }
-
-    if (member.role === "borrower") {
-      router.push("/borrower")
-      return
-    }
-
-    async function loadDashboard() {
+  // Pulled out of the mount effect below so the FAB's quick-entry sheet
+  // (in Navbar, above this page and unaware of it) can also trigger a
+  // quiet refresh after saving a transaction -- see the listener effect
+  // further down.
+  const loadDashboard = useCallback(async () => {
       if (!member) return
 
       // Only show the blocking loader on a true cold start -- if we
@@ -182,10 +169,42 @@ export default function DashboardPage() {
         recentTransactions: nextRecentTransactions,
         asOf: nextAsOf.toISOString()
       })
+    // Depends only on member's id (see auth-context's own comment on why),
+    // not on fundCash/myBalance/recentTransactions -- those are read only
+    // as an error-path fallback, so a stale closure over them is harmless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [member?.member_id])
+
+  useEffect(() => {
+    if (authLoading) return
+
+    if (!member) {
+      router.push("/login")
+      return
+    }
+
+    if (member.status !== "approved") {
+      router.push("/waiting")
+      return
+    }
+
+    if (member.role === "borrower") {
+      router.push("/borrower")
+      return
     }
 
     loadDashboard()
-  }, [authLoading, member, router])
+  }, [authLoading, member, router, loadDashboard])
+
+  // The FAB's quick-entry sheet lives in Navbar, above this page and with
+  // no reference to its load function -- this listens for the plain DOM
+  // event it fires after a successful save instead, so a contribution/
+  // withdrawal/etc. submitted from here shows up without needing a full
+  // navigation away and back.
+  useEffect(() => {
+    window.addEventListener(TRANSACTIONS_CHANGED_EVENT, loadDashboard)
+    return () => window.removeEventListener(TRANSACTIONS_CHANGED_EVENT, loadDashboard)
+  }, [loadDashboard])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -283,43 +302,60 @@ export default function DashboardPage() {
             <ScanToPayCard />
           </div>
 
-          <h2 className="font-display text-[17px] font-medium text-ink mt-2 mb-2.5">Shortcuts</h2>
-          <div className="grid grid-cols-4 gap-2">
-            <Shortcut
-              label="Add Contribution"
-              onClick={() => router.push("/transactions/new?type=contribution")}
-              icon={
-                <path d="M12 19V5M12 5l-5 5M12 5l5 5" strokeLinecap="round" strokeLinejoin="round" />
-              }
-            />
-            <Shortcut
-              label="Request Withdrawal"
-              onClick={() => router.push("/transactions/new?type=withdrawal")}
-              icon={
-                <path d="M12 5v14M12 19l-5-5M12 19l5-5" strokeLinecap="round" strokeLinejoin="round" />
-              }
-            />
-            <Shortcut
-              label="Request Loan"
-              onClick={() => router.push("/transactions/new?type=loan_request")}
-              icon={
-                <>
-                  <rect x="3.5" y="7" width="17" height="12" rx="1.5" />
-                  <path d="M3.5 11h17M8 7V5.5a1.5 1.5 0 011.5-1.5h5a1.5 1.5 0 011.5 1.5V7" />
-                </>
-              }
-            />
-            <Shortcut
-              label="Repay Loan"
-              onClick={() => router.push("/transactions/new?type=loan_payment")}
-              icon={
-                <>
-                  <path d="M4 12a8 8 0 0113.66-5.66M20 12a8 8 0 01-13.66 5.66" strokeLinecap="round" />
-                  <path d="M17.5 3.5v3h-3M6.5 20.5v-3h3" strokeLinecap="round" strokeLinejoin="round" />
-                </>
-              }
-            />
-          </div>
+          {/* Member-facing types (Contribution, Withdrawal, Loan Request,
+              Loan Payment, Investment Return) used to have their own
+              shortcuts here too, deep-linking into /transactions/new --
+              dropped now that the FAB's quick-entry sheet covers all five
+              of those directly, so this section is admin-only bookkeeping
+              types the FAB never needed to cover in the first place. */}
+          {isAdmin && (
+            <>
+              <h2 className="font-display text-[17px] font-medium text-ink mt-2 mb-2.5">Admin Transactions</h2>
+              <div className="grid grid-cols-4 gap-2">
+                <Shortcut
+                  label="Bank Interest"
+                  onClick={() => router.push("/transactions/new?type=bank_interest")}
+                  icon={
+                    <>
+                      <rect x="3.5" y="7" width="17" height="12" rx="1.5" />
+                      <path d="M3.5 11h17M8 7V5.5a1.5 1.5 0 011.5-1.5h5a1.5 1.5 0 011.5 1.5V7" />
+                      <path d="M9.5 16.5l5-5M9.75 14a.25.25 0 100-.5.25.25 0 000 .5zM14.25 15.5a.25.25 0 100-.5.25.25 0 000 .5z" />
+                    </>
+                  }
+                />
+                <Shortcut
+                  label="Expense"
+                  onClick={() => router.push("/transactions/new?type=expense")}
+                  icon={
+                    <>
+                      <path d="M6 3.5h9l3 3V19a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 016 19V3.5z" />
+                      <path d="M9 8.5h6M9 12h6M9 15.5h3.5" strokeLinecap="round" />
+                    </>
+                  }
+                />
+                <Shortcut
+                  label="Bank Transfer"
+                  onClick={() => router.push("/transactions/new?type=bank_transfer")}
+                  icon={
+                    <>
+                      <path d="M4 8h13.5M17.5 8l-3.5-3.5M17.5 8L14 11.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M20 16H6.5M6.5 16L10 12.5M6.5 16L10 19.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </>
+                  }
+                />
+                <Shortcut
+                  label="Investment"
+                  onClick={() => router.push("/transactions/new?type=investment")}
+                  icon={
+                    <>
+                      <path d="M4 19V9M9.5 19V5M15 19v-7M20 19v-3" strokeLinecap="round" />
+                      <path d="M4 19h16" strokeLinecap="round" />
+                    </>
+                  }
+                />
+              </div>
+            </>
+          )}
 
           <div className="flex items-baseline justify-between gap-3 mt-6 mb-2.5">
             <h2 className="font-display text-[17px] font-medium text-ink">Recent Transactions</h2>

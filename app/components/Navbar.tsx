@@ -1,9 +1,12 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
 import { NotificationBell } from "@/app/components/NotificationBell"
+import { NewTransactionSheet } from "@/app/components/NewTransactionSheet"
+import { Toast } from "@/app/components/Toast"
+import { notifyTransactionsChanged } from "@/lib/transactionEvents"
 
 // Same reduced fraction budget-tracker's BottomNav uses -- a floating pill
 // inset from the edge only needs a little clearance from the home
@@ -72,6 +75,8 @@ export default function Navbar() {
   const navRef = useRef<HTMLElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
   const fabRef = useRef<HTMLButtonElement>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
   // The transaction forms have their own sticky Amount/Save footer -- a
   // second fixed bar at the bottom would stack on top of it. The FAB (which
@@ -112,6 +117,39 @@ export default function Navbar() {
       window.removeEventListener("resize", update)
     }
   }, [hideDock])
+
+  // iOS can leave a `position: fixed` element positioned against a stale
+  // layout viewport on a page too short to ever scroll on its own (a
+  // loading screen, a short list) -- WebKit only recomputes fixed-position
+  // layout in response to an actual scroll event, which a non-scrollable
+  // page never fires. Nudging the scroll position by a pixel and
+  // immediately back forces that recompute regardless of whether this
+  // particular page happens to be tall enough to scroll by itself (see
+  // layout.tsx's spacer div, which guarantees it always has somewhere to
+  // nudge into). Fires on every navigation (below), and also on resuming
+  // from the background (screen lock, app switch, home-screen icon
+  // relaunch without a full process kill) -- a case with no route change
+  // at all, but the same layout can just as easily go stale across it.
+  useEffect(() => {
+    function nudge() {
+      window.scrollTo(0, 1)
+      requestAnimationFrame(() => window.scrollTo(0, 0))
+    }
+    function onVisible() {
+      if (document.visibilityState === "visible") nudge()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("pageshow", nudge)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("pageshow", nudge)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.scrollTo(0, 1)
+    requestAnimationFrame(() => window.scrollTo(0, 0))
+  }, [pathname])
 
   // Everything that doesn't get its own docked tab still lives somewhere
   // -- on the Menu page -- so Menu reads as "active" while browsing any of
@@ -201,10 +239,14 @@ export default function Navbar() {
                 border, chips), so a gold FAB read as just one more gold
                 thing instead of standing out -- bg-ink/text-paper plus a
                 gold glow is the same "primary action" language every
-                submit button elsewhere in the app already uses. */}
+                submit button elsewhere in the app already uses. Opens the
+                quick-entry sheet in place rather than navigating -- the
+                full /transactions/new page is still there for the rarer
+                admin-only entry types, reachable from Admin > Members or a
+                Dashboard shortcut same as before. */}
             <button
               ref={fabRef}
-              onClick={() => router.push("/transactions/new")}
+              onClick={() => setSheetOpen(true)}
               aria-label="New Transaction"
               className="absolute right-4 w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center shadow-lg shadow-gold/30 ring-1 ring-gold/40"
               style={{ bottom: "calc(100% + 0.5rem)", transform: "translateZ(0)", willChange: "transform" }}
@@ -214,6 +256,19 @@ export default function Navbar() {
           </div>
         </nav>
       )}
+
+      {sheetOpen && (
+        <NewTransactionSheet
+          onClose={() => setSheetOpen(false)}
+          onSaved={(saveMessage) => {
+            setSheetOpen(false)
+            setToast(saveMessage)
+            notifyTransactionsChanged()
+          }}
+        />
+      )}
+
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </>
   )
 }

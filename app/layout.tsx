@@ -32,6 +32,15 @@ export const metadata: Metadata = {
     title: "Haru",
     statusBarStyle: "black-translucent",
   },
+  other: {
+    // Next's `appleWebApp` only emits the modern, unprefixed
+    // "mobile-web-app-capable" tag -- iOS's own "Add to Home Screen"
+    // standalone wrapper still keys its safe-area/viewport layout off this
+    // older Apple-specific one. Without it, the installed icon can size its
+    // content area short of the real screen, even though the exact same
+    // page in a plain Safari tab is unaffected.
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 // Theme follows the device's prefers-color-scheme by default, unless the
@@ -80,6 +89,30 @@ export default function RootLayout({
           </ThemeProvider>
         </AuthProvider>
         <Analytics />
+        {/* iOS only recomputes a `position: fixed` element's layout in
+            response to an actual scroll event -- on a page too short to
+            scroll on its own (a loading screen, a short list), that never
+            fires, and fixed overlays like Sheet's can end up laid out
+            against a stale/short viewport, especially in the installed
+            home-screen app. Navbar's own scroll-nudge (scrollTo a pixel and
+            back) forces the recompute, but only has something to nudge into
+            if the page has real overflow -- this guarantees that
+            unconditionally, regardless of any given page's own content.
+            Absolutely positioned behind everything and inert (aria-hidden,
+            no pointer events, no visible color) so it's never seen or felt,
+            just scrolled into. */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "calc(100vh + 40px)",
+            zIndex: -1,
+            pointerEvents: "none"
+          }}
+        />
       </body>
     </html>
   );

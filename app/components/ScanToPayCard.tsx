@@ -80,7 +80,10 @@ export default function ScanToPayCard() {
         <div
           // bg-black, not bg-ink -- ink is the light foreground color in
           // dark mode, so bg-ink/80 dims the backdrop to near-white there.
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          // No backdrop-blur -- `backdrop-filter` on a `position: fixed`
+          // element is a known WebKit compositing bug on iOS (see
+          // Sheet.tsx); bg-black/80 is opaque enough on its own.
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-4"
           onClick={() => setSheetOpen(false)}
         >
           <div

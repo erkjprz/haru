@@ -38,17 +38,21 @@ export function FlowBadge({
 export function AmountHero({
   value,
   onChange,
-  label = "Amount",
+  label,
   helper
 }: {
   value: string
   onChange: (v: string) => void
+  // Both optional and only rendered when given -- the number itself is
+  // already the biggest thing on screen, so a caller with no real label/
+  // helper to add (see NewTransactionSheet) isn't stuck reserving a blank
+  // line's worth of space for either.
   label?: string
   helper?: string
 }) {
   return (
     <div className="text-center pt-2 pb-5">
-      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">{label}</p>
+      {label && <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">{label}</p>}
       <div className="flex items-center justify-center gap-1.5">
         <span className="font-mono text-3xl font-bold text-ink-soft">₱</span>
         <input
@@ -335,14 +339,20 @@ function formatFull(isoDate: string): string {
 export function DateField({
   value,
   onChange,
-  placeholder
+  placeholder,
+  bare
 }: {
   value: string
   onChange: (v: string) => void
   placeholder: string
+  // Icon-row layout (e.g. NewTransactionSheet's Details card) -- no border/
+  // background of its own, sized by its own row padding instead of a fixed
+  // height, and matches the plain text weight of its row siblings instead
+  // of standing out with font-mono/a gold border once a date's picked.
+  bare?: boolean
 }) {
   return (
-    <div className="relative h-11">
+    <div className={`relative ${bare ? "" : "h-11"}`}>
       <input
         type="date"
         value={value}
@@ -351,16 +361,20 @@ export function DateField({
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [color-scheme:dark]"
       />
       <div
-        className={`pointer-events-none h-full flex items-center gap-2 border rounded-md px-3 text-sm font-mono ${
-          value ? "border-gold text-ink" : "border-hairline text-ink-soft"
-        }`}
+        className={
+          bare
+            ? "pointer-events-none flex items-center gap-3 px-4 py-3.5 text-sm text-ink"
+            : `pointer-events-none h-full flex items-center gap-2 border rounded-md px-3 text-sm font-mono ${
+                value ? "border-gold text-ink" : "border-hairline text-ink-soft"
+              }`
+        }
       >
         <svg
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
           strokeWidth={1.8}
-          className="w-[15px] h-[15px] shrink-0 text-ink-soft"
+          className={bare ? "w-5 h-5 shrink-0 text-ink-soft" : "w-[15px] h-[15px] shrink-0 text-ink-soft"}
         >
           <rect x="3.5" y="5" width="17" height="16" rx="2" />
           <path d="M8 3v4M16 3v4M3.5 10h17" strokeLinecap="round" />

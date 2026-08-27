@@ -90,12 +90,20 @@ function NewTransactionForm() {
   const [loanRepaidTotals, setLoanRepaidTotals] = useState<Record<string, number>>({})
   const [investmentsList, setInvestmentsList] = useState<any[]>([])
 
-  // Dashboard shortcuts (Add Contribution, Request Withdrawal, etc.) deep
-  // link here with ?type= so the form opens straight to the right entry
-  // type instead of always defaulting to Contribution.
+  // Dashboard shortcuts (Add Contribution, Request Withdrawal, the
+  // admin-only Bank Interest/Expense/Bank Transfer/Investment ones, etc.)
+  // deep link here with ?type= so the form opens straight to the right
+  // entry type instead of always defaulting to Contribution. Matched
+  // against every ENTRY_TYPES key, not just MEMBER_TYPES -- the dropdown
+  // and every other isAdmin-gated read of selectedType below already
+  // fall back correctly (an admin-only key a non-admin somehow lands on
+  // resolves to a blank type label there, same as picking one no longer
+  // available would), so this only needs to get the *admin* shortcuts
+  // actually landing on their real type instead of silently resetting
+  // to Contribution.
   const [selectedType, setSelectedType] = useState(() => {
     const requested = searchParams.get("type")
-    return MEMBER_TYPES.some((t) => t.key === requested) ? requested! : "contribution"
+    return ENTRY_TYPES.some((t) => t.key === requested) ? requested! : "contribution"
   })
   const [onBehalfOfId, setOnBehalfOfId] = useState("")
   const [investmentId, setInvestmentId] = useState("")
