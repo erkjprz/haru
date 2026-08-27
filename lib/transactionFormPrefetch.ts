@@ -1,0 +1,116 @@
+import { supabase } from "@/lib/supabase"
+
+// Everything NewTransactionSheet needs before it can render anything but
+// "Loading..." -- pulled out of the sheet itself so Navbar can kick this
+// off the moment a page mounts (well before the FAB is ever tapped),
+// while the sheet itself still owns re-fetching pieces of this in
+// response to user interaction (on-behalf-of switch, type switch).
+export type TransactionFormData = {
+  banks: any[]
+  allMembers: any[]
+  investmentsList: any[]
+  myLoans: any[]
+  loanRepaidTotals: Record<string, number>
+  contributionDefault: number | null
+  contributionBankDefault: string | null
+  loanPaymentDefault: number | null
+  loanPaymentBankDefault: string | null
+}
+
+// Single-slot cache, not per-member -- there's only ever one signed-in
+// member in a given browser session, so "the last fetch" is always the
+// right one to reuse. Reset (never read) across a full page reload,
+// which is fine: the whole point is covering the FAB tap that follows an
+// already-open page, not surviving a reload.
+let cache: { forMemberId: string; data: TransactionFormData } | null = null
+
+export function getCachedTransactionFormData(memberId: string): TransactionFormData | null {
+  return cache && cache.forMemberId === memberId ? cache.data : null
+}
+
+// Callable from both Navbar (fire-and-forget, to warm the cache early)
+// and NewTransactionSheet itself (awaited, as a fallback when the sheet
+// gets opened before Navbar's own prefetch has finished -- e.g. tapping
+// the FAB within the first instant of a page load).
+export async function loadTransactionFormData(
+  memberId: string,
+  isAdmin: boolean
+): Promise<{ data: TransactionFormData | null; error: string | null }> {
+  const { data: bankList, error: bankError } = await supabase
+    .from("bank_accounts")
+    .select("id, bank_name, account_name")
+    .order("bank_name")
+
+  if (bankError) return { data: null, error: bankError.message }
+
+  let allMembers: any[] = []
+  if (isAdmin) {
+    const { data: memberList } = await supabase.from("members").select("member_id, name").order("name")
+    allMembers = memberList ?? []
+  }
+
+  // Closed investments are excluded -- closing settles the books, so no
+  // new returns should get recorded against one afterward without
+  // reopening it first. Same rule /transactions/new applies.
+  const { data: investmentList } = await supabase
+    .from("investments")
+    .select("investment_id, name, affects_cash")
+    .eq("status", "open")
+    .order("name")
+
+  const { data: borrowerRow } = await supabase
+    .from("borrowers")
+    .select("borrower_id")
+    .eq("member_id", memberId)
+    .maybeSingle()
+
+  const loanFilter = borrowerRow?.borrower_id
+    ? `member_id.eq.${memberId},borrower_id.eq.${borrowerRow.borrower_id}`
+    : `member_id.eq.${memberId}`
+
+  const { data: loans } = await supabase
+    .from("loans")
+    .select("loan_id, principal, interest_type, interest_rate, interest_amount, term_months, status, start_date")
+    .or(loanFilter)
+    .in("status", ["active", "requested"])
+    .order("start_date", { ascending: false })
+
+  const myLoans = loans ?? []
+  const loanIds = myLoans.map((l) => l.loan_id)
+  let loanRepaidTotals: Record<string, number> = {}
+  if (loanIds.length > 0) {
+    const { data: repayments } = await supabase
+      .from("transactions")
+      .select("loan_id, amount")
+      .in("loan_id", loanIds)
+      .eq("classification", "Loan Repayment")
+      .in("status", ["pending", "approved"])
+
+    ;(repayments ?? []).forEach((r) => {
+      loanRepaidTotals[r.loan_id] = (loanRepaidTotals[r.loan_id] || 0) + Number(r.amount)
+    })
+  }
+
+  const { data: prefs } = await supabase
+    .from("members")
+    .select(
+      "default_contribution_amount, default_contribution_bank_id, default_loan_payment_amount, default_loan_payment_bank_id"
+    )
+    .eq("member_id", memberId)
+    .maybeSingle()
+
+  const data: TransactionFormData = {
+    banks: bankList ?? [],
+    allMembers,
+    investmentsList: investmentList ?? [],
+    myLoans,
+    loanRepaidTotals,
+    contributionDefault: prefs?.default_contribution_amount != null ? Number(prefs.default_contribution_amount) : null,
+    contributionBankDefault: prefs?.default_contribution_bank_id ?? null,
+    loanPaymentDefault: prefs?.default_loan_payment_amount != null ? Number(prefs.default_loan_payment_amount) : null,
+    loanPaymentBankDefault: prefs?.default_loan_payment_bank_id ?? null
+  }
+
+  cache = { forMemberId: memberId, data }
+  return { data, error: null }
+}

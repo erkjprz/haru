@@ -17,6 +17,7 @@ import {
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { dateOnly } from "@/lib/currentValue"
+import { getCachedTransactionFormData, loadTransactionFormData } from "@/lib/transactionFormPrefetch"
 
 // The FAB's quick-entry sheet covers the types every member reaches for
 // constantly (Contribution/Withdrawal/Loan Request/Loan Payment) plus
@@ -155,20 +156,28 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const memberId = member?.member_id ?? null
   const isAdmin = member?.role === "admin"
 
-  const [dataLoading, setDataLoading] = useState(true)
+  // Navbar starts warming this the moment a page has a signed-in member
+  // (see its own effect) -- by the time someone actually taps the FAB,
+  // the fetch below is very often already done. Seeding state from
+  // whatever's cached (possibly nothing, on a very fast tap) means
+  // dataLoading only starts true when there's genuinely nothing to show
+  // yet, instead of unconditionally flashing "Loading..." every time.
+  const cached = memberId ? getCachedTransactionFormData(memberId) : null
+
+  const [dataLoading, setDataLoading] = useState(!cached)
   const [loadError, setLoadError] = useState("")
-  const [banks, setBanks] = useState<any[]>([])
-  const [allMembers, setAllMembers] = useState<any[]>([])
-  const [myLoans, setMyLoans] = useState<any[]>([])
-  const [loanRepaidTotals, setLoanRepaidTotals] = useState<Record<string, number>>({})
-  const [investmentsList, setInvestmentsList] = useState<any[]>([])
+  const [banks, setBanks] = useState<any[]>(cached?.banks ?? [])
+  const [allMembers, setAllMembers] = useState<any[]>(cached?.allMembers ?? [])
+  const [myLoans, setMyLoans] = useState<any[]>(cached?.myLoans ?? [])
+  const [loanRepaidTotals, setLoanRepaidTotals] = useState<Record<string, number>>(cached?.loanRepaidTotals ?? {})
+  const [investmentsList, setInvestmentsList] = useState<any[]>(cached?.investmentsList ?? [])
 
   const [selectedType, setSelectedType] = useState("contribution")
   const [showTypePicker, setShowTypePicker] = useState(false)
   const [onBehalfOfId, setOnBehalfOfId] = useState("")
-  const [bankId, setBankId] = useState("")
+  const [bankId, setBankId] = useState(cached?.contributionBankDefault ?? "")
   const [investmentId, setInvestmentId] = useState("")
-  const [amount, setAmount] = useState("")
+  const [amount, setAmount] = useState(cached?.contributionDefault != null ? String(cached.contributionDefault) : "")
   const [txnDate, setTxnDate] = useState(() => dateOnly(new Date()))
   const [description, setDescription] = useState("")
   const [receipt, setReceipt] = useState<File | null>(null)
@@ -185,10 +194,10 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [selectedLoanId, setSelectedLoanId] = useState("")
   const [showLoanPicker, setShowLoanPicker] = useState(false)
 
-  const [contributionDefault, setContributionDefault] = useState<number | null>(null)
-  const [contributionBankDefault, setContributionBankDefault] = useState<string | null>(null)
-  const [loanPaymentDefault, setLoanPaymentDefault] = useState<number | null>(null)
-  const [loanPaymentBankDefault, setLoanPaymentBankDefault] = useState<string | null>(null)
+  const [contributionDefault, setContributionDefault] = useState<number | null>(cached?.contributionDefault ?? null)
+  const [contributionBankDefault, setContributionBankDefault] = useState<string | null>(cached?.contributionBankDefault ?? null)
+  const [loanPaymentDefault, setLoanPaymentDefault] = useState<number | null>(cached?.loanPaymentDefault ?? null)
+  const [loanPaymentBankDefault, setLoanPaymentBankDefault] = useState<string | null>(cached?.loanPaymentBankDefault ?? null)
   const [saveAsDefault, setSaveAsDefault] = useState(false)
 
   // Loan Request is the only type in this reduced set with enough
@@ -255,50 +264,46 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     return { contrib, contribBank, loanPay, loanPayBank }
   }
 
+  // If `cached` was already there at mount, state above is already fully
+  // seeded and dataLoading started false -- nothing to do. Otherwise this
+  // is the fallback path: Navbar's own prefetch (see its effect) hasn't
+  // finished yet, most likely because the FAB got tapped within the very
+  // first instant of a page load, so fetch the same data directly.
   useEffect(() => {
-    if (!member) return
+    if (!member || cached) return
 
     async function load() {
-      const { data: bankList, error: bankError } = await supabase
-        .from("bank_accounts")
-        .select("id, bank_name, account_name")
-        .order("bank_name")
-
-      if (bankError) {
-        setLoadError(bankError.message)
+      const { data, error } = await loadTransactionFormData(member!.member_id, member!.role === "admin")
+      if (error || !data) {
+        setLoadError(error ?? "Couldn't load transaction data.")
         setDataLoading(false)
         return
       }
-      setBanks(bankList ?? [])
 
-      if (member!.role === "admin") {
-        const { data: memberList } = await supabase.from("members").select("member_id, name").order("name")
-        setAllMembers(memberList ?? [])
-      }
-
-      // Closed investments are excluded -- closing settles the books, so no
-      // new returns should get recorded against one afterward without
-      // reopening it first. Same rule /transactions/new applies.
-      const { data: investmentList } = await supabase
-        .from("investments")
-        .select("investment_id, name, affects_cash")
-        .eq("status", "open")
-        .order("name")
-      setInvestmentsList(investmentList ?? [])
-
-      await loadLoansFor(member!.member_id)
+      setBanks(data.banks)
+      setAllMembers(data.allMembers)
+      setInvestmentsList(data.investmentsList)
+      setMyLoans(data.myLoans)
+      setLoanRepaidTotals(data.loanRepaidTotals)
+      setContributionDefault(data.contributionDefault)
+      setContributionBankDefault(data.contributionBankDefault)
+      setLoanPaymentDefault(data.loanPaymentDefault)
+      setLoanPaymentBankDefault(data.loanPaymentBankDefault)
 
       // selectedType starts at "contribution" above, so only that default
       // needs applying here -- loan_payment's own default is applied by
       // handleTypeChange whenever someone actually switches to it.
-      const { contrib, contribBank } = await loadPreferencesFor(member!.member_id)
-      if (contrib != null) setAmount(String(contrib))
-      if (contribBank) setBankId(contribBank)
+      if (data.contributionDefault != null) setAmount(String(data.contributionDefault))
+      if (data.contributionBankDefault) setBankId(data.contributionBankDefault)
 
       setDataLoading(false)
     }
 
     load()
+    // cached is a plain value captured at mount (whether the sheet opened
+    // already warm), not state -- it isn't expected to change through this
+    // instance's lifetime, so it's deliberately left out of the deps list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member])
 
   const effectiveMemberId = isAdmin && onBehalfOfId ? onBehalfOfId : memberId
