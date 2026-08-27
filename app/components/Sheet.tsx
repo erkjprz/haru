@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Portal } from "@/app/components/Portal"
 
 // Generic bottom sheet -- backdrop + slide-up panel, mounted closed and
@@ -11,18 +11,19 @@ import { Portal } from "@/app/components/Portal"
 // by calling onClose directly instead, so it just disappears immediately
 // rather than replaying this animation.
 //
-// No tap-to-dismiss on the backdrop -- confirmed on-device (screen
-// recording) that a plain swipe-down starting at rest, or scrolling this
-// sheet's own content to either edge and continuing the drag, could still
-// reach the backdrop underneath despite overscroll-contain on the
-// scrollable div (see that div's own comment): iOS Safari doesn't
-// reliably contain the gesture at a `position: fixed` overlay's edges,
-// so the drag ends up registering as a tap on whatever's behind it,
-// silently closing the sheet and discarding the entire form. A
-// pointerdown/pointerup distance guard on the backdrop (tried first)
-// didn't fully close the gap -- some of these drags never even reach the
-// backdrop element itself before dismissing something. The × button is
-// the only way to close now; unambiguous regardless of gesture nuances.
+// Backdrop tap-to-dismiss uses a pointerdown/pointerup distance guard,
+// not a plain onClick -- a swipe-down that starts on the backdrop (or
+// scroll-chains into it from this sheet's own content, see that div's
+// own comment) can otherwise register as a "tap" on release even though
+// real movement happened, silently closing the sheet and discarding
+// whatever was filled in. The actual worse case turned out to be
+// PullToRefresh.tsx's own window-level listeners doing a real page
+// reload on the same gesture (fixed there, by checking whether a sheet
+// is open before arming) -- that's what plain swipe-downs were mostly
+// hitting, not this backdrop at all. This guard stays anyway as real
+// belt-and-suspenders: iOS Safari's overscroll containment at a
+// `position: fixed` overlay's edges still isn't reliable enough to trust
+// blindly.
 export function Sheet({
   title,
   onClose,
@@ -119,6 +120,20 @@ export function Sheet({
     setTimeout(onClose, 200)
   }
 
+  const backdropPointerStart = useRef<{ x: number; y: number } | null>(null)
+
+  function handleBackdropPointerDown(e: React.PointerEvent) {
+    backdropPointerStart.current = { x: e.clientX, y: e.clientY }
+  }
+
+  function handleBackdropPointerUp(e: React.PointerEvent) {
+    const start = backdropPointerStart.current
+    backdropPointerStart.current = null
+    if (!start) return
+    const movedTooFar = Math.abs(e.clientX - start.x) > 10 || Math.abs(e.clientY - start.y) > 10
+    if (!movedTooFar) handleClose()
+  }
+
   return (
     <Portal>
       {/* Its own full-screen fixed layer, not a wrapper the panel sits
@@ -137,6 +152,8 @@ export function Sheet({
         className={`fixed inset-0 z-50 bg-black/80 transition-opacity duration-200 ${
           open ? "opacity-100" : "opacity-0"
         }`}
+        onPointerDown={handleBackdropPointerDown}
+        onPointerUp={handleBackdropPointerUp}
       />
       {/* Its own independent `position: fixed; bottom: 0` element, not
           `absolute` inside a full-height wrapper -- see the comment on
@@ -162,8 +179,9 @@ export function Sheet({
             past the top/bottom of this list on a touch device hands the
             rest of the gesture to whatever's behind it (the backdrop, the
             locked page), which iOS Safari doesn't always keep contained
-            here even with this in place -- see the backdrop's own comment
-            on why closing no longer depends on that being reliable. min-h-0 is
+            here even with this in place -- the backdrop's own pointer-
+            distance guard is what actually keeps that from closing the
+            sheet. min-h-0 is
             load-bearing here, not decorative -- a flex child with
             overflow-y-auto defaults its minimum height to its own
             content size (a WebKit quirk), not 0, which can push this
