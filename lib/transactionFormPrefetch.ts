@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { readCache, writeCache } from "@/lib/cache"
 
 // Everything NewTransactionSheet needs before it can render anything but
 // "Loading..." -- pulled out of the sheet itself so Navbar can kick this
@@ -17,14 +18,16 @@ export type TransactionFormData = {
   loanPaymentBankDefault: string | null
 }
 
-// Single-slot cache, not per-member -- there's only ever one signed-in
-// member in a given browser session, so "the last fetch" is always the
-// right one to reuse. Reset (never read) across a full page reload,
-// which is fine: the whole point is covering the FAB tap that follows an
-// already-open page, not surviving a reload.
+// Backed by lib/cache.ts's localStorage-based cache, same as auth-context's
+// member seed and dashboard's own snapshot -- an in-memory-only version of
+// this (the original approach) meant a genuine app relaunch (not just
+// navigating within an already-open session) always started cold, since
+// there's nothing left in memory to reuse. That defeated the purpose for
+// exactly the case people actually hit: opening the app and tapping the
+// FAB, not just tapping it again mid-session.
 //
 // Keyed on isAdmin as well as memberId -- auth-context.tsx can seed
-// `member` from a stale session cache before the real Supabase check
+// `member` from a stale cached role before the real Supabase check
 // corrects it (see its own comment), so a role flip (or a plain stale
 // cached role from an earlier session) can mean this fires once with the
 // wrong isAdmin before firing again with the right one moments later.
@@ -35,10 +38,12 @@ export type TransactionFormData = {
 // once at mount and bails on any fetch of its own if *something* is
 // already cached, not specifically something cached for the current
 // isAdmin.
-let cache: { forMemberId: string; forIsAdmin: boolean; data: TransactionFormData } | null = null
+function cacheKey(memberId: string, isAdmin: boolean): string {
+  return `transactionForm:${memberId}:${isAdmin}`
+}
 
 export function getCachedTransactionFormData(memberId: string, isAdmin: boolean): TransactionFormData | null {
-  return cache && cache.forMemberId === memberId && cache.forIsAdmin === isAdmin ? cache.data : null
+  return readCache<TransactionFormData>(cacheKey(memberId, isAdmin)) ?? null
 }
 
 // Callable from both Navbar (fire-and-forget, to warm the cache early)
@@ -124,6 +129,6 @@ export async function loadTransactionFormData(
     loanPaymentBankDefault: prefs?.default_loan_payment_bank_id ?? null
   }
 
-  cache = { forMemberId: memberId, forIsAdmin: isAdmin, data }
+  writeCache(cacheKey(memberId, isAdmin), data)
   return { data, error: null }
 }
