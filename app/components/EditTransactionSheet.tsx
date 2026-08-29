@@ -738,6 +738,19 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
         <>
           {message && <p className="text-sm text-rust mb-3">{message}</p>}
           <div className="flex items-center gap-3">
+            {/* Same guard as before -- a rejected row is already out of the
+                review queue, so there's nothing left to cancel; Save either
+                resubmits it or the member just closes the sheet. */}
+            {status !== "rejected" && (
+              <button
+                type="button"
+                onClick={handleCancelEntry}
+                disabled={cancelling || saving}
+                className="shrink-0 border border-rust text-rust px-5 py-3.5 rounded-full text-base font-semibold disabled:opacity-50"
+              >
+                {cancelling ? "Cancelling…" : "Cancel"}
+              </button>
+            )}
             {isLoanRelease && formStep === 2 && (
               <button
                 type="button"
@@ -751,7 +764,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
               type="button"
               className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
               onClick={isLoanRelease && formStep === 1 ? handleContinueToReview : handleSave}
-              disabled={saving}
+              disabled={saving || cancelling}
             >
               {saving
                 ? "Saving…"
@@ -1135,24 +1148,6 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
               </FieldGroup>
             )}
           </>
-        )}
-
-        {/* handleCancelEntry's guard still requires status="pending" --
-            a rejected row is already out of the review queue, so there's
-            nothing left to cancel here; Save either resubmits it or the
-            member just closes the sheet and leaves it rejected. No more
-            explanatory paragraph above the button -- handleCancelEntry's
-            own confirm() dialog already carries that same warning at the
-            one moment it actually matters, right before it's irreversible. */}
-        {status !== "rejected" && (
-          <button
-            type="button"
-            onClick={handleCancelEntry}
-            disabled={cancelling}
-            className="w-full text-sm font-semibold text-rust border border-rust rounded-md px-4 py-3.5 disabled:opacity-50"
-          >
-            {cancelling ? "Cancelling…" : "Cancel this entry"}
-          </button>
         )}
       </div>
     </Sheet>
