@@ -126,11 +126,12 @@ export default function Navbar() {
   // Pages reserve bottom padding (--dock-h) to clear whichever floating
   // element sticks up furthest from the bottom edge -- the FAB floats above
   // the pill (see its own `bottom` below) and is taller than the pill
-  // overall, so it -- not the pill -- is what a page needs to clear.
-  // Measured (not hardcoded) so existing pages' padding stays correct
-  // without every one of them needing its own update. Both the dock and
-  // FAB are permanent fixtures of this component now (nothing hides them
-  // anymore), so this only needs to run once on mount.
+  // overall, so it -- not the pill -- is what a page needs to clear, on the
+  // pages that actually show it (see showFab below). Measured (not
+  // hardcoded) so existing pages' padding stays correct without every one
+  // of them needing its own update, and so it naturally shrinks back down
+  // to just the pill's own height on a page with no FAB. The dock itself
+  // is still a permanent fixture, so this only needs to run once on mount.
   useEffect(() => {
     // Measures actual rendered box edges rather than re-deriving the pill's
     // safe-area padding/gap/height arithmetic by hand -- correct regardless
@@ -190,6 +191,14 @@ export default function Navbar() {
     window.scrollTo(0, 1)
     requestAnimationFrame(() => window.scrollTo(0, 0))
   }, [pathname])
+
+  // The FAB only makes sense where "add a transaction" is actually the
+  // page's own task -- Dashboard and Transactions. Breakdown/Admin/Menu
+  // still reach it via Admin > Members' own "New Transaction" link (the
+  // ?newTransaction query-param watcher below stays mounted regardless of
+  // this, so that link keeps working even though the button itself is
+  // hidden on that page).
+  const showFab = pathname === "/dashboard" || pathname === "/transactions"
 
   // Everything that doesn't get its own docked tab still lives somewhere
   // -- on the Menu page -- so Menu reads as "active" while browsing any of
@@ -282,16 +291,19 @@ export default function Navbar() {
                 type, admin-only ones included, is reachable from here now --
                 Admin > Members' own "New Transaction" link opens this same
                 sheet (see the ?newTransaction query-param effect above)
-                instead of a separate full-page form. */}
-            <button
-              ref={fabRef}
-              onClick={() => setSheetOpen(true)}
-              aria-label="New Transaction"
-              className="absolute right-4 w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center shadow-lg shadow-gold/30 ring-1 ring-gold/40"
-              style={{ bottom: "calc(100% + 0.5rem)", transform: "translateZ(0)", willChange: "transform" }}
-            >
-              <span className="text-3xl leading-none font-light">+</span>
-            </button>
+                instead of a separate full-page form. Only rendered on
+                Dashboard/Transactions -- see showFab above. */}
+            {showFab && (
+              <button
+                ref={fabRef}
+                onClick={() => setSheetOpen(true)}
+                aria-label="New Transaction"
+                className="absolute right-4 w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center shadow-lg shadow-gold/30 ring-1 ring-gold/40"
+                style={{ bottom: "calc(100% + 0.5rem)", transform: "translateZ(0)", willChange: "transform" }}
+              >
+                <span className="text-3xl leading-none font-light">+</span>
+              </button>
+            )}
           </div>
         </nav>
 
