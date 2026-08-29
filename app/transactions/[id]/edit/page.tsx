@@ -18,6 +18,10 @@ import {
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
+import { LoanPickerSheet } from "@/app/components/LoanPickerSheet"
+import { InvestmentPickerSheet } from "@/app/components/InvestmentPickerSheet"
+import { InterestRatePickerSheet } from "@/app/components/InterestRatePickerSheet"
+import { TermPickerSheet } from "@/app/components/TermPickerSheet"
 
 // Member-submitted types: editable by the member who owns the row, only
 // while it's still pending. Investment Return is also member-submittable
@@ -105,6 +109,7 @@ export default function EditTransactionPage() {
 
   const [banks, setBanks] = useState<any[]>([])
   const [myLoans, setMyLoans] = useState<any[]>([])
+  const [loanRepaidTotals, setLoanRepaidTotals] = useState<Record<string, number>>({})
   const [investmentsList, setInvestmentsList] = useState<any[]>([])
 
   const [classification, setClassification] = useState("")
@@ -116,8 +121,8 @@ export default function EditTransactionPage() {
   const [investmentId, setInvestmentId] = useState("")
   // Set once at load from the row's actual member_id -- Investment Return
   // can be either a member's own pending submission or an admin's
-  // already-approved one (see /transactions/new), so this can't be derived
-  // from classification alone the way it can for every other type.
+  // already-approved one (see NewTransactionSheet), so this can't be
+  // derived from classification alone the way it can for every other type.
   const [isMemberOwned, setIsMemberOwned] = useState(false)
   const [amount, setAmount] = useState("")
   const [interestType, setInterestType] = useState<InterestType>("rate")
@@ -125,6 +130,18 @@ export default function EditTransactionPage() {
   const [interestAmount, setInterestAmount] = useState("")
   const [termMonths, setTermMonths] = useState("")
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
+  // Picker sheets replace plain <select>/<input> for these four fields,
+  // matching NewTransactionSheet's pattern -- interestRateCustom/termCustom
+  // default to false (picker-driven) same as there, regardless of whether
+  // an existing edited value happens to match a preset: the tappable row
+  // always displays the real value either way, and "Custom..." in the
+  // sheet is still one tap away.
+  const [showLoanPicker, setShowLoanPicker] = useState(false)
+  const [showInvestmentPicker, setShowInvestmentPicker] = useState(false)
+  const [showInterestRatePicker, setShowInterestRatePicker] = useState(false)
+  const [showTermPicker, setShowTermPicker] = useState(false)
+  const [interestRateCustom, setInterestRateCustom] = useState(false)
+  const [termCustom, setTermCustom] = useState(false)
   const [description, setDescription] = useState("")
   const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null)
   const [existingReceiptSignedUrl, setExistingReceiptSignedUrl] = useState<string | null>(null)
@@ -303,12 +320,34 @@ export default function EditTransactionPage() {
 
         const { data: loans } = await supabase
           .from("loans")
-          .select("loan_id, principal, interest_rate, term_months, status, start_date")
+          .select("loan_id, principal, interest_type, interest_rate, interest_amount, term_months, status, start_date")
           .or(loanFilter)
           .in("status", ["active", "requested"])
           .order("start_date", { ascending: false })
 
-        setMyLoans(loans ?? [])
+        const loansData = loans ?? []
+        setMyLoans(loansData)
+
+        // "X left to pay" needs each loan's total repaid so far --
+        // excludes this transaction's own row so editing its amount (or
+        // reassigning it to a different loan) doesn't count this entry
+        // against itself.
+        const loanIds = loansData.map((l) => l.loan_id)
+        if (loanIds.length > 0) {
+          const { data: repayments } = await supabase
+            .from("transactions")
+            .select("loan_id, amount")
+            .in("loan_id", loanIds)
+            .eq("classification", "Loan Repayment")
+            .in("status", ["pending", "approved"])
+            .neq("transaction_id", transactionId)
+
+          const totals: Record<string, number> = {}
+          ;(repayments ?? []).forEach((r) => {
+            totals[r.loan_id] = (totals[r.loan_id] ?? 0) + Number(r.amount)
+          })
+          setLoanRepaidTotals(totals)
+        }
       }
 
       setDataLoading(false)
@@ -329,10 +368,22 @@ export default function EditTransactionPage() {
     isBankTransfer ||
     isInvestmentEntry
   // Every editable type requires a receipt except Member Withdrawal and
-  // Loan Release, where nothing has actually moved yet -- mirrors the same
-  // rule on /transactions/new (see the comment there for why admin-entered
-  // types like Bank Interest/Expense/Internal Transfer are included).
+  // Loan Release, where nothing has actually moved yet -- admin-entered
+  // types like Bank Interest/Expense/Internal Transfer are included since
+  // those still need a bank statement/receipt attached same as anything
+  // else that moved real money.
   const needsReceipt = classification !== "Member Withdrawal" && !isLoanRelease
+
+  // Same filter the dropdown this replaces already used: active loans, plus
+  // whichever one this row already points to even if it's since closed --
+  // an existing edit shouldn't lose its own loan from the picker.
+  const activeLoansForPicker = myLoans.filter((l) => l.status === "active" || l.loan_id === loanId)
+  const selectedLoan = myLoans.find((l) => l.loan_id === loanId) ?? null
+  // Investments list includes closed ones (see the comment where it's
+  // fetched) -- filtered the same way here: open, plus whichever one this
+  // row already points to.
+  const investmentsForPicker = investmentsList.filter((inv) => inv.status === "open" || inv.investment_id === investmentId)
+  const selectedInvestmentRow = investmentsList.find((inv) => inv.investment_id === investmentId) ?? null
 
   const previewTotalRepayable =
     isLoanRelease &&
@@ -788,23 +839,31 @@ export default function EditTransactionPage() {
                           Which loan
                           <RequiredMark />
                         </label>
-                        {myLoans.filter((l) => l.status === "active").length === 0 ? (
-                          <p className="text-sm text-rust">No active loans to pay against.</p>
-                        ) : (
-                          <select
-                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                            value={loanId}
-                            onChange={(e) => setLoanId(e.target.value)}
-                          >
-                            <option value="">Select a loan</option>
-                            {myLoans
-                              .filter((l) => l.status === "active" || l.loan_id === loanId)
-                              .map((loan) => (
-                                <option key={loan.loan_id} value={loan.loan_id}>
-                                  ₱{fmt(loan.principal)} from {loan.start_date}
-                                </option>
-                              ))}
-                          </select>
+                        {/* Always renders the tappable row regardless of
+                            whether there's anything to pick -- LoanPickerSheet
+                            already shows its own graceful "No active loans"
+                            empty state, so a second, redder version of that
+                            same message here (the old inline notice) was
+                            redundant. */}
+                        <button
+                          type="button"
+                          onClick={() => setShowLoanPicker(true)}
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full flex items-center justify-between gap-2 text-left"
+                        >
+                          {selectedLoan ? (
+                            <span className="text-ink">
+                              ₱{fmt(selectedLoan.principal)} from {selectedLoan.start_date}
+                            </span>
+                          ) : (
+                            <span className="text-ink-soft">Select a loan</span>
+                          )}
+                          <span className="text-ink-soft text-xs shrink-0">▾</span>
+                        </button>
+                        {selectedLoan && (
+                          <p className="text-xs text-ink-soft mt-2">
+                            ₱{fmt(Math.max(0, totalRepayable(Number(selectedLoan.principal), selectedLoan.interest_type, Number(selectedLoan.interest_rate || 0), Number(selectedLoan.interest_amount || 0)) - (loanRepaidTotals[selectedLoan.loan_id] || 0)))}{" "}
+                            left to pay
+                          </p>
                         )}
                       </div>
                     )}
@@ -815,20 +874,22 @@ export default function EditTransactionPage() {
                           Investment
                           <RequiredMark />
                         </label>
-                        <select
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                          value={investmentId}
-                          onChange={(e) => setInvestmentId(e.target.value)}
+                        {/* Same tappable-row pattern as the loan field above
+                            -- both are just "pick one of a short list," and
+                            InvestmentPickerSheet already has its own
+                            graceful "No open investments" empty state. */}
+                        <button
+                          type="button"
+                          onClick={() => setShowInvestmentPicker(true)}
+                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full flex items-center justify-between gap-2 text-left"
                         >
-                          <option value="">Select an investment</option>
-                          {investmentsList
-                            .filter((inv) => inv.status === "open" || inv.investment_id === investmentId)
-                            .map((inv) => (
-                              <option key={inv.investment_id} value={inv.investment_id}>
-                                {inv.name}
-                              </option>
-                            ))}
-                        </select>
+                          {selectedInvestmentRow ? (
+                            <span className="text-ink">{selectedInvestmentRow.name}</span>
+                          ) : (
+                            <span className="text-ink-soft">Select an investment</span>
+                          )}
+                          <span className="text-ink-soft text-xs shrink-0">▾</span>
+                        </button>
                       </div>
                     )}
 
@@ -943,15 +1004,35 @@ export default function EditTransactionPage() {
                           </button>
                         </div>
                         {interestType === "rate" ? (
-                          <input
-                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="e.g. 5"
-                            value={interestRate}
-                            onChange={(e) => setInterestRate(e.target.value)}
-                          />
+                          // Picker is the default way in, matching
+                          // NewTransactionSheet -- "Custom..." in the sheet
+                          // switches to the raw input for anything outside
+                          // the preset list.
+                          !interestRateCustom ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowInterestRatePicker(true)}
+                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full flex items-center justify-between gap-2 text-left font-mono [font-variant-numeric:tabular-nums]"
+                            >
+                              {interestRate ? (
+                                <span className="text-ink">{interestRate}%</span>
+                              ) : (
+                                <span className="text-ink-soft">e.g. 5</span>
+                              )}
+                              <span className="text-ink-soft text-xs shrink-0 font-sans">▾</span>
+                            </button>
+                          ) : (
+                            <input
+                              className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="e.g. 5"
+                              value={interestRate}
+                              onChange={(e) => setInterestRate(e.target.value)}
+                              autoFocus
+                            />
+                          )
                         ) : (
                           <input
                             className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
@@ -970,15 +1051,33 @@ export default function EditTransactionPage() {
                           Term (months)
                           <RequiredMark />
                         </label>
-                        <input
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                          type="number"
-                          min="1"
-                          step="1"
-                          placeholder="e.g. 6"
-                          value={termMonths}
-                          onChange={(e) => setTermMonths(e.target.value)}
-                        />
+                        {!termCustom ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowTermPicker(true)}
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full flex items-center justify-between gap-2 text-left font-mono [font-variant-numeric:tabular-nums]"
+                          >
+                            {termMonths ? (
+                              <span className="text-ink">
+                                {termMonths} {termMonths === "1" ? "month" : "months"}
+                              </span>
+                            ) : (
+                              <span className="text-ink-soft">e.g. 6</span>
+                            )}
+                            <span className="text-ink-soft text-xs shrink-0 font-sans">▾</span>
+                          </button>
+                        ) : (
+                          <input
+                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                            type="number"
+                            min="1"
+                            step="1"
+                            placeholder="e.g. 6"
+                            value={termMonths}
+                            onChange={(e) => setTermMonths(e.target.value)}
+                            autoFocus
+                          />
+                        )}
                       </div>
 
                       <div>
@@ -1115,6 +1214,61 @@ export default function EditTransactionPage() {
           </button>
         </div>
       </div>
+
+      {showLoanPicker && (
+        <LoanPickerSheet
+          loans={activeLoansForPicker}
+          repaidTotals={loanRepaidTotals}
+          onClose={() => setShowLoanPicker(false)}
+          onSelect={(loan) => {
+            setLoanId(loan.loan_id)
+            setShowLoanPicker(false)
+          }}
+        />
+      )}
+
+      {showInvestmentPicker && (
+        <InvestmentPickerSheet
+          investments={investmentsForPicker}
+          onClose={() => setShowInvestmentPicker(false)}
+          onSelect={(investment) => {
+            setInvestmentId(investment.investment_id)
+            setShowInvestmentPicker(false)
+          }}
+        />
+      )}
+
+      {showInterestRatePicker && (
+        <InterestRatePickerSheet
+          value={interestRate}
+          onClose={() => setShowInterestRatePicker(false)}
+          onSelect={(rate) => {
+            setInterestRate(String(rate))
+            setInterestRateCustom(false)
+            setShowInterestRatePicker(false)
+          }}
+          onCustom={() => {
+            setInterestRateCustom(true)
+            setShowInterestRatePicker(false)
+          }}
+        />
+      )}
+
+      {showTermPicker && (
+        <TermPickerSheet
+          value={termMonths}
+          onClose={() => setShowTermPicker(false)}
+          onSelect={(months) => {
+            setTermMonths(String(months))
+            setTermCustom(false)
+            setShowTermPicker(false)
+          }}
+          onCustom={() => {
+            setTermCustom(true)
+            setShowTermPicker(false)
+          }}
+        />
+      )}
     </>
   )
 }
