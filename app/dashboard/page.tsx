@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ScanToPayCard from "@/app/components/ScanToPayCard"
 import { useAuth } from "@/app/auth-context"
@@ -10,22 +9,7 @@ import { SkeletonPanel } from "@/app/components/Skeleton"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
 import { readCache, writeCache } from "@/lib/cache"
 import { TRANSACTIONS_CHANGED_EVENT } from "@/lib/transactionEvents"
-
-type RecentTransaction = {
-  transaction_id: string
-  date: string
-  classification: string
-  amount: number
-  status: string
-}
-
-type DashboardSnapshot = {
-  fundCash: number | null
-  myBalance: number | null
-  pendingCount: number
-  recentTransactions: RecentTransaction[]
-  asOf: string
-}
+import { fetchDashboardFields, type DashboardSnapshot, type RecentTransaction } from "@/lib/dashboardSnapshot"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -62,97 +46,19 @@ export default function DashboardPage() {
       // of flashing back to a spinner on every navigation.
       if (!readCache(`dashboard:${member.member_id}`)) setDataLoading(true)
 
-      // v_fund_summary.total_cash is the same figure the Breakdown hub's
-      // Fund tab shows as "Fund Total Cash" -- reuse it rather than
-      // recomputing from bank balances.
-      const fundPromise = supabase.from("v_fund_summary").select("total_cash").single()
+      // The six queries themselves live in lib/dashboardSnapshot.ts, shared
+      // with the splash at / -- which runs the exact same fetch to get this
+      // cache warm before ever navigating here. A field comes back
+      // `undefined` when its own query errored; fall back to whatever's
+      // already on screen rather than blanking a value the member was just
+      // looking at over a transient error.
+      const fields = await fetchDashboardFields(member)
+      if (fields.error) setLoadError(fields.error)
 
-      // v_member_performance.withdrawable_now is the same figure Breakdown's
-      // You tab shows as "Available Balance."
-      const minePromise = supabase
-        .from("v_member_performance")
-        .select("withdrawable_now")
-        .eq("member_id", member.member_id)
-        .single()
-
-      const pendingPromise =
-        member.role === "admin"
-          ? supabase.from("transactions").select("transaction_id", { count: "exact", head: true }).eq("status", "pending")
-          : Promise.resolve({ count: 0, error: null })
-
-      // Mirrors Admin's own "entries awaiting approval" total -- transactions,
-      // pending member signups, and pending borrower signups. Distribution
-      // groups are deliberately left out (getPendingBankInterestGroups()
-      // does real aggregation work, not a cheap count, and isn't worth
-      // paying for on every dashboard load). role='borrower' is excluded
-      // from the members count the same way Admin's Members tab excludes
-      // it -- pending borrowers are counted once, not double-counted
-      // across both.
-      const pendingMembersPromise =
-        member.role === "admin"
-          ? supabase
-              .from("members")
-              .select("member_id", { count: "exact", head: true })
-              .eq("status", "pending")
-              .neq("role", "borrower")
-          : Promise.resolve({ count: 0, error: null })
-
-      const pendingBorrowersPromise =
-        member.role === "admin"
-          ? supabase
-              .from("members")
-              .select("member_id", { count: "exact", head: true })
-              .eq("status", "pending")
-              .eq("role", "borrower")
-          : Promise.resolve({ count: 0, error: null })
-
-      const recentTransactionsPromise = supabase
-        .from("transactions")
-        .select("transaction_id, txn_date, created_at, classification, amount, status")
-        .eq("member_id", member.member_id)
-        .neq("status", "cancelled")
-        .order("txn_date", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false })
-        .limit(5)
-
-      const [
-        fundResult,
-        mineResult,
-        pendingResult,
-        pendingMembersResult,
-        pendingBorrowersResult,
-        recentTransactionsResult
-      ] = await Promise.all([
-        fundPromise,
-        minePromise,
-        pendingPromise,
-        pendingMembersPromise,
-        pendingBorrowersPromise,
-        recentTransactionsPromise
-      ])
-
-      const firstError =
-        fundResult.error ||
-        mineResult.error ||
-        pendingResult.error ||
-        pendingMembersResult.error ||
-        pendingBorrowersResult.error ||
-        recentTransactionsResult.error
-      if (firstError) setLoadError(firstError.message)
-
-      const nextFundCash = !fundResult.error && fundResult.data ? Number(fundResult.data.total_cash) : fundCash
-      const nextMyBalance = !mineResult.error && mineResult.data ? Number(mineResult.data.withdrawable_now) : myBalance
-      const nextPendingCount = (pendingResult.count ?? 0) + (pendingMembersResult.count ?? 0) + (pendingBorrowersResult.count ?? 0)
-      const nextRecentTransactions =
-        !recentTransactionsResult.error && recentTransactionsResult.data
-          ? recentTransactionsResult.data.map((r) => ({
-              transaction_id: r.transaction_id,
-              date: r.txn_date ?? r.created_at,
-              classification: r.classification,
-              amount: Number(r.amount),
-              status: r.status
-            }))
-          : recentTransactions
+      const nextFundCash = fields.fundCash ?? fundCash
+      const nextMyBalance = fields.myBalance ?? myBalance
+      const nextPendingCount = fields.pendingCount
+      const nextRecentTransactions = fields.recentTransactions ?? recentTransactions
       const nextAsOf = new Date()
 
       setFundCash(nextFundCash)

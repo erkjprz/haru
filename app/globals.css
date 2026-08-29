@@ -97,3 +97,31 @@ body {
     font-size: 16px !important;
   }
 }
+
+/* SplashScreen's sprout mark -- a stroke-dashoffset "ink draw" for the stem
+   (paired with pathLength=1 on the path so the 0-to-1 range is exact
+   regardless of the curve's real length), a bounce-in for each leaf, and a
+   slow breathing glow once everything has settled in. */
+@keyframes sprout-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes sprout-bloom {
+  from { opacity: 0; transform: scale(0.35); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sprout-breathe {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 0 rgba(168, 118, 31, 0)); }
+  50% { opacity: .72; filter: drop-shadow(0 0 10px rgba(168, 118, 31, 0.35)); }
+}
+
+@keyframes splash-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes splash-indeterminate {
+  from { left: -40%; }
+  to { left: 100%; }
+}
