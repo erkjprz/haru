@@ -74,7 +74,6 @@ export default function AccountPage() {
     // refresh, not on every navigation -- reload so the new name shows up
     // everywhere it's used (Dashboard's greeting, Fund Breakdown, etc.)
     // right away instead of looking stale until the next session refresh.
-    // Same pattern PullToRefresh already uses for this reason.
     window.location.reload()
   }
 

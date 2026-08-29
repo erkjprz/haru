@@ -16,14 +16,9 @@ import { Portal } from "@/app/components/Portal"
 // scroll-chains into it from this sheet's own content, see that div's
 // own comment) can otherwise register as a "tap" on release even though
 // real movement happened, silently closing the sheet and discarding
-// whatever was filled in. The actual worse case turned out to be
-// PullToRefresh.tsx's own window-level listeners doing a real page
-// reload on the same gesture (fixed there, by checking whether a sheet
-// is open before arming) -- that's what plain swipe-downs were mostly
-// hitting, not this backdrop at all. This guard stays anyway as real
-// belt-and-suspenders: iOS Safari's overscroll containment at a
-// `position: fixed` overlay's edges still isn't reliable enough to trust
-// blindly.
+// whatever was filled in. Real belt-and-suspenders: iOS Safari's
+// overscroll containment at a `position: fixed` overlay's edges still
+// isn't reliable enough to trust blindly.
 export function Sheet({
   title,
   onClose,
