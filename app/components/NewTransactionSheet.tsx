@@ -9,6 +9,7 @@ import { InvestmentPickerSheet, InvestmentRowIcon } from "@/app/components/Inves
 import { InterestRatePickerSheet } from "@/app/components/InterestRatePickerSheet"
 import { TermPickerSheet } from "@/app/components/TermPickerSheet"
 import { TypePickerSheet, TypeBadge } from "@/app/components/TypePickerSheet"
+import { SkeletonPanel } from "@/app/components/Skeleton"
 import {
   AmountHero,
   StepTrack,
@@ -16,7 +17,16 @@ import {
   ReceiptField,
   RequiredMark,
   FieldGroup,
-  DateField
+  DateField,
+  BankIcon,
+  NoteIcon,
+  PersonIcon,
+  InterestIcon,
+  ClockIcon,
+  RepeatIcon,
+  FieldRow,
+  rowSelectClass,
+  rowInputClass
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { dateOnly } from "@/lib/currentValue"
@@ -27,9 +37,9 @@ import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 // constantly (Contribution/Withdrawal/Loan Request/Loan Payment), plus
 // Investment Return open to every member the same way, plus the
 // admin-only fund-level bookkeeping types (Bank Interest/Expense/Bank
-// Transfer/Investment) -- all mirroring /transactions/new's own
-// isAdminEntry shape (member_id null, approved immediately, no
-// on-behalf-of -- these aren't attributed to any one member). Investment
+// Transfer/Investment) -- all sharing one insert shape (member_id null,
+// approved immediately, no on-behalf-of -- these aren't attributed to
+// any one member). Investment
 // Return is the one type with two different shapes depending on who
 // submits it (see the isInvestmentReturn branch in handleSubmit): a
 // member's own return is a pending, self-attributed row like a
@@ -69,91 +79,6 @@ function isValidPositiveNumber(value: string, allowZero = false): boolean {
 function withFlow(options: typeof ENTRY_TYPES) {
   return options.map((o) => ({ ...o, ...(FLOW[o.key] ?? { arrow: "•", tone: "neutral" as const }) }))
 }
-
-// Plain metadata icons for the compact row layout below -- matching how
-// budget-tracker's own TransactionModal treats its Note/Date/Recurrence
-// rows: a bare muted icon inline, no colored circle (that's reserved for
-// TypeDropdown's flow-tone badge, the one row here with real per-value
-// styling to show).
-function RowIcon({ children }: { children: React.ReactNode }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-5 h-5 text-ink-soft flex-shrink-0">
-      {children}
-    </svg>
-  )
-}
-
-function BankIcon() {
-  return (
-    <RowIcon>
-      <path d="M3 10l9-6 9 6M4 10v9M20 10v9M8 10v9M16 10v9M2 21h20" strokeLinecap="round" strokeLinejoin="round" />
-    </RowIcon>
-  )
-}
-
-function NoteIcon() {
-  return (
-    <RowIcon>
-      <path d="M6 3h9l5 5v13a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M9 12h6M9 16h6" strokeLinecap="round" />
-    </RowIcon>
-  )
-}
-
-function PersonIcon() {
-  return (
-    <RowIcon>
-      <circle cx="12" cy="8" r="3.5" />
-      <path d="M4.5 20c1.5-4 4.5-6 7.5-6s6 2 7.5 6" strokeLinecap="round" strokeLinejoin="round" />
-    </RowIcon>
-  )
-}
-
-// A growth/trend icon rather than a literal "%" glyph -- this row already
-// has its own % / ₱ toggle right in it, and a percent-shaped icon right
-// next to a percent-labeled button read as two competing %s instead of an
-// icon plus a control.
-function InterestIcon() {
-  return (
-    <RowIcon>
-      <path d="M3 17l6-6 4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M15 7h6v6" strokeLinecap="round" strokeLinejoin="round" />
-    </RowIcon>
-  )
-}
-
-function ClockIcon() {
-  return (
-    <RowIcon>
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 7v5l3.5 2" strokeLinecap="round" strokeLinejoin="round" />
-    </RowIcon>
-  )
-}
-
-// Same shape as Dashboard's "Repay Loan" shortcut icon.
-function RepeatIcon() {
-  return (
-    <RowIcon>
-      <path d="M4 12a8 8 0 0113.66-5.66M20 12a8 8 0 01-13.66 5.66" strokeLinecap="round" />
-      <path d="M17.5 3.5v3h-3M6.5 20.5v-3h3" strokeLinecap="round" strokeLinejoin="round" />
-    </RowIcon>
-  )
-}
-
-// One row of the compact Details card -- icon + inline content, divided
-// from its siblings by the card's own divide-y rather than its own border.
-function FieldRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3.5">
-      {icon}
-      {children}
-    </div>
-  )
-}
-
-const rowSelectClass = "flex-1 min-w-0 bg-transparent text-sm text-ink outline-none"
-const rowInputClass = "flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft"
 
 export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (message: string) => void }) {
   const { member } = useAuth()
@@ -349,8 +274,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const needsReceipt = selectedType !== "withdrawal" && selectedType !== "loan_request"
   const needsBank = isContribution || isLoanPayment || isInvestmentEntry || isBankInterest || isExpense || isBankTransfer
   // Contribution and Loan Payment collect bank + receipt right here, so an
-  // on-behalf-of submission can safely skip the queue -- see the longer
-  // explanation on this same flag in /transactions/new.
+  // on-behalf-of submission has everything a normal approved entry needs
+  // and can safely skip the queue instead of landing pending.
   const willAutoApproveOnBehalf = isAdmin && !!onBehalfOfId && (isContribution || isLoanPayment)
   const showSaveAsDefault =
     (isContribution && (contributionDefault == null || contributionBankDefault == null)) ||
@@ -533,10 +458,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     }
 
     // Unlike the other four types, Investment Return has two different
-    // shapes depending on who submits it -- mirrors /transactions/new's
-    // own isAdminEntry vs. its final generic branch. An admin's is a
-    // fund-level entry (member_id null, approved immediately, no
-    // on-behalf-of concept -- it isn't attributed to any one member).
+    // shapes depending on who submits it. An admin's is a fund-level
+    // entry (member_id null, approved immediately, no on-behalf-of
+    // concept -- it isn't attributed to any one member).
     // A regular member's own return is a pending, self-attributed row
     // like a Contribution, going into the approval queue.
     if (isInvestmentReturn) {
@@ -569,7 +493,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
     // Cash-neutral: affects_cash 0 keeps it out of the cash ledger; the
     // per-bank balances use bank_account_id / to_bank_account_id instead.
-    // Mirrors /transactions/new's own isBankTransfer branch exactly.
     if (isBankTransfer) {
       const { error } = await supabase.from("transactions").insert({
         member_id: null,
@@ -598,9 +521,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     // Bank Interest, Expense, and new Investment outflows -- fund-level
     // entries same shape as Investment Return's own admin path above,
     // just always approved immediately (no member-submitted pending
-    // version of these exists). Mirrors /transactions/new's isAdminEntry
-    // branch: Expense and new Investment capital are cash going out, so
-    // the ledger stores them negative (matches v_investment_summary,
+    // version of these exists). Expense and new Investment capital are
+    // cash going out, so the ledger stores them negative (matches
+    // v_investment_summary,
     // which reads "invested" as -amount on Investment rows). Bank
     // Interest rows default to interest_distributed = false and sit
     // there until an admin manually distributes them from /admin.
@@ -631,9 +554,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
       // New capital into an investment changes who's staking it, so
       // re-snapshot the pool's shares for this investment's hold
-      // tracking -- same as /transactions/new does. The transaction
-      // itself already succeeded, so a failure here shouldn't block the
-      // confirmation or invite a duplicate resubmit, just surface it.
+      // tracking. The transaction itself already succeeded, so a
+      // failure here shouldn't block the confirmation or invite a
+      // duplicate resubmit, just surface it.
       let holdWarning = ""
       if (isInvestment) {
         try {
@@ -827,7 +750,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       }
     >
       {dataLoading ? (
-        <div className="py-12 text-center text-sm text-ink-soft">Loading…</div>
+        <SkeletonPanel />
       ) : loadError ? (
         <p className="py-12 text-center text-sm text-rust">Couldn&apos;t load: {loadError}</p>
       ) : (

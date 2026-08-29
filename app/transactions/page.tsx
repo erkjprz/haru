@@ -12,6 +12,7 @@ import { DateField } from "@/app/components/TransactionFormUI"
 import { readCache, writeCache } from "@/lib/cache"
 import { TRANSACTIONS_CHANGED_EVENT } from "@/lib/transactionEvents"
 import { fetchTransactionsFields, bankAccountLabel, TRANSACTIONS_CACHE_KEY, type TransactionsSnapshot } from "@/lib/transactionsSnapshot"
+import { cacheTransactionRow } from "@/lib/transactionRowCache"
 
 const typeColor: Record<string, string> = {
   "Member Contribution": "text-sage border-sage",
@@ -657,8 +658,8 @@ function TransactionsPageInner() {
               // to "approved" too, so this stays a reliable proxy without a
               // separate query). This first branch already covers a member's
               // own pending/rejected Investment Return too (see
-              // /transactions/new), since it's a generic "row I own" check,
-              // not classification-gated.
+              // EditTransactionSheet), since it's a generic "row I own"
+              // check, not classification-gated.
               // Admin entries (Bank Interest/Expense/Bank Transfer/
               // Investment) are always inserted already-approved with no
               // owning member, so editing is restricted to whichever admin
@@ -778,7 +779,15 @@ function TransactionsPageInner() {
                         {canEdit && (
                           <button
                             type="button"
-                            onClick={() => router.push(`/transactions/${transaction.transaction_id}/edit`)}
+                            onClick={() => {
+                              // Hands the exact row already on screen to
+                              // EditTransactionSheet, so it can render
+                              // instantly instead of re-fetching by ID and
+                              // showing a skeleton over data that hasn't
+                              // gone anywhere.
+                              cacheTransactionRow(transaction)
+                              router.push(`/transactions?editTransaction=${transaction.transaction_id}`)
+                            }}
                             className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-paper bg-gold-soft rounded-full px-3 py-1.5"
                           >
                             {transaction.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}

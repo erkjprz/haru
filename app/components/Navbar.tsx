@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { usePathname, useRouter } from "next/navigation"
+import { Suspense, useEffect, useRef, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
 import { NotificationBell } from "@/app/components/NotificationBell"
 import { NewTransactionSheet } from "@/app/components/NewTransactionSheet"
@@ -68,6 +68,38 @@ type DockItem = {
   activeWhen?: (pathname: string) => boolean
 }
 
+// The FAB's own open/close state is local to Navbar, so a page that isn't
+// Navbar itself (Admin > Members' "New Transaction" link) has no direct
+// way to trigger it -- this is that hook, a `?newTransaction=1` query
+// param this watches for and clears once handled.
+//
+// Needs useSearchParams(), not a plain window.location read in a
+// pathname-keyed effect -- router.push to the *same* pathname with only a
+// different query string doesn't change what usePathname() returns, so a
+// pathname-keyed effect never re-fires on an in-place
+// "?newTransaction=1" click (only on a genuinely fresh page load).
+// useSearchParams() is the one that's actually reactive to query-only
+// changes. It needs a Suspense boundary, kept local to this small watcher
+// (wrapped where it's rendered below) rather than pushed onto every page
+// that renders Navbar. onOpen is React's own setSheetOpen, so its
+// identity is stable across renders and doesn't need excluding from the
+// dependency array.
+function NewTransactionQueryWatcher({ onOpen }: { onOpen: (open: boolean) => void }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const { member } = useAuth()
+  const requested = searchParams.get("newTransaction")
+
+  useEffect(() => {
+    if (!member || !requested) return
+    onOpen(true)
+    router.replace(pathname, { scroll: false })
+  }, [member, requested, pathname, router, onOpen])
+
+  return null
+}
+
 export default function Navbar() {
   const router = useRouter()
   const pathname = usePathname()
@@ -91,19 +123,14 @@ export default function Navbar() {
     loadTransactionFormData(member.member_id, member.role === "admin")
   }, [member])
 
-  // The transaction forms have their own sticky Amount/Save footer -- a
-  // second fixed bar at the bottom would stack on top of it. The FAB (which
-  // replaced the header's "+ New" button) shares this same guard, since it
-  // sits right above the dock and would collide with that same footer.
-  const hideDock =
-    pathname === "/transactions/new" || (pathname.startsWith("/transactions/") && pathname.endsWith("/edit"))
-
   // Pages reserve bottom padding (--dock-h) to clear whichever floating
   // element sticks up furthest from the bottom edge -- the FAB floats above
   // the pill (see its own `bottom` below) and is taller than the pill
-  // overall, so whenever it's showing, it -- not the pill -- is what a page
-  // needs to clear. Measured (not hardcoded) so existing pages' padding
-  // stays correct without every one of them needing its own update.
+  // overall, so it -- not the pill -- is what a page needs to clear.
+  // Measured (not hardcoded) so existing pages' padding stays correct
+  // without every one of them needing its own update. Both the dock and
+  // FAB are permanent fixtures of this component now (nothing hides them
+  // anymore), so this only needs to run once on mount.
   useEffect(() => {
     // Measures actual rendered box edges rather than re-deriving the pill's
     // safe-area padding/gap/height arithmetic by hand -- correct regardless
@@ -129,7 +156,7 @@ export default function Navbar() {
       observers.forEach((o) => o.disconnect())
       window.removeEventListener("resize", update)
     }
-  }, [hideDock])
+  }, [])
 
   // iOS can leave a `position: fixed` element positioned against a stale
   // layout viewport on a page too short to ever scroll on its own (a
@@ -207,8 +234,7 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {!hideDock && (
-        <nav ref={navRef} className="fixed inset-x-0 bottom-0 z-40" style={{ paddingBottom: DOCK_OFFSET }}>
+      <nav ref={navRef} className="fixed inset-x-0 bottom-0 z-40" style={{ paddingBottom: DOCK_OFFSET }}>
           <div className="relative max-w-3xl mx-auto px-4">
             <div
               ref={barRef}
@@ -252,11 +278,11 @@ export default function Navbar() {
                 border, chips), so a gold FAB read as just one more gold
                 thing instead of standing out -- bg-ink/text-paper plus a
                 gold glow is the same "primary action" language every
-                submit button elsewhere in the app already uses. Opens the
-                quick-entry sheet in place rather than navigating -- the
-                full /transactions/new page is still there for the rarer
-                admin-only entry types, reachable from Admin > Members or a
-                Dashboard shortcut same as before. */}
+                submit button elsewhere in the app already uses. Every entry
+                type, admin-only ones included, is reachable from here now --
+                Admin > Members' own "New Transaction" link opens this same
+                sheet (see the ?newTransaction query-param effect above)
+                instead of a separate full-page form. */}
             <button
               ref={fabRef}
               onClick={() => setSheetOpen(true)}
@@ -268,7 +294,10 @@ export default function Navbar() {
             </button>
           </div>
         </nav>
-      )}
+
+      <Suspense fallback={null}>
+        <NewTransactionQueryWatcher onOpen={setSheetOpen} />
+      </Suspense>
 
       {sheetOpen && (
         <NewTransactionSheet

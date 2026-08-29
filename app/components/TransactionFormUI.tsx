@@ -1,9 +1,9 @@
 "use client"
 
-// Small presentational pieces shared by /transactions/new and
-// /transactions/[id]/edit, which mirror each other's layout closely.
-// Each page keeps its own classification/type -> { arrow, tone } mapping,
-// since the two pages key off different vocabularies (type keys vs
+// Small presentational pieces shared by NewTransactionSheet and
+// EditTransactionSheet, which mirror each other's layout closely.
+// Each keeps its own classification/type -> { arrow, tone } mapping,
+// since the two key off different vocabularies (type keys vs
 // classification strings) -- only the rendering is shared here.
 
 import { useState } from "react"
@@ -340,6 +340,93 @@ export function RequiredMark() {
     </span>
   )
 }
+
+// Plain metadata icons for the compact FieldRow layout below -- matching
+// how budget-tracker's own TransactionModal treats its Note/Date/
+// Recurrence rows: a bare muted icon inline, no colored circle (that's
+// reserved for TypeDropdown/FlowBadge's flow-tone badge, the one row with
+// real per-value styling to show). Shared by New and Edit's Details/Loan
+// Terms cards, which use the same row shape for the same fields.
+function RowIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-5 h-5 text-ink-soft flex-shrink-0">
+      {children}
+    </svg>
+  )
+}
+
+export function BankIcon() {
+  return (
+    <RowIcon>
+      <path d="M3 10l9-6 9 6M4 10v9M20 10v9M8 10v9M16 10v9M2 21h20" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+export function NoteIcon() {
+  return (
+    <RowIcon>
+      <path d="M6 3h9l5 5v13a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 12h6M9 16h6" strokeLinecap="round" />
+    </RowIcon>
+  )
+}
+
+export function PersonIcon() {
+  return (
+    <RowIcon>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M4.5 20c1.5-4 4.5-6 7.5-6s6 2 7.5 6" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+// A growth/trend icon rather than a literal "%" glyph -- the interest row
+// already has its own % / ₱ toggle right in it, and a percent-shaped icon
+// right next to a percent-labeled button read as two competing %s instead
+// of an icon plus a control.
+export function InterestIcon() {
+  return (
+    <RowIcon>
+      <path d="M3 17l6-6 4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15 7h6v6" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+export function ClockIcon() {
+  return (
+    <RowIcon>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7v5l3.5 2" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+// Same shape as Dashboard's "Repay Loan" shortcut icon.
+export function RepeatIcon() {
+  return (
+    <RowIcon>
+      <path d="M4 12a8 8 0 0113.66-5.66M20 12a8 8 0 01-13.66 5.66" strokeLinecap="round" />
+      <path d="M17.5 3.5v3h-3M6.5 20.5v-3h3" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+// One row of a compact Details/Loan Terms card -- icon + inline content,
+// divided from its siblings by the card's own divide-y rather than its own
+// border.
+export function FieldRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3.5">
+      {icon}
+      {children}
+    </div>
+  )
+}
+
+export const rowSelectClass = "flex-1 min-w-0 bg-transparent text-sm text-ink outline-none"
+export const rowInputClass = "flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft"
 
 function formatFull(isoDate: string): string {
   return new Date(`${isoDate}T00:00:00`).toLocaleDateString(undefined, {

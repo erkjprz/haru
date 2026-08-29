@@ -11,6 +11,17 @@ export type LoanTransaction = {
   date: string
   rejection_reason: string | null
   receipt_url: string | null
+  // Not read by LoanCards' own rendering -- carried through so a row can
+  // be handed straight to EditTransactionSheet via transactionRowCache
+  // instead of it re-fetching by ID (see LoanCards' Edit button).
+  member_id: string | null
+  bank_account_id: string | null
+  to_bank_account_id: string | null
+  loan_id: string | null
+  investment_id: string | null
+  description: string | null
+  submitted_by: string | null
+  interest_distributed: boolean
 }
 
 export type Loan = {
@@ -60,7 +71,7 @@ export async function fetchLoansSummary(memberId: string): Promise<{ loans: Loan
     ? await supabase
         .from("transactions")
         .select(
-          "transaction_id, loan_id, classification, amount, status, txn_date, created_at, rejection_reason, receipt_url"
+          "transaction_id, loan_id, classification, amount, status, txn_date, created_at, rejection_reason, receipt_url, member_id, bank_account_id, to_bank_account_id, investment_id, description, submitted_by, interest_distributed"
         )
         .in("loan_id", loanIds)
         .neq("status", "cancelled")
@@ -107,7 +118,15 @@ export async function fetchLoansSummary(memberId: string): Promise<{ loans: Loan
         status: t.status,
         date: t.txn_date ?? t.created_at,
         rejection_reason: t.rejection_reason ?? null,
-        receipt_url: t.receipt_url ?? null
+        receipt_url: t.receipt_url ?? null,
+        member_id: t.member_id ?? null,
+        bank_account_id: t.bank_account_id ?? null,
+        to_bank_account_id: t.to_bank_account_id ?? null,
+        loan_id: t.loan_id ?? null,
+        investment_id: t.investment_id ?? null,
+        description: t.description ?? null,
+        submitted_by: t.submitted_by ?? null,
+        interest_distributed: t.interest_distributed === true
       }))
     }
   })

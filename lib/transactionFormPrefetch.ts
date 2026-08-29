@@ -69,7 +69,7 @@ export async function loadTransactionFormData(
 
   // Closed investments are excluded -- closing settles the books, so no
   // new returns should get recorded against one afterward without
-  // reopening it first. Same rule /transactions/new applies.
+  // reopening it first.
   const { data: investmentList } = await supabase
     .from("investments")
     .select("investment_id, name, affects_cash")

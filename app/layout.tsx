@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/app/components/ThemeProvider";
 import { ScrollToTop } from "@/app/scroll-to-top";
 import { AuthProvider } from "@/app/auth-context";
 import { ServiceWorkerRegister } from "@/app/components/ServiceWorkerRegister";
+import { EditTransactionSheetHost } from "@/app/components/EditTransactionSheetHost";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -85,6 +86,11 @@ export default function RootLayout({
         <ServiceWorkerRegister />
         <AuthProvider>
           <ThemeProvider>{children}</ThemeProvider>
+          {/* Mounted once here, not per-page -- LoanCards (on /borrower,
+              which has no Navbar) and the Transactions list both need to be
+              able to open this, and the FAB's own NewTransactionSheet only
+              lives in Navbar, which borrowers never see. */}
+          <EditTransactionSheetHost />
         </AuthProvider>
         <Analytics />
         {/* iOS only recomputes a `position: fixed` element's layout in
