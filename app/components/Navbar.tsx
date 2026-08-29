@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { usePathname, useRouter } from "next/navigation"
+import { Suspense, useEffect, useRef, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
 import { NotificationBell } from "@/app/components/NotificationBell"
 import { NewTransactionSheet } from "@/app/components/NewTransactionSheet"
@@ -68,6 +68,38 @@ type DockItem = {
   activeWhen?: (pathname: string) => boolean
 }
 
+// The FAB's own open/close state is local to Navbar, so a page that isn't
+// Navbar itself (Admin > Members' "New Transaction" link) has no direct
+// way to trigger it -- this is that hook, a `?newTransaction=1` query
+// param this watches for and clears once handled.
+//
+// Needs useSearchParams(), not a plain window.location read in a
+// pathname-keyed effect -- router.push to the *same* pathname with only a
+// different query string doesn't change what usePathname() returns, so a
+// pathname-keyed effect never re-fires on an in-place
+// "?newTransaction=1" click (only on a genuinely fresh page load).
+// useSearchParams() is the one that's actually reactive to query-only
+// changes. It needs a Suspense boundary, kept local to this small watcher
+// (wrapped where it's rendered below) rather than pushed onto every page
+// that renders Navbar. onOpen is React's own setSheetOpen, so its
+// identity is stable across renders and doesn't need excluding from the
+// dependency array.
+function NewTransactionQueryWatcher({ onOpen }: { onOpen: (open: boolean) => void }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const { member } = useAuth()
+  const requested = searchParams.get("newTransaction")
+
+  useEffect(() => {
+    if (!member || !requested) return
+    onOpen(true)
+    router.replace(pathname, { scroll: false })
+  }, [member, requested, pathname, router, onOpen])
+
+  return null
+}
+
 export default function Navbar() {
   const router = useRouter()
   const pathname = usePathname()
@@ -90,21 +122,6 @@ export default function Navbar() {
     if (!member) return
     loadTransactionFormData(member.member_id, member.role === "admin")
   }, [member])
-
-  // The FAB's own open/close state is local to this component, so a page
-  // that isn't Navbar itself (Admin > Members' "New Transaction" link) has
-  // no direct way to trigger it -- this is that hook, a `?newTransaction=1`
-  // query param this effect watches for and clears once handled. Reads
-  // window.location directly rather than useSearchParams(), which would
-  // force every one of Navbar's many callers into their own Suspense
-  // boundary just for this.
-  useEffect(() => {
-    if (!member) return
-    if (typeof window === "undefined") return
-    if (!new URLSearchParams(window.location.search).get("newTransaction")) return
-    setSheetOpen(true)
-    router.replace(pathname, { scroll: false })
-  }, [member, pathname, router])
 
   // Pages reserve bottom padding (--dock-h) to clear whichever floating
   // element sticks up furthest from the bottom edge -- the FAB floats above
@@ -277,6 +294,10 @@ export default function Navbar() {
             </button>
           </div>
         </nav>
+
+      <Suspense fallback={null}>
+        <NewTransactionQueryWatcher onOpen={setSheetOpen} />
+      </Suspense>
 
       {sheetOpen && (
         <NewTransactionSheet
