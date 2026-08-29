@@ -62,18 +62,6 @@ const TYPE_LABEL: Record<string, string> = {
   "Investment Return": "Investment Return"
 }
 
-const HELPER_TEXT: Record<string, string> = {
-  "Member Contribution": "You've already sent this money. Attach proof of deposit.",
-  "Member Withdrawal": "You're requesting money to be sent to you. No receipt needed yet.",
-  "Loan Repayment": "You've already sent this repayment. Attach proof of deposit.",
-  "Loan Release": "This member is requesting to borrow from the fund. No bank is assigned until you approve it from the loan's own page.",
-  "Bank Interest": "Recording interest earned by a bank account. Attach the bank statement or screenshot showing it credited. Goes in as approved -- splitting it across members is a separate manual step from Admin.",
-  "Expense": "Recording money spent out of the fund. Attach a receipt or proof of payment. Goes straight in as approved.",
-  "Internal Transfer": "Moving money between two of the fund's own banks. Attach a screenshot of the transfer confirmation. Doesn't affect total contributions or cash — it's just internal.",
-  "Investment": "Moving fund cash into a venture. Attach proof it went out (wire confirmation, receipt, etc).",
-  "Investment Return": "Cash coming back from a venture -- a payout, sale, or exit. Attach proof of deposit."
-}
-
 const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = {
   "Member Contribution": { arrow: "↑", tone: "in" },
   "Member Withdrawal": { arrow: "↓", tone: "out" },
@@ -777,20 +765,17 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
         </>
       }
     >
-      <div className="bg-paper-2 border border-hairline rounded-md p-5">
-        <AmountHero
-          value={amount}
-          onChange={setAmount}
-          label={isLoanRelease ? "Amount to borrow" : "Amount"}
-          helper={HELPER_TEXT[classification]}
-        />
+      <AmountHero value={amount} onChange={setAmount} label={isLoanRelease ? "Amount to borrow" : "Amount"} />
 
-        <div className="flex items-center justify-between gap-3 border border-hairline bg-paper rounded-full pl-1.5 pr-3 py-1.5">
-          <span className="flex items-center gap-2.5 min-w-0">
-            <FlowBadge {...(FLOW[classification] ?? { arrow: "•", tone: "in" })} small />
-            <span className="text-sm font-semibold text-ink truncate">
-              {TYPE_LABEL[classification]}
-            </span>
+      {/* Same card-of-FieldRows shape as the Details/Loan Terms cards
+          below, matching NewTransactionSheet's typeField -- just
+          non-interactive (no ▾, no onClick) since type can't be changed
+          here, with the status badge and lock standing in for it. */}
+      <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden mt-4">
+        <FieldRow icon={<FlowBadge {...(FLOW[classification] ?? { arrow: "•", tone: "in" })} small />}>
+          <span className="flex-1 min-w-0 text-sm">
+            <span className="text-ink-soft">Type: </span>
+            <span className="font-semibold text-ink">{TYPE_LABEL[classification]}</span>
           </span>
           <span className="shrink-0 flex items-center gap-2">
             <span
@@ -804,7 +789,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
               🔒
             </span>
           </span>
-        </div>
+        </FieldRow>
       </div>
 
       {status === "rejected" && (
@@ -1155,23 +1140,19 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
         {/* handleCancelEntry's guard still requires status="pending" --
             a rejected row is already out of the review queue, so there's
             nothing left to cancel here; Save either resubmits it or the
-            member just closes the sheet and leaves it rejected. */}
+            member just closes the sheet and leaves it rejected. No more
+            explanatory paragraph above the button -- handleCancelEntry's
+            own confirm() dialog already carries that same warning at the
+            one moment it actually matters, right before it's irreversible. */}
         {status !== "rejected" && (
-          <FieldGroup>
-            <p className="text-xs text-ink-soft mb-3">
-              {isLoanRelease
-                ? "Changed your mind? This cancels the loan request and removes its pending disbursement entirely -- it can't be undone from the app."
-                : "Changed your mind? This entry will be marked cancelled and removed from the transaction list -- it can't be undone from the app."}
-            </p>
-            <button
-              type="button"
-              onClick={handleCancelEntry}
-              disabled={cancelling}
-              className="w-full text-sm font-semibold text-rust border border-rust rounded-sm px-4 py-2.5 disabled:opacity-50"
-            >
-              {cancelling ? "Cancelling…" : "Cancel this entry"}
-            </button>
-          </FieldGroup>
+          <button
+            type="button"
+            onClick={handleCancelEntry}
+            disabled={cancelling}
+            className="w-full text-sm font-semibold text-rust border border-rust rounded-md px-4 py-3.5 disabled:opacity-50"
+          >
+            {cancelling ? "Cancelling…" : "Cancel this entry"}
+          </button>
         )}
       </div>
     </Sheet>
