@@ -1,6 +1,16 @@
 import type { NextConfig } from "next";
 
+// A stable identifier for this exact build, baked into the client bundle at build time, so
+// ServiceWorkerRegister can tell whether the server is still running the same deploy the
+// currently-loaded bundle came from. Vercel sets VERCEL_GIT_COMMIT_SHA for every deploy;
+// falling back to the build timestamp covers local dev, where that variable doesn't exist but
+// a fresh value per `next build` is still wanted.
+const buildId = process.env.VERCEL_GIT_COMMIT_SHA ?? String(Date.now());
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_BUILD_ID: buildId
+  },
   async headers() {
     return [
       {

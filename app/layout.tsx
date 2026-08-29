@@ -3,7 +3,6 @@ import { Geist, Geist_Mono, Manrope } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/ThemeProvider";
-import { PullToRefresh } from "@/app/components/PullToRefresh";
 import { ScrollToTop } from "@/app/scroll-to-top";
 import { AuthProvider } from "@/app/auth-context";
 import { ServiceWorkerRegister } from "@/app/components/ServiceWorkerRegister";
@@ -72,7 +71,8 @@ export default function RootLayout({
             applies the stored theme override if there is one, otherwise
             resolves the device's prefers-color-scheme, so a hard reload
             never shows a flash of the wrong theme while React hydrates.
-            Without this, pull-to-refresh's window.location.reload() briefly
+            Without this, a window.location.reload() (account's name change,
+            the deploy-refresh check in ServiceWorkerRegister) briefly
             painted the wrong background every time. */}
         <script
           dangerouslySetInnerHTML={{
@@ -84,9 +84,7 @@ export default function RootLayout({
         <ScrollToTop />
         <ServiceWorkerRegister />
         <AuthProvider>
-          <ThemeProvider>
-            <PullToRefresh>{children}</PullToRefresh>
-          </ThemeProvider>
+          <ThemeProvider>{children}</ThemeProvider>
         </AuthProvider>
         <Analytics />
         {/* iOS only recomputes a `position: fixed` element's layout in
