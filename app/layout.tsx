@@ -25,10 +25,10 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Haru",
+  title: "Est. 2017",
   description: "Shared fund tracker",
   appleWebApp: {
-    title: "Haru",
+    title: "Est. 2017",
     statusBarStyle: "black-translucent",
   },
   other: {

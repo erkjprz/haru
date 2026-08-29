@@ -83,8 +83,7 @@ export default function LoginPage() {
     return (
       <main className="min-h-screen bg-paper flex items-center justify-center px-5 py-8">
         <div className="w-full max-w-md animate-in fade-in duration-500 text-center">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-gold font-mono">Est. 2017</p>
-          <h1 className="font-display text-4xl font-semibold text-ink mt-2">Haru</h1>
+          <h1 className="font-display text-4xl font-semibold text-ink">Est. 2017</h1>
 
           <div className="bg-paper-2 border border-hairline rounded-xl shadow-sm p-6 mt-8 text-left">
             <p className="text-sm text-ink">
@@ -112,12 +111,8 @@ export default function LoginPage() {
         {/* Header */}
         <div className="text-center mb-8">
 
-          <p className="text-[11px] uppercase tracking-[0.2em] text-gold font-mono">
+          <h1 className="font-display text-4xl font-semibold text-ink">
             Est. 2017
-          </p>
-
-          <h1 className="font-display text-4xl font-semibold text-ink mt-2">
-            Haru
           </h1>
 
           <p className="text-sm text-ink-soft mt-2">

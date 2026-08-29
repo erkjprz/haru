@@ -136,10 +136,10 @@ const memberSections: FaqSection[] = [
         q: "What's the bell icon for?",
         a: (
           <p>
-            It opens <strong>Notifications</strong> — everything Haru has sent you, like a submission being
+            It opens <strong>Notifications</strong> — everything Est. 2017 has sent you, like a submission being
             approved or rejected, or a gain/loss landing in your account. Tap one to jump straight to what
             it&apos;s about. From there you can also turn on <strong>Push Notifications</strong>, so you get
-            notified on your device even when Haru isn&apos;t open.
+            notified on your device even when Est. 2017 isn&apos;t open.
           </p>
         )
       }
@@ -408,7 +408,7 @@ const borrowerSections: FaqSection[] = [
           <p>
             It opens <strong>Notifications</strong> — things like your loan payment being approved or
             rejected. Tap one to jump straight to what it&apos;s about. From there you can also turn on{" "}
-            <strong>Push Notifications</strong>, so you get notified on your device even when Haru isn&apos;t
+            <strong>Push Notifications</strong>, so you get notified on your device even when Est. 2017 isn&apos;t
             open.
           </p>
         )
@@ -815,7 +815,7 @@ export default function HelpPage() {
           </div>
           <h1 className="font-display text-4xl font-semibold">Help</h1>
           <p className="text-sm text-ink-soft mt-2 max-w-md">
-            Haru is meant to be simple enough to use without a manual. This is here for whenever you want a
+            Est. 2017 is meant to be simple enough to use without a manual. This is here for whenever you want a
             quick refresher, organized by what you're trying to do.
           </p>
 
