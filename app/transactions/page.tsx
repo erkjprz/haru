@@ -657,8 +657,8 @@ function TransactionsPageInner() {
               // to "approved" too, so this stays a reliable proxy without a
               // separate query). This first branch already covers a member's
               // own pending/rejected Investment Return too (see
-              // /transactions/new), since it's a generic "row I own" check,
-              // not classification-gated.
+              // EditTransactionSheet), since it's a generic "row I own"
+              // check, not classification-gated.
               // Admin entries (Bank Interest/Expense/Bank Transfer/
               // Investment) are always inserted already-approved with no
               // owning member, so editing is restricted to whichever admin

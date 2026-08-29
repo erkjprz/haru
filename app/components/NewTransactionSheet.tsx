@@ -27,9 +27,9 @@ import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 // constantly (Contribution/Withdrawal/Loan Request/Loan Payment), plus
 // Investment Return open to every member the same way, plus the
 // admin-only fund-level bookkeeping types (Bank Interest/Expense/Bank
-// Transfer/Investment) -- all mirroring /transactions/new's own
-// isAdminEntry shape (member_id null, approved immediately, no
-// on-behalf-of -- these aren't attributed to any one member). Investment
+// Transfer/Investment) -- all sharing one insert shape (member_id null,
+// approved immediately, no on-behalf-of -- these aren't attributed to
+// any one member). Investment
 // Return is the one type with two different shapes depending on who
 // submits it (see the isInvestmentReturn branch in handleSubmit): a
 // member's own return is a pending, self-attributed row like a
@@ -349,8 +349,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const needsReceipt = selectedType !== "withdrawal" && selectedType !== "loan_request"
   const needsBank = isContribution || isLoanPayment || isInvestmentEntry || isBankInterest || isExpense || isBankTransfer
   // Contribution and Loan Payment collect bank + receipt right here, so an
-  // on-behalf-of submission can safely skip the queue -- see the longer
-  // explanation on this same flag in /transactions/new.
+  // on-behalf-of submission has everything a normal approved entry needs
+  // and can safely skip the queue instead of landing pending.
   const willAutoApproveOnBehalf = isAdmin && !!onBehalfOfId && (isContribution || isLoanPayment)
   const showSaveAsDefault =
     (isContribution && (contributionDefault == null || contributionBankDefault == null)) ||
@@ -533,10 +533,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     }
 
     // Unlike the other four types, Investment Return has two different
-    // shapes depending on who submits it -- mirrors /transactions/new's
-    // own isAdminEntry vs. its final generic branch. An admin's is a
-    // fund-level entry (member_id null, approved immediately, no
-    // on-behalf-of concept -- it isn't attributed to any one member).
+    // shapes depending on who submits it. An admin's is a fund-level
+    // entry (member_id null, approved immediately, no on-behalf-of
+    // concept -- it isn't attributed to any one member).
     // A regular member's own return is a pending, self-attributed row
     // like a Contribution, going into the approval queue.
     if (isInvestmentReturn) {
@@ -569,7 +568,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
     // Cash-neutral: affects_cash 0 keeps it out of the cash ledger; the
     // per-bank balances use bank_account_id / to_bank_account_id instead.
-    // Mirrors /transactions/new's own isBankTransfer branch exactly.
     if (isBankTransfer) {
       const { error } = await supabase.from("transactions").insert({
         member_id: null,
@@ -598,9 +596,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     // Bank Interest, Expense, and new Investment outflows -- fund-level
     // entries same shape as Investment Return's own admin path above,
     // just always approved immediately (no member-submitted pending
-    // version of these exists). Mirrors /transactions/new's isAdminEntry
-    // branch: Expense and new Investment capital are cash going out, so
-    // the ledger stores them negative (matches v_investment_summary,
+    // version of these exists). Expense and new Investment capital are
+    // cash going out, so the ledger stores them negative (matches
+    // v_investment_summary,
     // which reads "invested" as -amount on Investment rows). Bank
     // Interest rows default to interest_distributed = false and sit
     // there until an admin manually distributes them from /admin.
@@ -631,9 +629,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
       // New capital into an investment changes who's staking it, so
       // re-snapshot the pool's shares for this investment's hold
-      // tracking -- same as /transactions/new does. The transaction
-      // itself already succeeded, so a failure here shouldn't block the
-      // confirmation or invite a duplicate resubmit, just surface it.
+      // tracking. The transaction itself already succeeded, so a
+      // failure here shouldn't block the confirmation or invite a
+      // duplicate resubmit, just surface it.
       let holdWarning = ""
       if (isInvestment) {
         try {
