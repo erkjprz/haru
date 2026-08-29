@@ -184,30 +184,23 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
     async function load() {
       if (!member) return
 
-      const { data: bankList } = await supabase
-        .from("bank_accounts")
-        .select("id, bank_name, account_name")
-        .order("bank_name")
+      // These three don't depend on each other -- run them together instead
+      // of one after another, since the transaction row's own fetch (the
+      // one thing that can't start any earlier) was sitting behind two
+      // unrelated queries every time this sheet opened.
+      const [{ data: bankList }, { data: investmentList }, { data: txn, error }] = await Promise.all([
+        supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name"),
+        // Includes closed investments too -- an existing transaction
+        // already linked to one (fixing an old amount/receipt) shouldn't
+        // have its investment silently disappear from the picker. The
+        // picker itself filters closed ones out except for whichever one
+        // this row already points to (see investmentsForPicker below).
+        supabase.from("investments").select("investment_id, name, affects_cash, status").order("name"),
+        supabase.from("transactions").select("*").eq("transaction_id", transactionId).single()
+      ])
 
       setBanks(bankList ?? [])
-
-      // Includes closed investments too -- an existing transaction already
-      // linked to one (fixing an old amount/receipt) shouldn't have its
-      // investment silently disappear from the picker. The picker itself
-      // filters closed ones out except for whichever one this row already
-      // points to (see investmentsForPicker below).
-      const { data: investmentList } = await supabase
-        .from("investments")
-        .select("investment_id, name, affects_cash, status")
-        .order("name")
-
       setInvestmentsList(investmentList ?? [])
-
-      const { data: txn, error } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("transaction_id", transactionId)
-        .single()
 
       // Investment Return straddles both buckets depending on who actually
       // submitted this particular row (see the comment on MEMBER_EDITABLE
