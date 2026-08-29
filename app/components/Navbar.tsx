@@ -91,12 +91,26 @@ export default function Navbar() {
     loadTransactionFormData(member.member_id, member.role === "admin")
   }, [member])
 
-  // The transaction forms have their own sticky Amount/Save footer -- a
+  // The edit transaction page has its own sticky Amount/Save footer -- a
   // second fixed bar at the bottom would stack on top of it. The FAB (which
   // replaced the header's "+ New" button) shares this same guard, since it
   // sits right above the dock and would collide with that same footer.
-  const hideDock =
-    pathname === "/transactions/new" || (pathname.startsWith("/transactions/") && pathname.endsWith("/edit"))
+  const hideDock = pathname.startsWith("/transactions/") && pathname.endsWith("/edit")
+
+  // The FAB's own open/close state is local to this component, so a page
+  // that isn't Navbar itself (Admin > Members' "New Transaction" link) has
+  // no direct way to trigger it -- this is that hook, a `?newTransaction=1`
+  // query param this effect watches for and clears once handled. Reads
+  // window.location directly rather than useSearchParams(), which would
+  // force every one of Navbar's many callers into their own Suspense
+  // boundary just for this.
+  useEffect(() => {
+    if (!member) return
+    if (typeof window === "undefined") return
+    if (!new URLSearchParams(window.location.search).get("newTransaction")) return
+    setSheetOpen(true)
+    router.replace(pathname, { scroll: false })
+  }, [member, pathname, router])
 
   // Pages reserve bottom padding (--dock-h) to clear whichever floating
   // element sticks up furthest from the bottom edge -- the FAB floats above
@@ -252,11 +266,11 @@ export default function Navbar() {
                 border, chips), so a gold FAB read as just one more gold
                 thing instead of standing out -- bg-ink/text-paper plus a
                 gold glow is the same "primary action" language every
-                submit button elsewhere in the app already uses. Opens the
-                quick-entry sheet in place rather than navigating -- the
-                full /transactions/new page is still there for the rarer
-                admin-only entry types, reachable from Admin > Members or a
-                Dashboard shortcut same as before. */}
+                submit button elsewhere in the app already uses. Every entry
+                type, admin-only ones included, is reachable from here now --
+                Admin > Members' own "New Transaction" link opens this same
+                sheet (see the ?newTransaction query-param effect above)
+                instead of a separate full-page form. */}
             <button
               ref={fabRef}
               onClick={() => setSheetOpen(true)}

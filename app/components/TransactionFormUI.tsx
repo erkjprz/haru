@@ -1,9 +1,9 @@
 "use client"
 
-// Small presentational pieces shared by /transactions/new and
+// Small presentational pieces shared by NewTransactionSheet and
 // /transactions/[id]/edit, which mirror each other's layout closely.
-// Each page keeps its own classification/type -> { arrow, tone } mapping,
-// since the two pages key off different vocabularies (type keys vs
+// Each keeps its own classification/type -> { arrow, tone } mapping,
+// since the two key off different vocabularies (type keys vs
 // classification strings) -- only the rendering is shared here.
 
 import { useState } from "react"
