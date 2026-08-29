@@ -12,12 +12,20 @@ import {
   ReviewRow,
   ReceiptField,
   RequiredMark,
-  FieldGroup
+  FieldGroup,
+  BankIcon,
+  NoteIcon,
+  InterestIcon,
+  ClockIcon,
+  RepeatIcon,
+  FieldRow,
+  rowSelectClass,
+  rowInputClass
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
-import { LoanPickerSheet } from "@/app/components/LoanPickerSheet"
-import { InvestmentPickerSheet } from "@/app/components/InvestmentPickerSheet"
+import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
+import { InvestmentPickerSheet, InvestmentRowIcon } from "@/app/components/InvestmentPickerSheet"
 import { InterestRatePickerSheet } from "@/app/components/InterestRatePickerSheet"
 import { TermPickerSheet } from "@/app/components/TermPickerSheet"
 import { notifyTransactionsChanged } from "@/lib/transactionEvents"
@@ -829,25 +837,22 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
       <div className="space-y-4 mt-4">
         {!isLoanRelease && (
           <>
-            <FieldGroup label="Details">
-              <div className="space-y-4">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
+              <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
                 {isLoanPayment && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Which loan
-                      <RequiredMark />
-                    </label>
-                    {/* Always renders the tappable row regardless of
-                        whether there's anything to pick -- LoanPickerSheet
-                        already shows its own graceful "No active loans"
-                        empty state, so a second, redder version of that
-                        same message here (the old inline notice) was
-                        redundant. */}
-                    <button
-                      type="button"
-                      onClick={() => setShowLoanPicker(true)}
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full flex items-center justify-between gap-2 text-left"
-                    >
+                  // Always renders the tappable row regardless of whether
+                  // there's anything to pick -- LoanPickerSheet already
+                  // shows its own graceful "No active loans" empty state,
+                  // so a second, redder version of that same message here
+                  // was redundant.
+                  <button
+                    type="button"
+                    onClick={() => setShowLoanPicker(true)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                  >
+                    <LoanRowIcon />
+                    <span className="flex-1 min-w-0 text-sm">
                       {selectedLoan ? (
                         <span className="text-ink">
                           ₱{fmt(selectedLoan.principal)} from {selectedLoan.start_date}
@@ -855,116 +860,93 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
                       ) : (
                         <span className="text-ink-soft">Select a loan</span>
                       )}
-                      <span className="text-ink-soft text-xs shrink-0">▾</span>
-                    </button>
-                    {selectedLoan && (
-                      <p className="text-xs text-ink-soft mt-2">
-                        ₱{fmt(Math.max(0, totalRepayable(Number(selectedLoan.principal), selectedLoan.interest_type, Number(selectedLoan.interest_rate || 0), Number(selectedLoan.interest_amount || 0)) - (loanRepaidTotals[selectedLoan.loan_id] || 0)))}{" "}
-                        left to pay
-                      </p>
-                    )}
-                  </div>
+                    </span>
+                    <span className="text-ink-soft text-xs shrink-0">▾</span>
+                  </button>
                 )}
 
                 {isInvestmentEntry && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Investment
-                      <RequiredMark />
-                    </label>
-                    {/* Same tappable-row pattern as the loan field above
-                        -- both are just "pick one of a short list," and
-                        InvestmentPickerSheet already has its own
-                        graceful "No open investments" empty state. */}
-                    <button
-                      type="button"
-                      onClick={() => setShowInvestmentPicker(true)}
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full flex items-center justify-between gap-2 text-left"
-                    >
+                  // Same tappable-row pattern as the loan field above --
+                  // both are just "pick one of a short list," and
+                  // InvestmentPickerSheet already has its own graceful
+                  // "No open investments" empty state.
+                  <button
+                    type="button"
+                    onClick={() => setShowInvestmentPicker(true)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                  >
+                    <InvestmentRowIcon />
+                    <span className="flex-1 min-w-0 text-sm">
                       {selectedInvestmentRow ? (
                         <span className="text-ink">{selectedInvestmentRow.name}</span>
                       ) : (
                         <span className="text-ink-soft">Select an investment</span>
                       )}
-                      <span className="text-ink-soft text-xs shrink-0">▾</span>
-                    </button>
-                  </div>
+                    </span>
+                    <span className="text-ink-soft text-xs shrink-0">▾</span>
+                  </button>
                 )}
 
                 {needsBank && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      {isBankTransfer ? "From bank" : "Bank"}
-                      <RequiredMark />
-                    </label>
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={bankId}
-                      onChange={(e) => setBankId(e.target.value)}
-                    >
-                      <option value="">Select a bank</option>
+                  <FieldRow icon={<BankIcon />}>
+                    <select className={rowSelectClass} value={bankId} onChange={(e) => setBankId(e.target.value)}>
+                      <option value="">{isBankTransfer ? "From which bank" : "Select a bank"}</option>
                       {banks.map((bank) => (
                         <option key={bank.id} value={bank.id}>
                           {bank.account_name || bank.bank_name}
                         </option>
                       ))}
                     </select>
-                  </div>
+                  </FieldRow>
                 )}
 
                 {isBankTransfer && (
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      To bank
-                      <RequiredMark />
-                    </label>
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={toBankId}
-                      onChange={(e) => setToBankId(e.target.value)}
-                    >
-                      <option value="">Select a bank</option>
+                  <FieldRow icon={<BankIcon />}>
+                    <select className={rowSelectClass} value={toBankId} onChange={(e) => setToBankId(e.target.value)}>
+                      <option value="">To which bank</option>
                       {banks.map((bank) => (
                         <option key={bank.id} value={bank.id}>
                           {bank.account_name || bank.bank_name}
                         </option>
                       ))}
                     </select>
-                  </div>
+                  </FieldRow>
                 )}
 
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Description
-                  </label>
+                <FieldRow icon={<NoteIcon />}>
                   <input
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                    className={rowInputClass}
                     placeholder="Notes (name & date already saved)"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
-                </div>
+                </FieldRow>
               </div>
-            </FieldGroup>
+
+              {isLoanPayment && selectedLoan && (
+                <p className="px-1 pt-2 text-sm text-ink-soft">
+                  ₱{fmt(Math.max(0, totalRepayable(Number(selectedLoan.principal), selectedLoan.interest_type, Number(selectedLoan.interest_rate || 0), Number(selectedLoan.interest_amount || 0)) - (loanRepaidTotals[selectedLoan.loan_id] || 0)))}{" "}
+                  left to pay
+                </p>
+              )}
+            </div>
 
             {needsReceipt && (
-              <FieldGroup label="Proof">
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Receipt
-                    <RequiredMark />
-                  </label>
-                  <ReceiptField
-                    receipt={receipt}
-                    receiptPreview={receiptPreview}
-                    existingReceiptUrl={existingReceiptUrl}
-                    existingReceiptSignedUrl={existingReceiptSignedUrl}
-                    dragActive={dragActive}
-                    setDragActive={setDragActive}
-                    onFileChange={setReceiptFile}
-                  />
-                </div>
-              </FieldGroup>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
+                  Receipt
+                  <RequiredMark />
+                </p>
+                <ReceiptField
+                  receipt={receipt}
+                  receiptPreview={receiptPreview}
+                  existingReceiptUrl={existingReceiptUrl}
+                  existingReceiptSignedUrl={existingReceiptSignedUrl}
+                  dragActive={dragActive}
+                  setDragActive={setDragActive}
+                  onFileChange={setReceiptFile}
+                />
+              </div>
             )}
           </>
         )}
@@ -974,155 +956,171 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
             <StepTrack step={formStep} labels={["Details", "Review"]} />
 
             {formStep === 1 && (
-              <FieldGroup>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Interest
-                      <RequiredMark />
-                    </label>
-                    <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
-                      <button
-                        type="button"
-                        onClick={() => setInterestType("rate")}
-                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                          interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                        }`}
-                      >
-                        Rate (%)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setInterestType("amount")}
-                        className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                          interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                        }`}
-                      >
-                        Fixed amount (₱)
-                      </button>
-                    </div>
-                    {interestType === "rate" ? (
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Loan Terms</p>
+                <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                  {/* Toggle + value share one row instead of stacking (toggle, then a
+                      second full-width input below it) -- matches NewTransactionSheet's
+                      Loan Terms card, the two only ever needing to look the same. */}
+                  <FieldRow icon={<InterestIcon />}>
+                    {interestType === "rate" && !interestRateCustom ? (
                       // Picker is the default way in, matching
                       // NewTransactionSheet -- "Custom..." in the sheet
                       // switches to the raw input for anything outside
                       // the preset list.
-                      !interestRateCustom ? (
-                        <button
-                          type="button"
-                          onClick={() => setShowInterestRatePicker(true)}
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full flex items-center justify-between gap-2 text-left font-mono [font-variant-numeric:tabular-nums]"
-                        >
-                          {interestRate ? (
-                            <span className="text-ink">{interestRate}%</span>
-                          ) : (
-                            <span className="text-ink-soft">e.g. 5</span>
-                          )}
-                          <span className="text-ink-soft text-xs shrink-0 font-sans">▾</span>
-                        </button>
-                      ) : (
-                        <input
-                          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="e.g. 5"
-                          value={interestRate}
-                          onChange={(e) => setInterestRate(e.target.value)}
-                          autoFocus
-                        />
-                      )
+                      <button
+                        type="button"
+                        onClick={() => setShowInterestRatePicker(true)}
+                        className="flex-1 min-w-0 text-left text-sm"
+                      >
+                        {interestRate ? (
+                          <span className="text-ink">{interestRate}%</span>
+                        ) : (
+                          <span className="text-ink-soft">Interest rate, e.g. 5</span>
+                        )}
+                      </button>
                     ) : (
                       <input
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
+                        className={rowInputClass}
                         type="number"
+                        inputMode="decimal"
                         min="0"
                         step="0.01"
-                        placeholder="e.g. 5000"
-                        value={interestAmount}
-                        onChange={(e) => setInterestAmount(e.target.value)}
+                        placeholder={interestType === "rate" ? "Interest rate, e.g. 5" : "Interest amount, e.g. 5000"}
+                        value={interestType === "rate" ? interestRate : interestAmount}
+                        onChange={(e) =>
+                          interestType === "rate" ? setInterestRate(e.target.value) : setInterestAmount(e.target.value)
+                        }
+                        autoFocus={interestType === "rate" && interestRateCustom}
                       />
                     )}
-                  </div>
+                    <div className="flex border border-hairline rounded-sm overflow-hidden shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setInterestType("rate")}
+                        aria-label="Interest as a rate"
+                        className={`w-8 py-1.5 text-xs font-semibold transition-colors ${
+                          interestType === "rate" ? "bg-ink text-paper" : "text-ink-soft"
+                        }`}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInterestType("amount")}
+                        aria-label="Interest as a fixed amount"
+                        className={`w-8 py-1.5 text-xs font-semibold border-l border-hairline transition-colors ${
+                          interestType === "amount" ? "bg-ink text-paper" : "text-ink-soft"
+                        }`}
+                      >
+                        ₱
+                      </button>
+                    </div>
+                    {interestType === "rate" && (
+                      <button
+                        type="button"
+                        onClick={() => setShowInterestRatePicker(true)}
+                        aria-label="Choose a common interest rate"
+                        className="text-ink-soft text-xs shrink-0 px-1"
+                      >
+                        ▾
+                      </button>
+                    )}
+                  </FieldRow>
 
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Term (months)
-                      <RequiredMark />
-                    </label>
+                  <FieldRow icon={<ClockIcon />}>
                     {!termCustom ? (
                       <button
                         type="button"
                         onClick={() => setShowTermPicker(true)}
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full flex items-center justify-between gap-2 text-left font-mono [font-variant-numeric:tabular-nums]"
+                        className="flex-1 min-w-0 text-left text-sm"
                       >
                         {termMonths ? (
                           <span className="text-ink">
                             {termMonths} {termMonths === "1" ? "month" : "months"}
                           </span>
                         ) : (
-                          <span className="text-ink-soft">e.g. 6</span>
+                          <span className="text-ink-soft">Term, e.g. 6</span>
                         )}
-                        <span className="text-ink-soft text-xs shrink-0 font-sans">▾</span>
                       </button>
                     ) : (
-                      <input
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                        type="number"
-                        min="1"
-                        step="1"
-                        placeholder="e.g. 6"
-                        value={termMonths}
-                        onChange={(e) => setTermMonths(e.target.value)}
-                        autoFocus
-                      />
+                      <>
+                        <input
+                          className={rowInputClass}
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          step="1"
+                          placeholder="Term, e.g. 6"
+                          value={termMonths}
+                          onChange={(e) => setTermMonths(e.target.value)}
+                          autoFocus
+                        />
+                        <span className="text-xs text-ink-soft shrink-0">months</span>
+                      </>
                     )}
-                  </div>
-
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Repayment mode
-                    </label>
-                    <select
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                      value={repaymentFrequency}
-                      onChange={(e) => setRepaymentFrequency(e.target.value)}
+                    <button
+                      type="button"
+                      onClick={() => setShowTermPicker(true)}
+                      aria-label="Choose a common payment term"
+                      className="text-ink-soft text-xs shrink-0 px-1"
                     >
-                      <option value="monthly">Monthly installments</option>
-                      <option value="lump_sum">One lump sum at end of term</option>
-                    </select>
-                  </div>
+                      ▾
+                    </button>
+                  </FieldRow>
+
+                  <FieldRow icon={<RepeatIcon />}>
+                    <div className="flex-1 flex border border-hairline rounded-sm overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setRepaymentFrequency("monthly")}
+                        className={`flex-1 text-xs font-semibold py-2 transition-colors ${
+                          repaymentFrequency === "monthly" ? "bg-ink text-paper" : "text-ink-soft"
+                        }`}
+                      >
+                        Monthly
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRepaymentFrequency("lump_sum")}
+                        className={`flex-1 text-xs font-semibold py-2 border-l border-hairline transition-colors ${
+                          repaymentFrequency === "lump_sum" ? "bg-ink text-paper" : "text-ink-soft"
+                        }`}
+                      >
+                        Lump sum
+                      </button>
+                    </div>
+                  </FieldRow>
 
                   {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                    <div className="border border-hairline rounded-md p-4 bg-paper">
-                      <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
-                      <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
-                        <span className="text-ink-soft">Total repayable</span>
-                        <span>₱{fmt(previewTotalRepayable)}</span>
-                      </div>
-                      <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
-                        <span className="text-ink-soft">
-                          {repaymentFrequency === "monthly"
-                            ? `Per month × ${termMonths}`
-                            : `Due at ${termMonths} months`}
+                    <>
+                      <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
+                        <span className="text-sm font-semibold text-ink">Total repayable</span>
+                        <span className="text-sm font-bold font-mono [font-variant-numeric:tabular-nums] text-gold">
+                          ₱{fmt(previewTotalRepayable)}
                         </span>
-                        <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
                       </div>
-                    </div>
+                      <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
+                        <span className="text-sm text-ink-soft">
+                          {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
+                        </span>
+                        <span className="text-sm font-semibold font-mono [font-variant-numeric:tabular-nums] text-ink">
+                          ₱{fmt(previewPerInstallment)}
+                        </span>
+                      </div>
+                    </>
                   )}
 
-                  <div>
-                    <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                      Description
-                    </label>
+                  <FieldRow icon={<NoteIcon />}>
                     <input
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
+                      className={rowInputClass}
                       placeholder="Notes (name & date already saved)"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                     />
-                  </div>
+                  </FieldRow>
                 </div>
-              </FieldGroup>
+              </div>
             )}
 
             {formStep === 2 && (
