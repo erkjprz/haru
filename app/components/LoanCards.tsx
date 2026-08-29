@@ -6,6 +6,7 @@ import ReceiptModal from "@/app/components/ReceiptModal"
 import { formatInterestLabel } from "@/lib/loanFormat"
 import { TRANSACTION_TYPE_LABELS } from "@/lib/transactionLabels"
 import type { Loan } from "@/lib/useLoansSummary"
+import { cacheTransactionRow } from "@/lib/transactionRowCache"
 
 // A closed loan isn't always a full repayment -- an admin can close one
 // early via "Close Early" with less than totalRepayable
@@ -172,7 +173,16 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                               {canEdit && (
                                 <button
                                   type="button"
-                                  onClick={() => router.push(`${pathname}?editTransaction=${t.transaction_id}`)}
+                                  onClick={() => {
+                                    // Hands the exact row already on screen
+                                    // to EditTransactionSheet, so it can
+                                    // render instantly instead of
+                                    // re-fetching by ID and showing a
+                                    // skeleton over data that hasn't gone
+                                    // anywhere.
+                                    cacheTransactionRow(t)
+                                    router.push(`${pathname}?editTransaction=${t.transaction_id}`)
+                                  }}
                                   aria-label={t.status === "rejected" ? "Fix and resend" : "Edit"}
                                   className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
                                 >

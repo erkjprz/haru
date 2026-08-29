@@ -29,6 +29,8 @@ import { InvestmentPickerSheet, InvestmentRowIcon } from "@/app/components/Inves
 import { InterestRatePickerSheet } from "@/app/components/InterestRatePickerSheet"
 import { TermPickerSheet } from "@/app/components/TermPickerSheet"
 import { notifyTransactionsChanged } from "@/lib/transactionEvents"
+import { getCachedTransactionRow } from "@/lib/transactionRowCache"
+import { getCachedTransactionFormData } from "@/lib/transactionFormPrefetch"
 
 // Member-submitted types: editable by the member who owns the row, only
 // while it's still pending. Investment Return is also member-submittable
@@ -184,23 +186,61 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
     async function load() {
       if (!member) return
 
-      // These three don't depend on each other -- run them together instead
-      // of one after another, since the transaction row's own fetch (the
-      // one thing that can't start any earlier) was sitting behind two
-      // unrelated queries every time this sheet opened.
-      const [{ data: bankList }, { data: investmentList }, { data: txn, error }] = await Promise.all([
-        supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name"),
-        // Includes closed investments too -- an existing transaction
-        // already linked to one (fixing an old amount/receipt) shouldn't
-        // have its investment silently disappear from the picker. The
-        // picker itself filters closed ones out except for whichever one
-        // this row already points to (see investmentsForPicker below).
-        supabase.from("investments").select("investment_id, name, affects_cash, status").order("name"),
-        supabase.from("transactions").select("*").eq("transaction_id", transactionId).single()
-      ])
+      const cachedTxn = getCachedTransactionRow(transactionId)
+      const cachedForm = getCachedTransactionFormData(member.member_id, isAdmin)
 
-      setBanks(bankList ?? [])
-      setInvestmentsList(investmentList ?? [])
+      let txn: any = cachedTxn
+      let error: any = null
+
+      if (cachedTxn) {
+        // The list this sheet was opened from just rendered this exact row
+        // on screen a moment ago -- trust it outright, the same way
+        // NewTransactionSheet trusts its own prefetch cache, instead of
+        // re-fetching the very thing that's already known and flashing a
+        // skeleton over data that hasn't gone anywhere.
+        //
+        // Investment/Investment Return can point at a *closed* investment
+        // (see investmentsForPicker below); NewTransactionSheet's own cache
+        // is open-only, so it's only trustworthy here for every other
+        // classification, where investmentsList isn't even rendered.
+        const needsFreshInvestments =
+          cachedTxn.classification === "Investment" || cachedTxn.classification === "Investment Return"
+
+        if (cachedForm && !needsFreshInvestments) {
+          setBanks(cachedForm.banks)
+          setInvestmentsList(cachedForm.investmentsList)
+        } else {
+          const [bankRes, investmentRes] = await Promise.all([
+            cachedForm
+              ? Promise.resolve({ data: cachedForm.banks })
+              : supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name"),
+            needsFreshInvestments
+              ? supabase.from("investments").select("investment_id, name, affects_cash, status").order("name")
+              : Promise.resolve({ data: cachedForm?.investmentsList ?? [] })
+          ])
+          setBanks(bankRes.data ?? [])
+          setInvestmentsList(investmentRes.data ?? [])
+        }
+      } else {
+        // No cached row -- a deep link, a fresh page load, or a browser
+        // reload with the sheet still open in the URL. These three don't
+        // depend on each other, so run them together instead of one after
+        // another.
+        const [bankRes, investmentRes, txnRes] = await Promise.all([
+          supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name"),
+          // Includes closed investments too -- an existing transaction
+          // already linked to one (fixing an old amount/receipt) shouldn't
+          // have its investment silently disappear from the picker. The
+          // picker itself filters closed ones out except for whichever one
+          // this row already points to (see investmentsForPicker below).
+          supabase.from("investments").select("investment_id, name, affects_cash, status").order("name"),
+          supabase.from("transactions").select("*").eq("transaction_id", transactionId).single()
+        ])
+        setBanks(bankRes.data ?? [])
+        setInvestmentsList(investmentRes.data ?? [])
+        txn = txnRes.data
+        error = txnRes.error
+      }
 
       // Investment Return straddles both buckets depending on who actually
       // submitted this particular row (see the comment on MEMBER_EDITABLE
