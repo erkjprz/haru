@@ -6,6 +6,8 @@ import { useAuth } from "@/app/auth-context"
 import { SplashScreen } from "@/app/components/SplashScreen"
 import { warmDashboardCache } from "@/lib/dashboardSnapshot"
 import { warmLoansCache } from "@/lib/useLoansSummary"
+import { warmTransactionsCache } from "@/lib/transactionsSnapshot"
+import { warmGroupBreakdownCache } from "@/lib/fundBreakdownGroup"
 
 // A slow connection shouldn't strand anyone on the splash indefinitely --
 // give the destination's data this long to warm, then move on regardless.
@@ -39,7 +41,15 @@ export default function Home() {
       return
     }
 
-    const warm = warmDashboardCache(member).catch(() => {})
+    // Dashboard is the landing page, so it goes first -- but /transactions
+    // and /fund-breakdown's default (group) view are common next stops, so
+    // their caches get warmed the same way, all in parallel rather than
+    // one after another.
+    const warm = Promise.all([
+      warmDashboardCache(member),
+      warmTransactionsCache(),
+      warmGroupBreakdownCache()
+    ]).catch(() => {})
     const timeout = new Promise((resolve) => setTimeout(resolve, WARM_UP_TIMEOUT_MS))
     Promise.race([warm, timeout]).then(() => router.replace("/dashboard"))
   }, [loading, user, member, router])

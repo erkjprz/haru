@@ -2,7 +2,6 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { supabase } from "@/lib/supabase"
 import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { SkeletonCardList } from "@/app/components/Skeleton"
@@ -12,17 +11,7 @@ import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 import { DateField } from "@/app/components/TransactionFormUI"
 import { readCache, writeCache } from "@/lib/cache"
 import { TRANSACTIONS_CHANGED_EVENT } from "@/lib/transactionEvents"
-
-// Not scoped per member -- every approved non-borrower member sees the same
-// full transaction list (filtering happens entirely client-side below), so
-// one shared cache entry covers everyone.
-const TRANSACTIONS_CACHE_KEY = "transactions:list"
-
-type TransactionsSnapshot = {
-  transactions: any[]
-  totalCount: number
-  members: any[]
-}
+import { fetchTransactionsFields, bankAccountLabel, TRANSACTIONS_CACHE_KEY, type TransactionsSnapshot } from "@/lib/transactionsSnapshot"
 
 const typeColor: Record<string, string> = {
   "Member Contribution": "text-sage border-sage",
@@ -137,67 +126,6 @@ const CLASSIFICATIONS_WITH_HIDDEN_DESCRIPTION = new Set([
   "Bank Interest",
   "Tax"
 ])
-
-// Each legacy (migrated) bank transfer is stored as two rows (a
-// negative-amount leg on the source bank, a positive-amount leg on the
-// destination bank, same date, same absolute amount, identified via the
-// plain `bank` text column) rather than one row with a from/to pair. New
-// transfers created through the app are a single row instead, with both
-// ends on bank_account_id / to_bank_account_id.
-function findTransferPair(transaction: any, allTransactions: any[]): any | null {
-  return (
-    allTransactions.find(
-      (other) =>
-        other.transaction_id !== transaction.transaction_id &&
-        other.classification === "Internal Transfer" &&
-        other.txn_date === transaction.txn_date &&
-        Number(other.amount) === -Number(transaction.amount)
-    ) ?? null
-  )
-}
-
-function bankAccountLabel(account: any): string | null {
-  if (!account) return null
-  return account.account_name || account.bank_name || null
-}
-
-function transferDirectionLabel(transaction: any, allTransactions: any[]): string | null {
-  const fromAccount = bankAccountLabel(transaction.from_bank_account)
-  const toAccount = bankAccountLabel(transaction.to_bank_account)
-  if (fromAccount && toAccount) {
-    return `${fromAccount} → ${toAccount}`
-  }
-
-  const pair = findTransferPair(transaction, allTransactions)
-  if (!pair || !transaction.bank || !pair.bank) return null
-
-  const fromLeg = Number(transaction.amount) < 0 ? transaction : pair
-  const toLeg = Number(transaction.amount) < 0 ? pair : transaction
-
-  return `${fromLeg.bank} → ${toLeg.bank}`
-}
-
-// Legacy transfers are two separate DB rows -- correct as source-of-truth
-// data, but showing both as separate cards duplicates the same real-world
-// event. Collapse each pair down to one card: keep the negative ("from")
-// leg since Math.abs() at render time already turns it into a plain
-// magnitude, drop its paired positive ("to") leg. New single-row transfers
-// never match this and pass through untouched. Nothing in the database
-// changes -- both original rows still exist exactly as migrated.
-function dedupeLegacyTransferPairs(rows: any[]): any[] {
-  const skipIds = new Set<string>()
-
-  for (const row of rows) {
-    if (row.classification !== "Internal Transfer") continue
-    if (row.bank_account_id || row.to_bank_account_id) continue
-    if (Number(row.amount) <= 0) continue
-
-    const pair = findTransferPair(row, rows)
-    if (pair) skipIds.add(row.transaction_id)
-  }
-
-  return rows.filter((row) => !skipIds.has(row.transaction_id))
-}
 
 // Owns the raw keystroke-by-keystroke input state itself and only reports
 // upward once typing pauses -- debouncing the *value* passed up wasn't
@@ -320,113 +248,24 @@ function TransactionsPageInner() {
   const [loadError, setLoadError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
-  async function loadTransactions() {
-    // members needs an explicit FK hint: transactions has two FKs into
-    // members (member_id, submitted_by), so a bare `members(...)` embed is
-    // ambiguous and PostgREST errors on it.
-    //
-    // bank_accounts is joined twice (aliased from_bank_account /
-    // to_bank_account) for the new single-row Internal Transfer shape --
-    // legacy migrated transfers instead used two separate rows with the
-    // plain `bank` text column and null bank_account_id/to_bank_account_id.
-    //
-    // .range() is required: without an explicit range, PostgREST applies its
-    // own default row cap (1000), which silently truncates the result. 4999
-    // comfortably covers current volume; if the table keeps growing, switch
-    // this to real server-side pagination instead of raising the number
-    // again. totalCount is derived from the deduped row count below rather
-    // than a separate exact-count query, since we already fetch every row
-    // within that range.
-    const { data, error } = await supabase
-      .from("transactions")
-      .select(
-        `
-        *,
-        members!transactions_member_id_fkey (
-          name,
-          email
-        ),
-        submitted_by_member:members!transactions_submitted_by_fkey (
-          name
-        ),
-        loans!transactions_loan_id_fkey (
-          name,
-          borrowers!loans_borrower_id_fkey (
-            name
-          )
-        ),
-        investments!transactions_investment_id_fkey (
-          name
-        ),
-        from_bank_account:bank_accounts!transactions_bank_account_id_fkey (
-          bank_name,
-          account_name
-        ),
-        to_bank_account:bank_accounts!transactions_to_bank_account_id_fkey (
-          bank_name,
-          account_name
-        )
-      `
-      )
-      .neq("status", "cancelled")
-      .order("txn_date", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .range(0, 4999)
-
-    if (error) {
-      setLoadError(error.message)
-      setTransactions([])
-      setTotalCount(0)
-      return []
-    }
-
-    setLoadError("")
-
-    const rawRows = data ?? []
-
-    // Compute each transfer's from->to label while both legacy legs are
-    // still present (dedupeLegacyTransferPairs below removes one of them,
-    // and findTransferPair can't locate a partner that's already gone).
-    const withTransferLabels = rawRows.map((row) =>
-      row.classification === "Internal Transfer"
-        ? { ...row, _transferLabel: transferDirectionLabel(row, rawRows) }
-        : row
-    )
-
-    const deduped = dedupeLegacyTransferPairs(withTransferLabels)
-
-    setTransactions(deduped)
-    setTotalCount(deduped.length)
-    return deduped
-  }
-
-  async function loadMembers() {
-    const { data, error } = await supabase
-      .from("members")
-      .select("member_id, name")
-      .order("name")
-
-    if (error) {
-      setLoadError(error.message)
-      return []
-    }
-
-    setMembers(data ?? [])
-    return data ?? []
-  }
-
-  // Pulled out to its own callback (rather than staying inline in the
-  // mount effect below) so the FAB's quick-entry sheet -- in Navbar, above
-  // this page and with no reference to this page's own load function --
-  // can also trigger a quiet refresh after saving a transaction; see the
-  // listener effect further down.
+  // The actual queries live in lib/transactionsSnapshot.ts, shared with the
+  // splash at / -- which runs the exact same fetch to get this cache warm
+  // before ever navigating here. Pulled out to its own callback (rather
+  // than staying inline in the mount effect below) so the FAB's quick-entry
+  // sheet -- in Navbar, above this page and with no reference to this
+  // page's own load function -- can also trigger a quiet refresh after
+  // saving a transaction; see the listener effect further down.
   const load = useCallback(async () => {
     // Only show the blocking loader on a true cold start -- if we already
     // rendered cached data, refresh quietly behind it instead of flashing
     // back to a spinner on every navigation.
     if (!readCache(TRANSACTIONS_CACHE_KEY)) setDataLoading(true)
 
-    const [loadedTransactions, loadedMembers] = await Promise.all([loadTransactions(), loadMembers()])
+    const { transactions: loadedTransactions, members: loadedMembers, error } = await fetchTransactionsFields()
+    setLoadError(error ?? "")
+    setTransactions(loadedTransactions)
+    setTotalCount(loadedTransactions.length)
+    setMembers(loadedMembers)
     setDataLoading(false)
 
     writeCache<TransactionsSnapshot>(TRANSACTIONS_CACHE_KEY, {
