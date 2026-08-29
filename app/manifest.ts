@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next"
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Haru — Shared Fund Tracker",
-    short_name: "Haru",
+    name: "Est. 2017 — Shared Fund Tracker",
+    short_name: "Est. 2017",
     description: "Shared fund tracker",
     start_url: "/",
     display: "standalone",

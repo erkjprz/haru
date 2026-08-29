@@ -81,12 +81,8 @@ export default function SignupPage() {
 
         <div className="text-center mb-8">
 
-          <p className="text-[11px] uppercase tracking-[0.2em] text-gold font-mono">
+          <h1 className="font-display text-4xl font-semibold text-ink">
             Est. 2017
-          </p>
-
-          <h1 className="font-display text-4xl font-semibold text-ink mt-2">
-            Haru
           </h1>
 
           <p className="text-sm text-ink-soft mt-2">

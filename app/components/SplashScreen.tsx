@@ -37,17 +37,11 @@ export function SplashScreen() {
         </div>
 
         <div className="flex flex-col items-center mt-[22px]">
-          <p
-            className="opacity-0 animate-[splash-fade-up_600ms_ease-out_forwards] text-[11px] uppercase tracking-[0.2em] text-gold font-mono"
+          <h1
+            className="opacity-0 animate-[splash-fade-up_600ms_ease-out_forwards] font-display text-4xl font-semibold text-ink"
             style={{ animationDelay: "900ms" }}
           >
             Est. 2017
-          </p>
-          <h1
-            className="opacity-0 animate-[splash-fade-up_600ms_ease-out_forwards] font-display text-4xl font-semibold text-ink mt-2"
-            style={{ animationDelay: "1000ms" }}
-          >
-            Haru
           </h1>
         </div>
 

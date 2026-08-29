@@ -138,7 +138,7 @@ function FundBreakdownHub() {
                       activeView === v ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
                     }`}
                   >
-                    {v === "group" ? "Haru" : "You"}
+                    {v === "group" ? "Est. 2017" : "You"}
                   </button>
                 ))}
               </div>
@@ -2443,7 +2443,7 @@ function BankForm({
           <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Account name</label>
           <input
             className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-            placeholder="e.g. Haru Fund Savings"
+            placeholder="e.g. Est. 2017 Fund Savings"
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
           />
