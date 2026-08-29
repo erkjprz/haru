@@ -786,7 +786,7 @@ function TransactionsPageInner() {
                               // showing a skeleton over data that hasn't
                               // gone anywhere.
                               cacheTransactionRow(transaction)
-                              router.push(`/transactions?editTransaction=${transaction.transaction_id}`)
+                              router.push(`/transactions?editTransaction=${transaction.transaction_id}`, { scroll: false })
                             }}
                             className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-paper bg-gold-soft rounded-full px-3 py-1.5"
                           >

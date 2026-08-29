@@ -46,9 +46,18 @@ export function Sheet({
   // that measurement reads the just-nudged layout instead of racing it.
   // Has to run before the body-lock effect further down sets `overflow:
   // hidden`, or there's nothing left to actually scroll.
+  //
+  // Nudges by 1px around wherever the page already was, not a hardcoded
+  // (0, 0) -- unlike Navbar's own nudge, which only ever fires on a real
+  // navigation (where jumping to the top is the expected behavior
+  // anyway), a Sheet opens *in place* over whatever page is already
+  // showing (tapping Edit three screens down a transaction list, say),
+  // and has no business moving that page's scroll position at all -- it
+  // just needs *an* actual scroll event to fire, wherever that happens.
   useEffect(() => {
-    window.scrollTo(0, 1)
-    window.scrollTo(0, 0)
+    const y = window.scrollY
+    window.scrollTo(0, y + 1)
+    window.scrollTo(0, y)
   }, [])
 
   // Locks the page behind the sheet from scrolling while it's open --

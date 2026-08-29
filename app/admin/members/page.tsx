@@ -284,7 +284,7 @@ export default function AdminMembersPage() {
             To record a contribution, withdrawal, or other transaction on a member's behalf, use{" "}
             <button
               className="text-gold underline"
-              onClick={() => router.push("/admin/members?newTransaction=1")}
+              onClick={() => router.push("/admin/members?newTransaction=1", { scroll: false })}
             >
               New Transaction
             </button>{" "}

@@ -181,7 +181,7 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                                     // skeleton over data that hasn't gone
                                     // anywhere.
                                     cacheTransactionRow(t)
-                                    router.push(`${pathname}?editTransaction=${t.transaction_id}`)
+                                    router.push(`${pathname}?editTransaction=${t.transaction_id}`, { scroll: false })
                                   }}
                                   aria-label={t.status === "rejected" ? "Fix and resend" : "Edit"}
                                   className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
