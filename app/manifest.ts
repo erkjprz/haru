@@ -7,8 +7,12 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Shared fund tracker",
     start_url: "/",
     display: "standalone",
-    background_color: "#0a0a0a",
-    theme_color: "#0a0a0a",
+    // Matches the icon's own paper background -- this is the native splash
+    // color the OS paints behind the icon before any of the app's own CSS
+    // has loaded, so it has to agree with the icon rather than the current
+    // light/dark theme (which isn't knowable yet at that point anyway).
+    background_color: "#faf7f2",
+    theme_color: "#faf7f2",
     icons: [
       {
         src: "/icons/icon-192.png",
