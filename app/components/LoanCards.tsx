@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { formatInterestLabel } from "@/lib/loanFormat"
 import { TRANSACTION_TYPE_LABELS } from "@/lib/transactionLabels"
@@ -27,6 +27,7 @@ const fmt = (n: number) =>
 // "view as" preview, which is read-only.
 export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolean }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
   if (loans.length === 0) {
@@ -171,7 +172,7 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
                               {canEdit && (
                                 <button
                                   type="button"
-                                  onClick={() => router.push(`/transactions/${t.transaction_id}/edit`)}
+                                  onClick={() => router.push(`${pathname}?editTransaction=${t.transaction_id}`)}
                                   aria-label={t.status === "rejected" ? "Fix and resend" : "Edit"}
                                   className="shrink-0 w-6 h-6 rounded-full border border-gold text-gold text-[11px] flex items-center justify-center"
                                 >

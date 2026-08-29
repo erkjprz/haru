@@ -91,12 +91,6 @@ export default function Navbar() {
     loadTransactionFormData(member.member_id, member.role === "admin")
   }, [member])
 
-  // The edit transaction page has its own sticky Amount/Save footer -- a
-  // second fixed bar at the bottom would stack on top of it. The FAB (which
-  // replaced the header's "+ New" button) shares this same guard, since it
-  // sits right above the dock and would collide with that same footer.
-  const hideDock = pathname.startsWith("/transactions/") && pathname.endsWith("/edit")
-
   // The FAB's own open/close state is local to this component, so a page
   // that isn't Navbar itself (Admin > Members' "New Transaction" link) has
   // no direct way to trigger it -- this is that hook, a `?newTransaction=1`
@@ -115,9 +109,11 @@ export default function Navbar() {
   // Pages reserve bottom padding (--dock-h) to clear whichever floating
   // element sticks up furthest from the bottom edge -- the FAB floats above
   // the pill (see its own `bottom` below) and is taller than the pill
-  // overall, so whenever it's showing, it -- not the pill -- is what a page
-  // needs to clear. Measured (not hardcoded) so existing pages' padding
-  // stays correct without every one of them needing its own update.
+  // overall, so it -- not the pill -- is what a page needs to clear.
+  // Measured (not hardcoded) so existing pages' padding stays correct
+  // without every one of them needing its own update. Both the dock and
+  // FAB are permanent fixtures of this component now (nothing hides them
+  // anymore), so this only needs to run once on mount.
   useEffect(() => {
     // Measures actual rendered box edges rather than re-deriving the pill's
     // safe-area padding/gap/height arithmetic by hand -- correct regardless
@@ -143,7 +139,7 @@ export default function Navbar() {
       observers.forEach((o) => o.disconnect())
       window.removeEventListener("resize", update)
     }
-  }, [hideDock])
+  }, [])
 
   // iOS can leave a `position: fixed` element positioned against a stale
   // layout viewport on a page too short to ever scroll on its own (a
@@ -221,8 +217,7 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {!hideDock && (
-        <nav ref={navRef} className="fixed inset-x-0 bottom-0 z-40" style={{ paddingBottom: DOCK_OFFSET }}>
+      <nav ref={navRef} className="fixed inset-x-0 bottom-0 z-40" style={{ paddingBottom: DOCK_OFFSET }}>
           <div className="relative max-w-3xl mx-auto px-4">
             <div
               ref={barRef}
@@ -282,7 +277,6 @@ export default function Navbar() {
             </button>
           </div>
         </nav>
-      )}
 
       {sheetOpen && (
         <NewTransactionSheet

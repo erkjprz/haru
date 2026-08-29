@@ -397,8 +397,8 @@ export default function AdminPage() {
     try {
       // transactions.loan_id has a foreign key into loans with no cascade, so
       // the reference has to be cleared before the loan row can be deleted --
-      // same fix already used by the member-facing "Cancel entry" flow on
-      // /transactions/[id]/edit.
+      // same fix already used by the member-facing "Cancel entry" flow in
+      // EditTransactionSheet.
       const trimmedReason = reason.trim() || null
       const { error: txnError } = await supabase
         .from("transactions")

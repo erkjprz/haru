@@ -778,7 +778,7 @@ function TransactionsPageInner() {
                         {canEdit && (
                           <button
                             type="button"
-                            onClick={() => router.push(`/transactions/${transaction.transaction_id}/edit`)}
+                            onClick={() => router.push(`/transactions?editTransaction=${transaction.transaction_id}`)}
                             className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-paper bg-gold-soft rounded-full px-3 py-1.5"
                           >
                             {transaction.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
