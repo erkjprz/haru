@@ -1278,13 +1278,14 @@ export default function AdminPage() {
                         setWithdrawalBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
                       }
                     >
-                      <option value="">Withdraw from bank</option>
+                      <option value="">Select a bank</option>
                       {banks.map((bank) => (
                         <option key={bank.id} value={bank.id}>
                           {bank.account_name || bank.bank_name}
                         </option>
                       ))}
                     </select>
+                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                   </FieldRow>
                 )}
 
@@ -1297,13 +1298,14 @@ export default function AdminPage() {
                         setLoanReleaseBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
                       }
                     >
-                      <option value="">Disburse from bank</option>
+                      <option value="">Select a bank</option>
                       {banks.map((bank) => (
                         <option key={bank.id} value={bank.id}>
                           {bank.account_name || bank.bank_name}
                         </option>
                       ))}
                     </select>
+                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                   </FieldRow>
                 )}
 
@@ -1339,10 +1341,17 @@ export default function AdminPage() {
               )}
             </div>
 
-            {(t.description || !needsLoanBank || t.receipt_url) && (
+            {(t.description || (!needsLoanBank && !needsWithdrawalBank) || t.receipt_url) && (
               <div className="mt-4 pt-4 border-t border-hairline space-y-2">
                 {t.description && <p className="text-sm text-ink-soft">{t.description}</p>}
-                {!needsLoanBank && (
+                {/* Withdrawal/Loan Release never have a bank on record yet at
+                    this point -- that's exactly what the picker above is
+                    for -- so this line would always read "Bank: None" right
+                    next to a picker already showing what was just chosen,
+                    contradicting it for no reason. Only worth showing for
+                    types where the bank is already settled, not being
+                    picked in this same sheet. */}
+                {!needsLoanBank && !needsWithdrawalBank && (
                   <p className="text-sm text-ink-soft">
                     Bank: {t.bank_accounts?.account_name || t.bank_accounts?.bank_name || "None"}
                   </p>
@@ -1425,6 +1434,7 @@ export default function AdminPage() {
                       </option>
                     ))}
                   </select>
+                  <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                 </FieldRow>
               </div>
             </div>
@@ -1489,6 +1499,7 @@ export default function AdminPage() {
                         </option>
                       ))}
                     </select>
+                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                   </FieldRow>
                 </div>
               </div>

@@ -321,6 +321,7 @@ export default function AdminMembersPage() {
                     <option value="admin">Admin</option>
                     <option value="borrower">Borrower</option>
                   </select>
+                  <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                 </FieldRow>
               </div>
             </Sheet>
@@ -503,6 +504,7 @@ export default function AdminMembersPage() {
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
               </select>
+              <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
             </FieldRow>
 
             <FieldRow icon={<StatusIcon />}>
@@ -511,6 +513,7 @@ export default function AdminMembersPage() {
                 <option value="pending">Pending</option>
                 <option value="inactive">Inactive</option>
               </select>
+              <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
             </FieldRow>
           </div>
 

@@ -567,6 +567,7 @@ function SupportEditForm({
                 </option>
               ))}
             </select>
+            <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
           </FieldRow>
 
           <FieldRow icon={<StatusIcon />}>
@@ -577,6 +578,7 @@ function SupportEditForm({
                 </option>
               ))}
             </select>
+            <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
           </FieldRow>
 
           <FieldRow icon={<NoteIcon />}>

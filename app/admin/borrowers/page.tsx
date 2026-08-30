@@ -297,6 +297,7 @@ export default function AdminBorrowersPage() {
                         </option>
                       ))}
                     </select>
+                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                   </FieldRow>
                 </div>
               </div>
