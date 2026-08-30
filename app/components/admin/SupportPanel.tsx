@@ -106,7 +106,6 @@ export function SupportPanel() {
   const [banks, setBanks] = useState<BankAccount[]>([])
   const [loadError, setLoadError] = useState("")
   const [query, setQuery] = useState("")
-  const [searchFocused, setSearchFocused] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
 
   // Loaded once, when this tab is actually opened (this component only
@@ -185,11 +184,13 @@ export function SupportPanel() {
 
   const editingTxn = transactions.find((t) => t.transaction_id === editingId) ?? null
 
-  // Collapsed the moment the field is focused or has anything typed --
-  // this intro is only useful before you've started, and at four lines
-  // it was eating exactly the space results needed most once the keyboard
-  // was up and already covering half the sheet.
-  const searchActive = searchFocused || query.trim().length > 0
+  // Collapsed once there's an actual query, not just on focus -- focusing
+  // alone (before typing anything) has no results to show yet, so hiding
+  // the intro right then left a blank gap between the input and the
+  // keyboard instead of the results it was meant to make room for. Once
+  // you start typing, the intro isn't useful anymore and results fill
+  // that space instead.
+  const searchActive = query.trim().length > 0
 
   // min-h keeps the sheet itself from resizing when the intro collapses
   // or results come and go -- Sheet's own panel has no explicit height,
@@ -218,8 +219,6 @@ export function SupportPanel() {
             placeholder="Search by member, bank, description, amount, date…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
           />
 
           {query.trim() && (
