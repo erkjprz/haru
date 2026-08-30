@@ -191,8 +191,15 @@ export function SupportPanel() {
   // was up and already covering half the sheet.
   const searchActive = searchFocused || query.trim().length > 0
 
+  // min-h keeps the sheet itself from resizing when the intro collapses
+  // or results come and go -- Sheet's own panel has no explicit height,
+  // just a max-height cap, so it otherwise shrinks to fit whatever's
+  // here (four lines of intro one moment, an empty results list the
+  // next) and visibly pops taller/shorter as you type. Pinning this
+  // section to roughly the sheet's usual full extent means that growth
+  // already happened before you ever focus the field.
   return (
-    <section className="mt-6">
+    <section className="mt-6 min-h-[65dvh]">
       {!searchActive && (
         <p className="text-[13px] text-ink-soft mb-4">
           Find any transaction, regardless of who it belongs to or its status, to fix a mistake -- wrong amount,
