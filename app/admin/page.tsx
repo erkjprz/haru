@@ -777,7 +777,11 @@ export default function AdminPage() {
           </div>
 
           <div className="mt-6 space-y-8">
-            {totalCount === 0 && (
+            {/* Only on "All" -- switching to the Transactions or Signups
+                chip with nothing pending already gets its own "Nothing
+                pending right now" from that chip's own fallback section
+                below, so showing this too duplicated the same message. */}
+            {filter === "all" && totalCount === 0 && (
               <div className="text-center py-16">
                 <p className="text-2xl mb-2">🌱</p>
                 <p className="font-display font-medium">Nothing waiting here</p>
