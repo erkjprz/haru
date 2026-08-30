@@ -707,6 +707,13 @@ export default function AdminPage() {
   const bulkTransactions = pendingTransactions.filter((t) => BULK_CLASSIFICATIONS.has(t.classification))
   const reviewTransactions = pendingTransactions.filter((t) => !BULK_CLASSIFICATIONS.has(t.classification))
   const reviewingTxn = reviewTransactions.find((t) => t.transaction_id === reviewingTxnId) ?? null
+  // Confirmed money rows have no sheet of their own to nest a reject prompt
+  // inside (they're plain rows in the page, not opened via a sheet the way
+  // everything else here is) -- rejectingId doubles as which row's own
+  // reject sheet is open, bulkTransactions and reviewTransactions never
+  // overlapping so this and Review Transaction's own reject state can never
+  // both resolve to a real row at once.
+  const rejectingBulkTxn = bulkTransactions.find((t) => t.transaction_id === rejectingId) ?? null
 
   const pendingAmountTotal = pendingTransactions.reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0)
   const pendingBorrowers = borrowerMembers.filter((m) => m.status === "pending")
@@ -883,20 +890,6 @@ export default function AdminPage() {
                           </div>
                         </div>
                       </div>
-                      {rejectingId === t.transaction_id && (
-                        <div className="px-4 pb-3 pt-3 border-t border-hairline">
-                          <RejectReasonPrompt
-                            reason={rejectReason}
-                            onChangeReason={setRejectReason}
-                            onCancel={() => {
-                              setRejectingId(null)
-                              setRejectReason("")
-                            }}
-                            onConfirm={() => rejectTransaction(t.transaction_id, rejectReason)}
-                            compact
-                          />
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1509,6 +1502,36 @@ export default function AdminPage() {
         )
       })()}
 
+      {rejectingBulkTxn && (
+        <Sheet
+          title="Reject transaction"
+          onClose={() => {
+            setRejectingId(null)
+            setRejectReason("")
+          }}
+        >
+          <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden mb-4">
+            <FieldRow icon={<FlowBadge {...(FLOW[rejectingBulkTxn.classification] ?? { arrow: "•", tone: "in" })} small />}>
+              <span className="flex-1 min-w-0 text-sm">
+                <span className="font-semibold text-ink">{rejectingBulkTxn.members?.name || "Fund"}</span>
+                <span className="text-ink-soft"> · {typeLabels[rejectingBulkTxn.classification] || rejectingBulkTxn.classification}</span>
+              </span>
+              <span className="shrink-0 text-sm font-mono">₱{fmt(rejectingBulkTxn.amount)}</span>
+            </FieldRow>
+          </div>
+
+          <RejectReasonPrompt
+            reason={rejectReason}
+            onChangeReason={setRejectReason}
+            onCancel={() => {
+              setRejectingId(null)
+              setRejectReason("")
+            }}
+            onConfirm={() => rejectTransaction(rejectingBulkTxn.transaction_id, rejectReason)}
+          />
+        </Sheet>
+      )}
+
       {showSearchFix && <SearchFixSheet onClose={() => setShowSearchFix(false)} />}
       {openReceiptUrl && <ReceiptModal path={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
@@ -1523,22 +1546,12 @@ function RejectReasonPrompt({
   reason,
   onChangeReason,
   onCancel,
-  onConfirm,
-  compact
+  onConfirm
 }: {
   reason: string
   onChangeReason: (value: string) => void
   onCancel: () => void
   onConfirm: () => void
-  // The Review Transaction sheet uses this as a sticky footer, sized to
-  // match that footer's own big pill buttons -- dropped inline into a
-  // plain row card (Confirmed money's own inline reject, well below the
-  // scale of anything else on that card) those same buttons dwarfed
-  // everything around them. compact matches the row's own small
-  // text-link/button scale instead, and swaps the textarea's background
-  // to bg-paper -- these rows are bg-paper-2 themselves, so the sheet's
-  // own bg-paper-2 textarea would otherwise blend straight into the card.
-  compact?: boolean
 }) {
   return (
     <>
@@ -1551,28 +1564,20 @@ function RejectReasonPrompt({
         value={reason}
         onChange={(e) => onChangeReason(e.target.value)}
         placeholder="e.g. Receipt doesn't match the amount"
-        className={`w-full border border-hairline rounded-md px-3.5 py-3 text-sm mb-3 ${compact ? "bg-paper" : "bg-paper-2"}`}
+        className="w-full border border-hairline rounded-md px-3.5 py-3 text-sm bg-paper-2 mb-3"
       />
-      <div className={`flex items-center ${compact ? "gap-2" : "gap-3"}`}>
+      <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={onCancel}
-          className={
-            compact
-              ? "shrink-0 border border-hairline text-ink-soft px-3 py-1.5 rounded-md text-sm"
-              : "shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold"
-          }
+          className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold"
         >
           Cancel
         </button>
         <button
           type="button"
           onClick={onConfirm}
-          className={
-            compact
-              ? "bg-rust text-paper px-3 py-1.5 rounded-md text-sm"
-              : "flex-1 bg-rust text-paper px-6 py-3.5 rounded-full text-base font-bold motion-safe:transition-transform motion-safe:active:scale-[0.97]"
-          }
+          className="flex-1 bg-rust text-paper px-6 py-3.5 rounded-full text-base font-bold motion-safe:transition-transform motion-safe:active:scale-[0.97]"
         >
           Confirm reject
         </button>
