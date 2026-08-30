@@ -8,8 +8,16 @@ import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { getPendingBankInterestGroups, distributeBankInterestGroup, type PendingBankInterestGroup } from "@/lib/bankInterest"
-import { SupportPanel } from "@/app/components/admin/SupportPanel"
-import { FlowBadge } from "@/app/components/TransactionFormUI"
+import { SearchFixSheet } from "@/app/components/admin/SearchFixSheet"
+import { Sheet } from "@/app/components/Sheet"
+import {
+  FlowBadge,
+  AmountHero,
+  FieldRow,
+  BankIcon,
+  PersonIcon,
+  rowSelectClass
+} from "@/app/components/TransactionFormUI"
 import { approveLoanRelease } from "@/lib/approveLoan"
 import { approveBorrowerMember } from "@/lib/approveBorrower"
 import { dateOnly } from "@/lib/currentValue"
@@ -38,7 +46,7 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
 // selectedBulkIds can't blanket-approve either of those two.
 const BULK_CLASSIFICATIONS = new Set(["Member Contribution", "Loan Repayment"])
 
-type Tab = "members" | "txns" | "borrowers" | "distrib" | "support"
+type Filter = "all" | "txn" | "distrib" | "signup"
 
 // Same global admin approvals queue for any admin viewing it -- no
 // per-user scoping needed, so a single fixed cache key covers everyone.
@@ -96,11 +104,20 @@ export default function AdminPage() {
   const [dataLoading, setDataLoading] = useState(!cached)
   const checkingAccess = authLoading || dataLoading
 
-  const [activeTab, setActiveTab] = useState<Tab>("txns")
-  // Remembers which approvals sub-tab was open before switching to Support,
-  // so coming back to "Approvals" restores it instead of always resetting
-  // to Txns.
-  const [lastApprovalsTab, setLastApprovalsTab] = useState<Exclude<Tab, "support">>("txns")
+  // Replaces the old two-tier tab system -- one flat queue, grouped by
+  // what each item actually is rather than switched between screens; this
+  // just narrows which groups show. Support has no queue of its own
+  // (see showSearchFix below), so it isn't one of these.
+  const [filter, setFilter] = useState<Filter>("all")
+  const [showSearchFix, setShowSearchFix] = useState(false)
+
+  // Each row across every group below is a compact summary that opens its
+  // full form in a sheet instead of expanding in place -- one row's form
+  // used to push every row after it down the page and fight the sheet
+  // above (Search & Fix) for space when both happened to be open at once.
+  const [reviewingTxnId, setReviewingTxnId] = useState<string | null>(null)
+  const [reviewingSignupId, setReviewingSignupId] = useState<string | null>(null)
+  const [reviewingBorrowerId, setReviewingBorrowerId] = useState<string | null>(null)
 
   const [pendingMembers, setPendingMembers] = useState<any[]>(cached?.pendingMembers ?? [])
   const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>(cached?.unclaimedMembers ?? [])
@@ -139,10 +156,6 @@ export default function AdminPage() {
   const [actionError, setActionError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
-  const [memberSearch, setMemberSearch] = useState("")
-  const [txnSearch, setTxnSearch] = useState("")
-  const [txnTypeFilter, setTxnTypeFilter] = useState("")
-
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState("")
 
@@ -163,10 +176,10 @@ export default function AdminPage() {
       pendingGroupsRes
     ] = await Promise.all([
       // role='borrower' pending signups are handled entirely by the
-      // Borrowers tab (which offers borrower-record linking the generic
-      // Members tab doesn't) -- excluded here so a pending borrower isn't
-      // double-counted across both tabs' totals, or approved through the
-      // wrong tab and skip the chance to link their loan history.
+      // Borrowers group (which offers borrower-record linking the generic
+      // Members group doesn't) -- excluded here so a pending borrower isn't
+      // double-counted across both groups' totals, or approved through the
+      // wrong group and skip the chance to link their loan history.
       supabase
         .from("members")
         .select("*")
@@ -305,6 +318,13 @@ export default function AdminPage() {
   // approved, same storage bucket/naming convention member-side receipts
   // already use.
   async function uploadApprovalReceipt(file: File, memberId: string | null): Promise<string | null> {
+    // This is only ever invoked from approveTransaction, itself only wired to
+    // a button's onClick -- never during render. react-hooks/purity's
+    // whole-component reachability analysis loses track of that once this
+    // file has enough closures in it (confirmed by bisection: unrelated JSX
+    // added elsewhere in this component tips it into flagging this call,
+    // with no change to this function or its call sites).
+    // eslint-disable-next-line react-hooks/purity
     const fileName = `${memberId || "admin"}-${Date.now()}-${file.name}`
     const { error } = await supabase.storage.from("Receipts").upload(fileName, file, { contentType: file.type })
     if (error) {
@@ -684,26 +704,35 @@ export default function AdminPage() {
     }
   }
 
-  const filteredMembers = pendingMembers.filter((m) => {
-    const q = memberSearch.toLowerCase()
-    return m.name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)
-  })
-
-  const filteredTransactions = pendingTransactions.filter((t) => {
-    const q = txnSearch.toLowerCase()
-    const matchesSearch =
-      t.members?.name?.toLowerCase().includes(q) ||
-      t.description?.toLowerCase().includes(q) ||
-      String(t.amount).includes(q)
-    const matchesType = !txnTypeFilter || t.classification === txnTypeFilter
-    return matchesSearch && matchesType
-  })
-
-  const bulkTransactions = filteredTransactions.filter((t) => BULK_CLASSIFICATIONS.has(t.classification))
-  const reviewTransactions = filteredTransactions.filter((t) => !BULK_CLASSIFICATIONS.has(t.classification))
+  const bulkTransactions = pendingTransactions.filter((t) => BULK_CLASSIFICATIONS.has(t.classification))
+  const reviewTransactions = pendingTransactions.filter((t) => !BULK_CLASSIFICATIONS.has(t.classification))
+  const reviewingTxn = reviewTransactions.find((t) => t.transaction_id === reviewingTxnId) ?? null
+  // Confirmed money rows have no sheet of their own to nest a reject prompt
+  // inside (they're plain rows in the page, not opened via a sheet the way
+  // everything else here is) -- rejectingId doubles as which row's own
+  // reject sheet is open, bulkTransactions and reviewTransactions never
+  // overlapping so this and Review Transaction's own reject state can never
+  // both resolve to a real row at once.
+  const rejectingBulkTxn = bulkTransactions.find((t) => t.transaction_id === rejectingId) ?? null
 
   const pendingAmountTotal = pendingTransactions.reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0)
   const pendingBorrowers = borrowerMembers.filter((m) => m.status === "pending")
+  const reviewingSignup = pendingMembers.find((m) => m.member_id === reviewingSignupId) ?? null
+  const reviewingBorrower = pendingBorrowers.find((m) => m.member_id === reviewingBorrowerId) ?? null
+
+  const signupsCount = pendingMembers.length + pendingBorrowers.length
+  const totalCount = pendingTransactions.length + pendingGroups.length + signupsCount
+
+  const chips: { id: Filter; label: string; count: number }[] = [
+    { id: "all", label: "All", count: totalCount },
+    { id: "txn", label: "Transactions", count: pendingTransactions.length },
+    { id: "distrib", label: "Distrib.", count: pendingGroups.length },
+    { id: "signup", label: "Signups", count: signupsCount }
+  ]
+
+  const showTxns = filter === "all" || filter === "txn"
+  const showDistrib = filter === "all" || filter === "distrib"
+  const showSignups = filter === "all" || filter === "signup"
 
   if (checkingAccess) {
     return (
@@ -718,49 +747,44 @@ export default function AdminPage() {
     )
   }
 
-  // Support isn't an approval queue like the other four -- it's a tool you
-  // reach for, not a queue that reaches for you -- so it never carries a
-  // count. It still gets equal billing as a top-level tab (see topTabs
-  // below) rather than a header button, so it isn't easy to miss.
-  const tabs: { id: Exclude<Tab, "support">; label: string; count: number }[] = [
-    { id: "txns", label: "Txns", count: pendingTransactions.length },
-    { id: "distrib", label: "Distrib.", count: pendingGroups.length },
-    { id: "members", label: "Members", count: pendingMembers.length },
-    { id: "borrowers", label: "Borrowers", count: pendingBorrowers.length }
-  ]
-  const totalApprovalsCount = tabs.reduce((sum, t) => sum + t.count, 0)
-
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
+      <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden relative">
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
                 Administration
               </div>
-              <h1 className="font-display text-4xl font-semibold">Admin Panel</h1>
-              <p className="text-sm text-ink-soft mt-2 max-w-md">
-                Everything waiting on you: new signups, transactions to approve, borrower accounts to link, and
-                bank interest ready to split across members.
-              </p>
+              <h1 className="font-display text-3xl font-semibold">
+                {totalCount > 0 ? (
+                  <>
+                    <span className="text-gold">{totalCount}</span> waiting on you
+                  </>
+                ) : (
+                  "All caught up"
+                )}
+              </h1>
             </div>
 
-            {/* Page-level action, not scoped to any tab -- always exports
-                the full transaction history regardless of what's active
-                below. Kept up here in the header, away from the tab
-                content, so it doesn't read as "export this tab". */}
+            {/* Page-level action, not scoped to any group -- always exports
+                the full transaction history regardless of what's filtered
+                below. */}
             <button
               onClick={exportTransactionsCsv}
               disabled={exporting}
-              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium text-ink-soft border border-hairline rounded-md px-3 py-2 hover:bg-paper-2 hover:text-ink transition-colors disabled:opacity-60"
+              className="shrink-0 inline-flex items-center justify-center w-9 h-9 text-ink-soft border border-hairline rounded-full hover:bg-paper-2 hover:text-ink transition-colors disabled:opacity-60"
               title="Export full transaction history (every status, not just what's shown below) as a CSV backup"
+              aria-label="Export CSV"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-                <path d="M12 3v13M7 11l5 5 5-5M5 20h14" />
-              </svg>
-              {exporting ? "Exporting..." : "Export"}
+              {exporting ? (
+                <span className="text-[10px] font-mono">...</span>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                  <path d="M12 3v13M7 11l5 5 5-5M5 20h14" />
+                </svg>
+              )}
             </button>
           </div>
           {exportError && (
@@ -773,276 +797,105 @@ export default function AdminPage() {
 
           {actionError && <p className="mt-4 text-sm text-rust">{actionError}</p>}
 
-          {/* Top-level section nav -- plain underline tabs, matching
-              Breakdown's page-level pattern, distinct from the pill toggle
-              nested inside Approvals below. Support sits here as an equal
-              peer tab instead of a header button. */}
-          <div className="mt-6 flex border-b border-hairline">
-            <button
-              onClick={() => {
-                setActiveTab(lastApprovalsTab)
-                window.scrollTo(0, 0)
-              }}
-              className={`flex-1 text-[14px] font-semibold pt-1 pb-2.5 border-b-2 -mb-px transition-colors ${
-                activeTab !== "support" ? "text-ink border-gold" : "text-ink-soft border-transparent"
-              }`}
-            >
-              Approvals
-              {totalApprovalsCount > 0 && (
-                <span
-                  className={`ml-1.5 text-[10px] font-mono font-bold rounded-full px-1.5 py-0.5 ${
-                    activeTab !== "support" ? "text-gold bg-gold/15" : "text-ink-soft bg-ink-soft/10"
-                  }`}
-                >
-                  {totalApprovalsCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("support")
-                window.scrollTo(0, 0)
-              }}
-              className={`flex-1 text-[14px] font-semibold pt-1 pb-2.5 border-b-2 -mb-px transition-colors ${
-                activeTab === "support" ? "text-ink border-gold" : "text-ink-soft border-transparent"
-              }`}
-            >
-              🔧 Support
-            </button>
-          </div>
-
-          {/* Segmented control -- hidden while Support is active, nested
-              one level inside the "Approvals" top tab. */}
-          {activeTab !== "support" && (
-          <div className="mt-4 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
-            {tabs.map((t) => (
+          {/* Filter chips -- narrow which groups show below, replacing the
+              old two-tier tab system. Single-select, matching the pill
+              vocabulary used elsewhere (TypePickerSheet, filter rows). */}
+          <div className="mt-5 flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {chips.map((c) => (
               <button
-                key={t.id}
-                onClick={() => {
-                  setActiveTab(t.id)
-                  setLastApprovalsTab(t.id)
-                  window.scrollTo(0, 0)
-                }}
-                className={`flex-1 py-2.5 rounded-[6px] text-sm font-semibold transition-colors ${
-                  activeTab === t.id ? "bg-paper text-ink shadow-sm" : "text-ink-soft"
+                key={c.id}
+                onClick={() => setFilter(c.id)}
+                className={`shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                  filter === c.id ? "bg-gold-soft text-ink" : "border border-hairline text-ink-soft"
                 }`}
               >
-                {t.label}
-                {t.count > 0 && (
-                  <span className={activeTab === t.id ? "text-gold" : "text-ink-soft"}> {t.count}</span>
-                )}
+                {c.label}
+                <span className={`font-mono text-xs ${filter === c.id ? "text-ink" : "text-ink-soft"}`}>{c.count}</span>
               </button>
             ))}
           </div>
-          )}
 
-          {/* ---- Members ---- */}
-          {activeTab === "members" && (
-            <section className="mt-6">
-              {pendingMembers.length > 0 && (
-                <input
-                  className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2 w-full"
-                  placeholder="Search by name or email"
-                  value={memberSearch}
-                  onChange={(e) => setMemberSearch(e.target.value)}
-                />
-              )}
-
-              <div className="mt-3 space-y-3">
-                {filteredMembers.map((m) => (
-                  <details key={m.member_id} className="group bg-paper-2 border border-hairline rounded-md overflow-hidden">
-                    <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-display font-medium truncate">{m.name}</p>
-                        <p className="text-sm text-ink-soft truncate">{m.email}</p>
-                        <p className="text-[11px] text-ink-soft font-mono mt-0.5">{timeAgo(m.created_at)}</p>
-                      </div>
-                      <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-wide text-gold border border-gold rounded-full px-2.5 py-1">
-                        <span className="group-open:hidden">Review</span>
-                        <span className="hidden group-open:inline">Close</span>
-                        <span className="inline-block transition-transform group-open:rotate-180">▾</span>
-                      </span>
-                    </summary>
-
-                    <div className="px-4 pb-4 border-t border-hairline pt-3">
-                      {unclaimedMembers.length > 0 && (
-                        <div className="mb-3">
-                          <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                            Link to existing member
-                          </label>
-                          <p className="text-xs text-ink-soft mb-2">
-                            If this signup is actually one of the fund&apos;s existing members, link it to their
-                            record so their contributions, loans and investments carry over.
-                          </p>
-                          <select
-                            className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
-                            value={memberLinkChoice[m.member_id] || ""}
-                            onChange={(e) =>
-                              setMemberLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
-                            }
-                          >
-                            <option value="">Select a member</option>
-                            {unclaimedMembers.map((um: any) => (
-                              <option key={um.member_id} value={um.member_id}>
-                                {um.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      <div className="flex gap-2 flex-wrap">
-                        <button
-                          className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                          onClick={() => approveMember(m.member_id)}
-                          disabled={memberBusyId === m.member_id}
-                        >
-                          {memberBusyId === m.member_id ? "Approving..." : "Approve as new"}
-                        </button>
-                        {memberLinkChoice[m.member_id] && (
-                          <button
-                            className="border border-hairline px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                            onClick={() => linkMember(m.member_id)}
-                            disabled={memberBusyId === m.member_id}
-                          >
-                            {memberBusyId === m.member_id ? "Linking..." : "Link & approve"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </details>
-                ))}
-                {pendingMembers.length === 0 && <p className="text-sm text-ink-soft">No pending members</p>}
-                {pendingMembers.length > 0 && filteredMembers.length === 0 && (
-                  <p className="text-sm text-ink-soft">No matches for &quot;{memberSearch}&quot;</p>
-                )}
+          <div className="mt-6 space-y-8">
+            {totalCount === 0 && (
+              <div className="text-center py-16">
+                <p className="text-2xl mb-2">🌱</p>
+                <p className="font-display font-medium">Nothing waiting here</p>
+                <p className="text-sm text-ink-soft mt-1">
+                  New signups, transactions, and interest ready to split will show up here.
+                </p>
               </div>
+            )}
 
-              <button
-                onClick={() => router.push("/admin/members")}
-                className="mt-4 text-sm text-gold hover:underline"
-              >
-                Manage all members →
-              </button>
-            </section>
-          )}
-
-          {/* ---- Transactions ---- */}
-          {activeTab === "txns" && (
-            <section className="mt-6">
-              {pendingTransactions.length > 0 && (
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <input
-                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2 flex-1"
-                    placeholder="Search by member, description, or amount"
-                    value={txnSearch}
-                    onChange={(e) => setTxnSearch(e.target.value)}
-                  />
-                  <select
-                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3 py-2"
-                    value={txnTypeFilter}
-                    onChange={(e) => setTxnTypeFilter(e.target.value)}
-                  >
-                    <option value="">All types</option>
-                    {Object.keys(FLOW).map((key) => (
-                      <option key={key} value={key}>
-                        {typeLabels[key]}
-                      </option>
-                    ))}
-                  </select>
+            {/* ---- Confirmed money (bulk) ---- */}
+            {showTxns && bulkTransactions.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2.5 text-sm font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-[18px] h-[18px] accent-ink shrink-0"
+                      checked={bulkTransactions.every((t) => selectedBulkIds.has(t.transaction_id))}
+                      onChange={() => toggleSelectAllBulk(bulkTransactions.map((t) => t.transaction_id))}
+                    />
+                    Confirmed money
+                  </label>
+                  <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2.5 py-1">
+                    {bulkTransactions.length} pending
+                  </span>
                 </div>
-              )}
+                <p className="mt-1.5 text-xs text-ink-soft">
+                  Already in the bank — nothing left to decide, just to confirm.
+                </p>
 
-              <div className="mt-3 space-y-6">
-                {bulkTransactions.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between gap-3">
-                      <label className="flex items-center gap-2.5 text-sm font-semibold cursor-pointer">
+                <div className="mt-3 space-y-2">
+                  {bulkTransactions.map((t) => (
+                    <div key={t.transaction_id} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                      <div className="flex items-center gap-3 px-4 py-3">
                         <input
                           type="checkbox"
                           className="w-[18px] h-[18px] accent-ink shrink-0"
-                          checked={bulkTransactions.every((t) => selectedBulkIds.has(t.transaction_id))}
-                          onChange={() => toggleSelectAllBulk(bulkTransactions.map((t) => t.transaction_id))}
+                          checked={selectedBulkIds.has(t.transaction_id)}
+                          onChange={() => toggleBulkSelected(t.transaction_id)}
                         />
-                        Contributions &amp; Loan Payments
-                      </label>
-                      <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2.5 py-1">
-                        {bulkTransactions.length} pending
-                      </span>
-                    </div>
-                    <p className="mt-1.5 text-xs text-ink-soft">
-                      Money already confirmed in the bank — nothing left to decide, just to confirm.
-                    </p>
-
-                    <div className="mt-3 border-t border-hairline">
-                      {bulkTransactions.map((t) => (
-                        <div key={t.transaction_id} className="border-b border-hairline">
-                          <div className="flex items-center gap-3 py-3">
-                            <input
-                              type="checkbox"
-                              className="w-[18px] h-[18px] accent-ink shrink-0"
-                              checked={selectedBulkIds.has(t.transaction_id)}
-                              onChange={() => toggleBulkSelected(t.transaction_id)}
-                            />
-                            <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "in" })} small />
-                            <div className="min-w-0 flex-1">
-                              <p className="font-display font-medium truncate">{t.members?.name || "Fund"}</p>
-                              <p className="text-xs text-ink-soft">
-                                {typeLabels[t.classification] || t.classification}
-                                {t.bank_accounts && ` · ${t.bank_accounts.account_name || t.bank_accounts.bank_name}`}
-                              </p>
-                            </div>
-                            <div className="shrink-0 text-right">
-                              <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
-                              <div className="flex items-center justify-end gap-2 mt-0.5">
-                                {t.receipt_url && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setOpenReceiptUrl(t.receipt_url)}
-                                    className="text-[11px] text-gold hover:underline"
-                                  >
-                                    🧾 Receipt
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setRejectingId(t.transaction_id)
-                                    setRejectReason("")
-                                  }}
-                                  className="text-[11px] text-ink-soft hover:text-rust hover:underline"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          {rejectingId === t.transaction_id && (
-                            <RejectReasonPrompt
-                              reason={rejectReason}
-                              onChangeReason={setRejectReason}
-                              onCancel={() => {
-                                setRejectingId(null)
+                        <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "in" })} small />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display font-medium truncate text-sm">{t.members?.name || "Fund"}</p>
+                          <p className="text-xs text-ink-soft truncate">
+                            {typeLabels[t.classification] || t.classification}
+                            {t.bank_accounts && ` · ${t.bank_accounts.account_name || t.bank_accounts.bank_name}`}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-mono">₱{fmt(t.amount)}</p>
+                          <div className="flex items-center justify-end gap-2 mt-0.5">
+                            {t.receipt_url && (
+                              <button
+                                type="button"
+                                onClick={() => setOpenReceiptUrl(t.receipt_url)}
+                                className="text-[11px] text-gold hover:underline"
+                              >
+                                🧾 Receipt
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRejectingId(t.transaction_id)
                                 setRejectReason("")
                               }}
-                              onConfirm={() => rejectTransaction(t.transaction_id, rejectReason)}
-                            />
-                          )}
+                              className="text-[11px] text-ink-soft hover:text-rust hover:underline"
+                            >
+                              Reject
+                            </button>
+                          </div>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
 
-                {/* Sticky and placed right after the bulk list, not after
-                    the whole page, so it's still visible while scrolling
-                    through a long review section below -- a sticky element
-                    only starts pinning once you've scrolled past where it
-                    would normally sit, so putting it after everything else
-                    meant it stayed invisible until you'd scrolled past all
-                    the review cards too. */}
                 {selectedBulkIds.size > 0 && (
-                  <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg">
+                  <div className="sticky bottom-4 z-10 mt-3 flex items-center justify-between gap-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg">
                     <span className="text-sm font-mono">{selectedBulkIds.size} selected</span>
                     <div className="flex gap-2">
                       <button
@@ -1062,386 +915,645 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {reviewTransactions.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-semibold">Needs a closer look</span>
-                      <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-gold border border-gold rounded-full px-2.5 py-1">
-                        {reviewTransactions.length} pending
-                      </span>
-                    </div>
-                    <p className="mt-1.5 text-xs text-ink-soft">
-                      Money going out always needs a bank picked before it can move — Loan Release also activates
-                      the loan. A member-submitted Investment Return lands here too, since it credits the shared
-                      pool and is worth checking one at a time rather than batch-approving.
-                    </p>
+                <button
+                  onClick={() => router.push("/transactions")}
+                  className="mt-4 text-sm text-gold hover:underline"
+                >
+                  View all transactions →
+                </button>
+              </section>
+            )}
 
-                    <div className="mt-3 space-y-3">
-                      {reviewTransactions.map((t) => {
-                        const needsWithdrawalBank = t.classification === "Member Withdrawal"
-                        const needsLoanBank = t.classification === "Loan Release"
+            {/* ---- Transactions (empty-state fallback) ---- */}
+            {showTxns && bulkTransactions.length === 0 && reviewTransactions.length === 0 && (
+              <section>
+                <span className="text-sm font-semibold">Transactions</span>
+                <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
+                <button
+                  onClick={() => router.push("/transactions")}
+                  className="mt-3 text-sm text-gold hover:underline"
+                >
+                  View all transactions →
+                </button>
+              </section>
+            )}
 
-                        return (
-                          <details key={t.transaction_id} className="group bg-paper-2 border border-hairline rounded-md overflow-hidden">
-                            <summary className="p-4 flex items-start gap-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                              <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "out" })} small />
-                              <div className="min-w-0 flex-1">
-                                <p className="font-display font-medium truncate">{t.members?.name || "Fund"}</p>
-                                {t.submitted_by_member && (
-                                  <p className="text-[11px] text-gold font-mono truncate">Recorded by {t.submitted_by_member.name}</p>
-                                )}
-                                <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
-                                <p className="text-sm text-ink-soft">
-                                  {typeLabels[t.classification] || t.classification}
-                                  {needsLoanBank && " · requested"}
-                                  {needsWithdrawalBank && " · pick the disbursing bank"}
-                                  {t.classification === "Investment Return" && t.investments?.name && ` · ${t.investments.name}`}
-                                </p>
-                              </div>
-                              <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-wide text-gold border border-gold rounded-full px-2.5 py-1">
-                                <span className="group-open:hidden">Review</span>
-                                <span className="hidden group-open:inline">Close</span>
-                                <span className="inline-block transition-transform group-open:rotate-180">▾</span>
-                              </span>
-                            </summary>
-
-                            <div className="px-4 pb-4 border-t border-hairline pt-3">
-                              <div className="mb-3">
-                                <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                                  Amount
-                                </label>
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
-                                  value={editAmounts[t.transaction_id] ?? String(Math.abs(t.amount))}
-                                  onChange={(e) =>
-                                    setEditAmounts((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
-                                  }
-                                />
-                              </div>
-
-                              {needsLoanBank && (
-                                <div className="mb-3 grid grid-cols-2 gap-3">
-                                  <div>
-                                    <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                                      {t.loans?.interest_type === "amount" ? "Interest (₱)" : "Interest rate (%)"}
-                                    </label>
-                                    <input
-                                      type="number"
-                                      inputMode="decimal"
-                                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
-                                      value={
-                                        t.loans?.interest_type === "amount"
-                                          ? editInterestAmount[t.transaction_id] ?? String(t.loans?.interest_amount ?? "")
-                                          : editInterestRate[t.transaction_id] ?? String(t.loans?.interest_rate ?? "")
-                                      }
-                                      onChange={(e) => {
-                                        const value = e.target.value
-                                        if (t.loans?.interest_type === "amount") {
-                                          setEditInterestAmount((prev) => ({ ...prev, [t.transaction_id]: value }))
-                                        } else {
-                                          setEditInterestRate((prev) => ({ ...prev, [t.transaction_id]: value }))
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                                      Term (months)
-                                    </label>
-                                    <input
-                                      type="number"
-                                      inputMode="numeric"
-                                      className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
-                                      value={editTermMonths[t.transaction_id] ?? String(t.loans?.term_months ?? "")}
-                                      onChange={(e) =>
-                                        setEditTermMonths((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
-                                      }
-                                    />
-                                  </div>
-                                </div>
-                              )}
-
-                              <button
-                                type="button"
-                                className="mb-4 border border-hairline px-3 py-1.5 rounded-md text-xs disabled:opacity-50"
-                                onClick={() => saveTransactionEdit(t)}
-                                disabled={savingEditId === t.transaction_id}
-                              >
-                                {savingEditId === t.transaction_id ? "Saving..." : "Save changes"}
-                              </button>
-
-                              {needsWithdrawalBank && (
-                                <div className="mb-3">
-                                  <p className="text-xs text-gold bg-gold/10 border border-gold rounded-md px-3 py-2 mb-2">
-                                    Which fund bank this pays out from is always an admin call.
-                                  </p>
-                                  <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                                    Withdraw from bank
-                                  </label>
-                                  <select
-                                    className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
-                                    value={withdrawalBankSelections[t.transaction_id] || ""}
-                                    onChange={(e) =>
-                                      setWithdrawalBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
-                                    }
-                                  >
-                                    <option value="">Select a bank</option>
-                                    {banks.map((bank) => (
-                                      <option key={bank.id} value={bank.id}>
-                                        {bank.account_name || bank.bank_name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
-
-                              {needsLoanBank && (
-                                <div className="mb-3">
-                                  <p className="text-xs text-gold bg-gold/10 border border-gold rounded-md px-3 py-2 mb-2">
-                                    Approving here activates the loan and records the disbursing bank in one step,
-                                    instead of separately on the loan&apos;s own page.
-                                  </p>
-                                  <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                                    Disburse from bank
-                                  </label>
-                                  <select
-                                    className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
-                                    value={loanReleaseBankSelections[t.transaction_id] || ""}
-                                    onChange={(e) =>
-                                      setLoanReleaseBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
-                                    }
-                                  >
-                                    <option value="">Select a bank</option>
-                                    {banks.map((bank) => (
-                                      <option key={bank.id} value={bank.id}>
-                                        {bank.account_name || bank.bank_name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
-
-                              <div className="mb-3">
-                                <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                                  Proof of transfer
-                                </label>
-                                <input
-                                  type="file"
-                                  accept="image/*,.pdf"
-                                  className="block w-full text-xs text-ink-soft file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-hairline file:bg-paper file:text-xs file:text-ink"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0]
-                                    if (file) {
-                                      setApprovalReceipts((prev) => ({ ...prev, [t.transaction_id]: file }))
-                                    }
-                                  }}
-                                />
-                                {approvalReceipts[t.transaction_id] && (
-                                  <p className="mt-1 text-[11px] text-ink-soft truncate">
-                                    {approvalReceipts[t.transaction_id].name}
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="flex gap-2">
-                                <button
-                                  className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                                  onClick={() => approveTransaction(t.transaction_id)}
-                                  disabled={
-                                    !approvalReceipts[t.transaction_id] ||
-                                    uploadingReceiptId === t.transaction_id ||
-                                    (needsWithdrawalBank && !withdrawalBankSelections[t.transaction_id]) ||
-                                    (needsLoanBank && !loanReleaseBankSelections[t.transaction_id])
-                                  }
-                                >
-                                  {uploadingReceiptId === t.transaction_id
-                                    ? "Uploading..."
-                                    : needsLoanBank
-                                    ? "Approve & activate"
-                                    : "Approve"}
-                                </button>
-                                <button
-                                  className="border border-hairline px-4 py-2 rounded-md text-sm"
-                                  onClick={() => {
-                                    setRejectingId(t.transaction_id)
-                                    setRejectReason("")
-                                  }}
-                                >
-                                  Reject
-                                </button>
-                              </div>
-
-                              {rejectingId === t.transaction_id && (
-                                <RejectReasonPrompt
-                                  reason={rejectReason}
-                                  onChangeReason={setRejectReason}
-                                  onCancel={() => {
-                                    setRejectingId(null)
-                                    setRejectReason("")
-                                  }}
-                                  onConfirm={() => rejectTransaction(t.transaction_id, rejectReason)}
-                                />
-                              )}
-
-                              {(t.description || !needsLoanBank || t.receipt_url) && (
-                                <div className="mt-4 pt-3 border-t border-hairline space-y-2">
-                                  {t.description && <p className="text-sm text-ink-soft">{t.description}</p>}
-                                  {!needsLoanBank && (
-                                    <p className="text-sm text-ink-soft">
-                                      Bank: {t.bank_accounts?.account_name || t.bank_accounts?.bank_name || "None"}
-                                    </p>
-                                  )}
-                                  {t.receipt_url && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setOpenReceiptUrl(t.receipt_url)}
-                                      className="inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
-                                    >
-                                      🧾 View Receipt
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </details>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {pendingTransactions.length === 0 && !loadError && (
-                  <p className="text-sm text-ink-soft">No pending transactions</p>
-                )}
-                {pendingTransactions.length > 0 && filteredTransactions.length === 0 && (
-                  <p className="text-sm text-ink-soft">No matches for current search/filter</p>
-                )}
-              </div>
-
-              {pendingTransactions.length > 0 && (
-                <p className="mt-3 text-xs text-ink-soft font-mono">
-                  {filteredTransactions.length} of {pendingTransactions.length} · ₱{fmt(pendingAmountTotal)} pending total
+            {/* ---- Needs a decision ---- */}
+            {showTxns && reviewTransactions.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">Needs a decision</span>
+                  <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-gold border border-gold rounded-full px-2.5 py-1">
+                    {reviewTransactions.length} pending
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-ink-soft">
+                  Money going out always needs a bank picked before it can move — Loan Release also activates
+                  the loan. A member-submitted Investment Return lands here too, since it credits the shared
+                  pool and is worth checking one at a time rather than batch-approving.
                 </p>
-              )}
 
-              <button
-                onClick={() => router.push("/transactions")}
-                className="mt-4 text-sm text-gold hover:underline"
-              >
-                View all transactions →
-              </button>
-            </section>
-          )}
+                <div className="mt-3 space-y-2">
+                  {reviewTransactions.map((t) => {
+                    const needsWithdrawalBank = t.classification === "Member Withdrawal"
+                    const needsLoanBank = t.classification === "Loan Release"
 
-          {/* ---- Borrowers ---- */}
-          {activeTab === "borrowers" && (
-            <section className="mt-6 space-y-3">
-              {pendingBorrowers.map((m) => {
-                const linkedName = linkedLoanNameByMemberId[m.member_id]
-                return (
-                  <div key={m.member_id} className="bg-paper-2 border border-hairline rounded-md p-4">
-                    <p className="font-display font-medium break-words">{m.name}</p>
-                    <p className="text-sm text-ink-soft break-words">{m.email || "No email"}</p>
-                    <p className="text-[11px] text-ink-soft font-mono mt-0.5">requests borrower access · {timeAgo(m.created_at)}</p>
+                    return (
+                      <button
+                        key={t.transaction_id}
+                        type="button"
+                        onClick={() => setReviewingTxnId(t.transaction_id)}
+                        className="w-full bg-paper-2 border border-hairline rounded-md overflow-hidden flex items-center gap-3 px-4 py-3 text-left"
+                      >
+                        <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "out" })} small />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display font-medium truncate text-sm">{t.members?.name || "Fund"}</p>
+                          <p className="text-xs text-ink-soft truncate">
+                            {typeLabels[t.classification] || t.classification}
+                            {needsLoanBank && " · requested"}
+                            {needsWithdrawalBank && " · pick the disbursing bank"}
+                            {t.classification === "Investment Return" && t.investments?.name && ` · ${t.investments.name}`}
+                            {t.submitted_by_member && ` · by ${t.submitted_by_member.name}`}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
+                          <p className="text-[11px] font-mono text-gold">Review →</p>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
 
-                    {linkedName ? (
-                      <p className="mt-3 text-xs text-sage font-mono">Linked to loan record: {linkedName}</p>
-                    ) : (
-                      <div className="mt-3">
-                        <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                          Link to an existing loan record (optional)
-                        </label>
-                        <select
-                          className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
-                          value={borrowerLinkChoice[m.member_id] ?? ""}
-                          onChange={(e) =>
-                            setBorrowerLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
-                          }
+                <p className="mt-3 text-xs text-ink-soft font-mono">
+                  ₱{fmt(pendingAmountTotal)} pending total
+                </p>
+
+                <button
+                  onClick={() => router.push("/transactions")}
+                  className="mt-4 text-sm text-gold hover:underline"
+                >
+                  View all transactions →
+                </button>
+              </section>
+            )}
+
+            {/* ---- Ready to distribute ---- */}
+            {showDistrib && pendingGroups.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">Ready to distribute</span>
+                  <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2.5 py-1">
+                    {pendingGroups.length}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-ink-soft">Approved interest that hasn&apos;t been split across members yet.</p>
+
+                <div className="mt-3 space-y-2">
+                  {pendingGroups.map((group) => {
+                    const key = `${group.year}-${group.bank}`
+                    return (
+                      <div key={key} className="bg-paper-2 border border-hairline rounded-md p-4 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
+                            {group.bank} · {group.year}
+                          </p>
+                          <p className="font-mono [font-variant-numeric:tabular-nums] text-xl font-bold text-ink">
+                            ₱{fmt(Math.abs(group.totalAmount))}
+                          </p>
+                          <p className="text-xs text-ink-soft mt-0.5">
+                            {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined
+                          </p>
+                        </div>
+                        <button
+                          className="shrink-0 bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
+                          onClick={() => distribute(group)}
+                          disabled={distributingKey === key}
                         >
-                          <option value="">No existing loan record</option>
-                          {unclaimedBorrowers.map((b: any) => (
-                            <option key={b.borrower_id} value={b.borrower_id}>
-                              {b.name}
-                            </option>
-                          ))}
-                        </select>
+                          {distributingKey === key ? "Distributing..." : "Distribute"}
+                        </button>
                       </div>
-                    )}
+                    )
+                  })}
+                </div>
+                {distributeError && <p className="mt-2 text-sm text-rust">{distributeError}</p>}
 
+                <button
+                  onClick={() => router.push("/fund-breakdown?tab=banks")}
+                  className="mt-4 text-sm text-gold hover:underline"
+                >
+                  View bank interest history →
+                </button>
+              </section>
+            )}
+
+            {/* ---- New signups ---- */}
+            {showSignups && pendingMembers.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">New signups</span>
+                  <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2.5 py-1">
+                    {pendingMembers.length}
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {pendingMembers.map((m) => (
                     <button
-                      className="mt-3 bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                      onClick={() => approveBorrower(m.member_id)}
-                      disabled={borrowerBusyId === m.member_id}
+                      key={m.member_id}
+                      type="button"
+                      onClick={() => setReviewingSignupId(m.member_id)}
+                      className="w-full bg-paper-2 border border-hairline rounded-md flex items-center gap-3 px-4 py-3 text-left"
                     >
-                      {borrowerBusyId === m.member_id
-                        ? "Approving..."
-                        : borrowerLinkChoice[m.member_id]
-                        ? "Approve & link"
-                        : "Approve"}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-display font-medium truncate text-sm">{m.name}</p>
+                        <p className="text-xs text-ink-soft truncate">
+                          {m.email} · {timeAgo(m.created_at)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-[11px] font-mono text-gold">Review →</span>
                     </button>
-                  </div>
-                )
-              })}
-              {pendingBorrowers.length === 0 && <p className="text-sm text-ink-soft">No pending borrower signups</p>}
+                  ))}
+                </div>
+              </section>
+            )}
 
-              <button
-                onClick={() => router.push("/admin/borrowers")}
-                className="text-sm text-gold hover:underline"
-              >
-                View all borrowers →
-              </button>
-            </section>
-          )}
+            {/* ---- Borrower requests ---- */}
+            {showSignups && pendingBorrowers.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">Borrower requests</span>
+                  <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2.5 py-1">
+                    {pendingBorrowers.length}
+                  </span>
+                </div>
 
-          {/* ---- Distributions ---- */}
-          {activeTab === "distrib" && (
-            <section className="mt-6 space-y-3">
-              <p className="text-sm text-ink-soft">Approved interest that hasn&apos;t been split across members yet.</p>
-              {pendingGroups.map((group) => {
-                const key = `${group.year}-${group.bank}`
-                return (
-                  <div key={key} className="bg-paper-2 border border-hairline rounded-md p-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
-                        {group.bank} · {group.year}
-                      </p>
-                      <p className="font-mono [font-variant-numeric:tabular-nums] text-xl font-bold text-ink">
-                        ₱{fmt(Math.abs(group.totalAmount))}
-                      </p>
-                      <p className="text-xs text-ink-soft mt-0.5">
-                        {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined
-                      </p>
-                    </div>
-                    <button
-                      className="shrink-0 bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                      onClick={() => distribute(group)}
-                      disabled={distributingKey === key}
-                    >
-                      {distributingKey === key ? "Distributing..." : "Distribute"}
-                    </button>
-                  </div>
-                )
-              })}
-              {pendingGroups.length === 0 && <p className="text-sm text-ink-soft">Nothing waiting to be distributed</p>}
-              {distributeError && <p className="text-sm text-rust">{distributeError}</p>}
+                <div className="mt-3 space-y-2">
+                  {pendingBorrowers.map((m) => {
+                    const linkedName = linkedLoanNameByMemberId[m.member_id]
+                    return (
+                      <button
+                        key={m.member_id}
+                        type="button"
+                        onClick={() => setReviewingBorrowerId(m.member_id)}
+                        className="w-full bg-paper-2 border border-hairline rounded-md flex items-center gap-3 px-4 py-3 text-left"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display font-medium truncate text-sm">{m.name}</p>
+                          <p className="text-xs text-ink-soft truncate">
+                            {m.email || "No email"} · {timeAgo(m.created_at)}
+                            {linkedName && ` · linked to ${linkedName}`}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[11px] font-mono text-gold">Review →</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
 
-              <button
-                onClick={() => router.push("/fund-breakdown?tab=banks")}
-                className="text-sm text-gold hover:underline"
-              >
-                View bank interest history →
-              </button>
-            </section>
-          )}
-
-          {/* ---- Support ---- */}
-          {activeTab === "support" && <SupportPanel />}
-
+            {/* ---- Signups (empty-state fallback) ---- */}
+            {showSignups && pendingMembers.length === 0 && pendingBorrowers.length === 0 && (
+              <section>
+                <span className="text-sm font-semibold">Signups</span>
+                <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
+                <div className="mt-3 flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/admin/members")}
+                    className="text-sm text-gold hover:underline"
+                  >
+                    Manage members →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/admin/borrowers")}
+                    className="text-sm text-gold hover:underline"
+                  >
+                    Manage borrowers →
+                  </button>
+                </div>
+              </section>
+            )}
+          </div>
         </div>
+
+        {/* Admin's own FAB -- Navbar's "New Transaction" FAB is hidden on
+            this page (see Navbar's showFab), so this is a separate button
+            for Admin's own primary action: finding and fixing any
+            transaction on record, replacing the old Support tab. */}
+        <button
+          onClick={() => setShowSearchFix(true)}
+          aria-label="Search & Fix"
+          className="fixed right-4 w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center shadow-lg shadow-gold/30 ring-1 ring-gold/40 z-40"
+          style={{ bottom: "calc(var(--dock-h) + 0.75rem)" }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path d="M20 20l-4.8-4.8" />
+          </svg>
+        </button>
       </main>
 
+      {reviewingTxn && (() => {
+        const t = reviewingTxn
+        const needsWithdrawalBank = t.classification === "Member Withdrawal"
+        const needsLoanBank = t.classification === "Loan Release"
+
+        const canApprove =
+          !!approvalReceipts[t.transaction_id] &&
+          uploadingReceiptId !== t.transaction_id &&
+          (!needsWithdrawalBank || !!withdrawalBankSelections[t.transaction_id]) &&
+          (!needsLoanBank || !!loanReleaseBankSelections[t.transaction_id])
+
+        const footer =
+          rejectingId === t.transaction_id ? (
+            <RejectReasonPrompt
+              reason={rejectReason}
+              onChangeReason={setRejectReason}
+              onCancel={() => {
+                setRejectingId(null)
+                setRejectReason("")
+              }}
+              onConfirm={() => rejectTransaction(t.transaction_id, rejectReason)}
+            />
+          ) : (
+            <>
+              {actionError && <p className="text-sm text-rust mb-3">{actionError}</p>}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="shrink-0 border border-rust text-rust px-5 py-3.5 rounded-full text-base font-semibold"
+                  onClick={() => {
+                    setRejectingId(t.transaction_id)
+                    setRejectReason("")
+                  }}
+                >
+                  Reject
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                  onClick={() => approveTransaction(t.transaction_id)}
+                  disabled={!canApprove}
+                >
+                  {uploadingReceiptId === t.transaction_id
+                    ? "Uploading…"
+                    : needsLoanBank
+                    ? "Approve & activate"
+                    : "Approve"}
+                </button>
+              </div>
+            </>
+          )
+
+        return (
+          <Sheet title="Review transaction" onClose={() => setReviewingTxnId(null)} footer={footer}>
+            <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+              <FieldRow icon={<FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "out" })} small />}>
+                <span className="flex-1 min-w-0 text-sm">
+                  <span className="font-semibold text-ink">{t.members?.name || "Fund"}</span>
+                  <span className="text-ink-soft"> · {typeLabels[t.classification] || t.classification}</span>
+                </span>
+              </FieldRow>
+            </div>
+            <p className="px-1 pt-2 text-xs text-ink-soft">
+              {needsLoanBank && "Requested"}
+              {t.classification === "Investment Return" && t.investments?.name && t.investments.name}
+              {t.submitted_by_member && `Submitted by ${t.submitted_by_member.name}`}
+            </p>
+
+            <AmountHero
+              value={editAmounts[t.transaction_id] ?? String(Math.abs(t.amount))}
+              onChange={(v) => setEditAmounts((prev) => ({ ...prev, [t.transaction_id]: v }))}
+              label="Amount"
+            />
+
+            {needsLoanBank && (
+              <div className="grid grid-cols-2 gap-3 -mt-2 mb-4">
+                <div>
+                  <p className="mb-1.5 text-[11px] uppercase tracking-wide text-ink-soft font-mono">
+                    {t.loans?.interest_type === "amount" ? "Interest (₱)" : "Interest rate (%)"}
+                  </p>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3.5 py-3 w-full"
+                    value={
+                      t.loans?.interest_type === "amount"
+                        ? editInterestAmount[t.transaction_id] ?? String(t.loans?.interest_amount ?? "")
+                        : editInterestRate[t.transaction_id] ?? String(t.loans?.interest_rate ?? "")
+                    }
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (t.loans?.interest_type === "amount") {
+                        setEditInterestAmount((prev) => ({ ...prev, [t.transaction_id]: value }))
+                      } else {
+                        setEditInterestRate((prev) => ({ ...prev, [t.transaction_id]: value }))
+                      }
+                    }}
+                  />
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[11px] uppercase tracking-wide text-ink-soft font-mono">
+                    Term (months)
+                  </p>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3.5 py-3 w-full"
+                    value={editTermMonths[t.transaction_id] ?? String(t.loans?.term_months ?? "")}
+                    onChange={(e) =>
+                      setEditTermMonths((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="mb-4 border border-hairline text-ink-soft px-4 py-2 rounded-full text-sm font-semibold disabled:opacity-50"
+              onClick={() => saveTransactionEdit(t)}
+              disabled={savingEditId === t.transaction_id}
+            >
+              {savingEditId === t.transaction_id ? "Saving…" : "Save changes"}
+            </button>
+
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
+              <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                {needsWithdrawalBank && (
+                  <FieldRow icon={<BankIcon />}>
+                    <select
+                      className={rowSelectClass}
+                      value={withdrawalBankSelections[t.transaction_id] || ""}
+                      onChange={(e) =>
+                        setWithdrawalBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
+                      }
+                    >
+                      <option value="">Select a bank</option>
+                      {banks.map((bank) => (
+                        <option key={bank.id} value={bank.id}>
+                          {bank.account_name || bank.bank_name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
+                  </FieldRow>
+                )}
+
+                {needsLoanBank && (
+                  <FieldRow icon={<BankIcon />}>
+                    <select
+                      className={rowSelectClass}
+                      value={loanReleaseBankSelections[t.transaction_id] || ""}
+                      onChange={(e) =>
+                        setLoanReleaseBankSelections((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
+                      }
+                    >
+                      <option value="">Select a bank</option>
+                      {banks.map((bank) => (
+                        <option key={bank.id} value={bank.id}>
+                          {bank.account_name || bank.bank_name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
+                  </FieldRow>
+                )}
+
+                <label className="flex items-center gap-3 px-4 py-3.5 cursor-pointer">
+                  <span className="text-base shrink-0">📎</span>
+                  <span className="flex-1 min-w-0 text-sm text-ink-soft truncate">
+                    {approvalReceipts[t.transaction_id]?.name ?? "Proof of transfer"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        setApprovalReceipts((prev) => ({ ...prev, [t.transaction_id]: file }))
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
+              {needsWithdrawalBank && (
+                <p className="px-1 pt-2 text-sm text-gold">
+                  Which fund bank this pays out from is always an admin call.
+                </p>
+              )}
+              {needsLoanBank && (
+                <p className="px-1 pt-2 text-sm text-gold">
+                  Approving here activates the loan and records the disbursing bank in one step, instead of
+                  separately on the loan&apos;s own page.
+                </p>
+              )}
+            </div>
+
+            {(t.description || (!needsLoanBank && !needsWithdrawalBank) || t.receipt_url) && (
+              <div className="mt-4 pt-4 border-t border-hairline space-y-2">
+                {t.description && <p className="text-sm text-ink-soft">{t.description}</p>}
+                {/* Withdrawal/Loan Release never have a bank on record yet at
+                    this point -- that's exactly what the picker above is
+                    for -- so this line would always read "Bank: None" right
+                    next to a picker already showing what was just chosen,
+                    contradicting it for no reason. Only worth showing for
+                    types where the bank is already settled, not being
+                    picked in this same sheet. */}
+                {!needsLoanBank && !needsWithdrawalBank && (
+                  <p className="text-sm text-ink-soft">
+                    Bank: {t.bank_accounts?.account_name || t.bank_accounts?.bank_name || "None"}
+                  </p>
+                )}
+                {t.receipt_url && (
+                  <button
+                    type="button"
+                    onClick={() => setOpenReceiptUrl(t.receipt_url)}
+                    className="inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
+                  >
+                    🧾 View Receipt
+                  </button>
+                )}
+              </div>
+            )}
+          </Sheet>
+        )
+      })()}
+
+      {reviewingSignup && (
+        <Sheet
+          title="New signup"
+          onClose={() => setReviewingSignupId(null)}
+          footer={
+            <div className="flex items-center gap-3">
+              {memberLinkChoice[reviewingSignup.member_id] && (
+                <button
+                  type="button"
+                  className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold disabled:opacity-50"
+                  onClick={() => linkMember(reviewingSignup.member_id)}
+                  disabled={memberBusyId === reviewingSignup.member_id}
+                >
+                  {memberBusyId === reviewingSignup.member_id ? "Linking…" : "Link & approve"}
+                </button>
+              )}
+              <button
+                type="button"
+                className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                onClick={() => approveMember(reviewingSignup.member_id)}
+                disabled={memberBusyId === reviewingSignup.member_id}
+              >
+                {memberBusyId === reviewingSignup.member_id ? "Approving…" : "Approve as new"}
+              </button>
+            </div>
+          }
+        >
+          <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+            <FieldRow icon={<PersonIcon />}>
+              <span className="flex-1 min-w-0 text-sm">
+                <span className="font-semibold text-ink">{reviewingSignup.name}</span>
+              </span>
+            </FieldRow>
+          </div>
+          <p className="px-1 pt-2 text-xs text-ink-soft">
+            {reviewingSignup.email} · {timeAgo(reviewingSignup.created_at)}
+          </p>
+
+          {unclaimedMembers.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
+                Link to existing member
+              </p>
+              <p className="text-sm text-ink-soft mb-2 px-1">
+                If this signup is actually one of the fund&apos;s existing members, link it to their
+                record so their contributions, loans and investments carry over.
+              </p>
+              <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                <FieldRow icon={<PersonIcon />}>
+                  <select
+                    className={rowSelectClass}
+                    value={memberLinkChoice[reviewingSignup.member_id] || ""}
+                    onChange={(e) =>
+                      setMemberLinkChoice((prev) => ({ ...prev, [reviewingSignup.member_id]: e.target.value }))
+                    }
+                  >
+                    <option value="">Select a member</option>
+                    {unclaimedMembers.map((um: any) => (
+                      <option key={um.member_id} value={um.member_id}>
+                        {um.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
+                </FieldRow>
+              </div>
+            </div>
+          )}
+        </Sheet>
+      )}
+
+      {reviewingBorrower && (() => {
+        const m = reviewingBorrower
+        const linkedName = linkedLoanNameByMemberId[m.member_id]
+
+        return (
+          <Sheet
+            title="Borrower request"
+            onClose={() => setReviewingBorrowerId(null)}
+            footer={
+              <button
+                type="button"
+                className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                onClick={() => approveBorrower(m.member_id)}
+                disabled={borrowerBusyId === m.member_id}
+              >
+                {borrowerBusyId === m.member_id
+                  ? "Approving…"
+                  : borrowerLinkChoice[m.member_id]
+                  ? "Approve & link"
+                  : "Approve"}
+              </button>
+            }
+          >
+            <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+              <FieldRow icon={<PersonIcon />}>
+                <span className="flex-1 min-w-0 text-sm">
+                  <span className="font-semibold text-ink">{m.name}</span>
+                </span>
+              </FieldRow>
+            </div>
+            <p className="px-1 pt-2 text-xs text-ink-soft">
+              {m.email || "No email"} · requests borrower access · {timeAgo(m.created_at)}
+            </p>
+
+            {linkedName ? (
+              <p className="mt-4 text-xs text-sage font-mono px-1">Linked to loan record: {linkedName}</p>
+            ) : (
+              <div className="mt-4">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
+                  Link to an existing loan record (optional)
+                </p>
+                <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                  <FieldRow icon={<PersonIcon />}>
+                    <select
+                      className={rowSelectClass}
+                      value={borrowerLinkChoice[m.member_id] ?? ""}
+                      onChange={(e) =>
+                        setBorrowerLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
+                      }
+                    >
+                      <option value="">No existing loan record</option>
+                      {unclaimedBorrowers.map((b: any) => (
+                        <option key={b.borrower_id} value={b.borrower_id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
+                  </FieldRow>
+                </div>
+              </div>
+            )}
+          </Sheet>
+        )
+      })()}
+
+      {rejectingBulkTxn && (
+        <Sheet
+          title="Reject transaction"
+          onClose={() => {
+            setRejectingId(null)
+            setRejectReason("")
+          }}
+        >
+          <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden mb-4">
+            <FieldRow icon={<FlowBadge {...(FLOW[rejectingBulkTxn.classification] ?? { arrow: "•", tone: "in" })} small />}>
+              <span className="flex-1 min-w-0 text-sm">
+                <span className="font-semibold text-ink">{rejectingBulkTxn.members?.name || "Fund"}</span>
+                <span className="text-ink-soft"> · {typeLabels[rejectingBulkTxn.classification] || rejectingBulkTxn.classification}</span>
+              </span>
+              <span className="shrink-0 text-sm font-mono">₱{fmt(rejectingBulkTxn.amount)}</span>
+            </FieldRow>
+          </div>
+
+          <RejectReasonPrompt
+            reason={rejectReason}
+            onChangeReason={setRejectReason}
+            onCancel={() => {
+              setRejectingId(null)
+              setRejectReason("")
+            }}
+            onConfirm={() => rejectTransaction(rejectingBulkTxn.transaction_id, rejectReason)}
+          />
+        </Sheet>
+      )}
+
+      {showSearchFix && <SearchFixSheet onClose={() => setShowSearchFix(false)} />}
       {openReceiptUrl && <ReceiptModal path={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
   )
@@ -1463,34 +1575,34 @@ function RejectReasonPrompt({
   onConfirm: () => void
 }) {
   return (
-    <div className="pb-3 -mt-1">
-      <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+    <>
+      <p className="mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">
         Reason (shown to the submitter)
-      </label>
+      </p>
       <textarea
         autoFocus
         rows={2}
         value={reason}
         onChange={(e) => onChangeReason(e.target.value)}
         placeholder="e.g. Receipt doesn't match the amount"
-        className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper"
+        className="w-full border border-hairline rounded-md px-3.5 py-3 text-sm bg-paper-2 mb-3"
       />
-      <div className="flex gap-2 mt-2">
+      <div className="flex items-center gap-3">
         <button
           type="button"
-          className="bg-rust text-paper px-3 py-1.5 rounded-md text-sm"
-          onClick={onConfirm}
-        >
-          Confirm reject
-        </button>
-        <button
-          type="button"
-          className="border border-hairline px-3 py-1.5 rounded-md text-sm"
           onClick={onCancel}
+          className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold"
         >
           Cancel
         </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="flex-1 bg-rust text-paper px-6 py-3.5 rounded-full text-base font-bold motion-safe:transition-transform motion-safe:active:scale-[0.97]"
+        >
+          Confirm reject
+        </button>
       </div>
-    </div>
+    </>
   )
 }

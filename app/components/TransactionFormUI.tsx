@@ -372,6 +372,15 @@ export function NoteIcon() {
   )
 }
 
+export function MailIcon() {
+  return (
+    <RowIcon>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 6 9-6" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
 export function PersonIcon() {
   return (
     <RowIcon>
@@ -390,6 +399,17 @@ export function InterestIcon() {
     <RowIcon>
       <path d="M3 17l6-6 4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M15 7h6v6" strokeLinecap="round" strokeLinejoin="round" />
+    </RowIcon>
+  )
+}
+
+// Generic status/flag icon -- used where a row lets you change a
+// transaction's lifecycle state directly (Support's Fix Transaction), not
+// just view it via a badge.
+export function StatusIcon() {
+  return (
+    <RowIcon>
+      <path d="M5 21V4a1 1 0 011-1h10.5L15 6.5 16.5 10H6" strokeLinecap="round" strokeLinejoin="round" />
     </RowIcon>
   )
 }
