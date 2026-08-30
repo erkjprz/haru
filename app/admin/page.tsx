@@ -886,7 +886,11 @@ export default function AdminPage() {
             )}
 
             {/* ---- Transactions (empty-state fallback) ---- */}
-            {showTxns && bulkTransactions.length === 0 && reviewTransactions.length === 0 && (
+            {/* Only when the Transactions chip is specifically selected --
+                on "All" with nothing pending anywhere, the 🌱 empty state
+                above already says so; repeating "nothing pending" once per
+                category underneath it was redundant. */}
+            {filter === "txn" && bulkTransactions.length === 0 && reviewTransactions.length === 0 && (
               <section>
                 <span className="text-sm font-semibold">Transactions</span>
                 <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
@@ -1026,7 +1030,9 @@ export default function AdminPage() {
             )}
 
             {/* ---- Signups (empty-state fallback) ---- */}
-            {showSignups && pendingMembers.length === 0 && pendingBorrowers.length === 0 && (
+            {/* Same reasoning as the Transactions fallback above -- only
+                when the Signups chip is specifically selected. */}
+            {filter === "signup" && pendingMembers.length === 0 && pendingBorrowers.length === 0 && (
               <section>
                 <span className="text-sm font-semibold">Signups</span>
                 <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
