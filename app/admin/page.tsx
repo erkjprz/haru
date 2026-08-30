@@ -914,6 +914,27 @@ export default function AdminPage() {
                     </div>
                   </div>
                 )}
+
+                <button
+                  onClick={() => router.push("/transactions")}
+                  className="mt-4 text-sm text-gold hover:underline"
+                >
+                  View all transactions →
+                </button>
+              </section>
+            )}
+
+            {/* ---- Transactions (empty-state fallback) ---- */}
+            {showTxns && bulkTransactions.length === 0 && reviewTransactions.length === 0 && (
+              <section>
+                <span className="text-sm font-semibold">Transactions</span>
+                <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
+                <button
+                  onClick={() => router.push("/transactions")}
+                  className="mt-3 text-sm text-gold hover:underline"
+                >
+                  View all transactions →
+                </button>
               </section>
             )}
 
