@@ -784,8 +784,7 @@ export default function AdminPage() {
             {filter === "all" && totalCount === 0 && (
               <div className="text-center py-16">
                 <p className="text-2xl mb-2">🌱</p>
-                <p className="font-display font-medium">Nothing waiting here</p>
-                <p className="text-sm text-ink-soft mt-1">
+                <p className="text-sm text-ink-soft">
                   New signups and transactions will show up here.
                 </p>
               </div>
