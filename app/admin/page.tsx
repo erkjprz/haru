@@ -808,6 +808,29 @@ export default function AdminPage() {
             ))}
           </div>
 
+          {/* Members and Borrowers only ever showed up in the queue via
+              their own "New signups"/"Borrower requests" sections, which
+              disappear the moment nothing's pending in them -- with no
+              other link to either page anywhere in Admin, an empty queue
+              meant there was no way left to reach them at all. This stays
+              up regardless of what's pending. */}
+          <div className="mt-4 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => router.push("/admin/members")}
+              className="text-xs text-ink-soft hover:text-ink transition-colors"
+            >
+              Manage members →
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/admin/borrowers")}
+              className="text-xs text-ink-soft hover:text-ink transition-colors"
+            >
+              Manage borrowers →
+            </button>
+          </div>
+
           <div className="mt-6 space-y-8">
             {totalCount === 0 && (
               <div className="text-center py-16">
@@ -1060,13 +1083,6 @@ export default function AdminPage() {
                     </button>
                   ))}
                 </div>
-
-                <button
-                  onClick={() => router.push("/admin/members")}
-                  className="mt-4 text-sm text-gold hover:underline"
-                >
-                  Manage all members →
-                </button>
               </section>
             )}
 
@@ -1102,13 +1118,6 @@ export default function AdminPage() {
                     )
                   })}
                 </div>
-
-                <button
-                  onClick={() => router.push("/admin/borrowers")}
-                  className="mt-4 text-sm text-gold hover:underline"
-                >
-                  View all borrowers →
-                </button>
               </section>
             )}
           </div>
