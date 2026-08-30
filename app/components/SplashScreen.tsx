@@ -21,21 +21,28 @@ export function SplashScreen() {
               pathLength={1}
               className="[stroke-dasharray:1] [stroke-dashoffset:1] animate-[sprout-draw_560ms_ease-out_forwards]"
             />
-            {/* Leaves stay fully hidden (opacity-0 scale-[0.35]) until the
+            {/* Leaves stay fully hidden (opacity-0, scaled to 35%) until the
                 stem finishes drawing at 560ms, then bloom one after another
                 rather than together -- overlapping their delays with the
                 stem's tail end made the whole mark read as popping in at
-                once instead of unfolding in sequence. */}
+                once instead of unfolding in sequence. The initial scale is
+                set via the [transform:scale(...)] arbitrary property, not
+                Tailwind's scale-[...] utility -- that utility targets the
+                standalone CSS `scale` property, a separate channel from
+                `transform`, so the sprout-bloom keyframes (which animate
+                `transform`) would never override it and both would keep
+                compounding, permanently squashing the settled leaf to 35%
+                of its size. */}
             <path
               d="M 50 44 A 25 25 0 0 1 12 60 A 25 25 0 0 1 50 44 Z"
               fill="currentColor"
-              className="[transform-box:fill-box] opacity-0 scale-[0.35] animate-[sprout-bloom_420ms_cubic-bezier(0.34,1.56,0.64,1)_forwards]"
+              className="[transform-box:fill-box] opacity-0 [transform:scale(0.35)] animate-[sprout-bloom_420ms_cubic-bezier(0.34,1.56,0.64,1)_forwards]"
               style={{ animationDelay: "560ms" }}
             />
             <path
               d="M 50 44 A 26 26 0 0 1 90 26 A 26 26 0 0 1 50 44 Z"
               fill="currentColor"
-              className="[transform-box:fill-box] opacity-0 scale-[0.35] animate-[sprout-bloom_420ms_cubic-bezier(0.34,1.56,0.64,1)_forwards]"
+              className="[transform-box:fill-box] opacity-0 [transform:scale(0.35)] animate-[sprout-bloom_420ms_cubic-bezier(0.34,1.56,0.64,1)_forwards]"
               style={{ animationDelay: "980ms" }}
             />
           </svg>
