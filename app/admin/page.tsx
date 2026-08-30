@@ -881,7 +881,7 @@ export default function AdminPage() {
 
                 <button
                   onClick={() => router.push("/transactions")}
-                  className="mt-4 text-sm text-gold hover:underline"
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                 >
                   View all transactions →
                 </button>
@@ -899,7 +899,7 @@ export default function AdminPage() {
                 <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
                 <button
                   onClick={() => router.push("/transactions")}
-                  className="mt-3 text-sm text-gold hover:underline"
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                 >
                   View all transactions →
                 </button>
@@ -959,7 +959,7 @@ export default function AdminPage() {
 
                 <button
                   onClick={() => router.push("/transactions")}
-                  className="mt-4 text-sm text-gold hover:underline"
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                 >
                   View all transactions →
                 </button>
@@ -1039,18 +1039,18 @@ export default function AdminPage() {
               <section>
                 <span className="text-sm font-semibold">Signups</span>
                 <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
-                <div className="mt-3 flex items-center gap-4">
+                <div className="mt-3 flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => router.push("/admin/members")}
-                    className="text-sm text-gold hover:underline"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                   >
                     Manage members →
                   </button>
                   <button
                     type="button"
                     onClick={() => router.push("/admin/borrowers")}
-                    className="text-sm text-gold hover:underline"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                   >
                     Manage borrowers →
                   </button>
