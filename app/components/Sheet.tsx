@@ -36,6 +36,42 @@ export function Sheet({
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // Drives the panel's actual bottom offset and max-height off
+  // visualViewport instead of trusting `bottom: 0` + `max-h-[92dvh]` alone
+  // -- the "known remaining gap" the body-lock effect below used to just
+  // document: iOS keeps a `position: fixed` element's `bottom: 0` pinned to
+  // the LAYOUT viewport, which doesn't shrink when the on-screen keyboard
+  // opens, so the panel's true bottom edge ends up under the keyboard
+  // (invisible) while `dvh` doesn't reliably shrink to compensate either in
+  // an installed home-screen app. visualViewport.height does shrink
+  // correctly when the keyboard opens, and .offsetTop catches the rarer
+  // case where the visual viewport itself has scrolled away from the
+  // layout viewport's top. keyboardInset (in px) is how far up the panel's
+  // bottom edge needs to lift to clear whatever's currently covering the
+  // bottom of the screen; maxHeight is recomputed against the real visible
+  // height so the panel's top edge never gets pushed up past it either.
+  const [viewportMetrics, setViewportMetrics] = useState<{ height: number; keyboardInset: number } | null>(null)
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+
+    function update() {
+      setViewportMetrics({
+        height: vv!.height,
+        keyboardInset: Math.max(0, window.innerHeight - vv!.height - vv!.offsetTop)
+      })
+    }
+
+    update()
+    vv.addEventListener("resize", update)
+    vv.addEventListener("scroll", update)
+    return () => {
+      vv.removeEventListener("resize", update)
+      vv.removeEventListener("scroll", update)
+    }
+  }, [])
+
   // A Sheet mounts fresh on every open, not behind a route change --
   // Navbar's own page-level scroll-nudge (see its file comment on the
   // same iOS bug) only fires on navigation/resume, so it doesn't
@@ -166,6 +202,11 @@ export function Sheet({
         className={`fixed left-0 right-0 bottom-0 z-50 max-h-[92dvh] flex flex-col bg-paper-2 border-t border-hairline rounded-t-2xl overflow-hidden shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
+        style={
+          viewportMetrics
+            ? { bottom: viewportMetrics.keyboardInset, maxHeight: viewportMetrics.height * 0.92 }
+            : undefined
+        }
       >
         <div className="w-9 h-1 rounded-full bg-hairline mx-auto mt-2.5 flex-shrink-0" />
         <div className="relative flex items-center justify-center px-4 pt-3 pb-4 flex-shrink-0">
