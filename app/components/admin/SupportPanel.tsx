@@ -106,6 +106,7 @@ export function SupportPanel() {
   const [banks, setBanks] = useState<BankAccount[]>([])
   const [loadError, setLoadError] = useState("")
   const [query, setQuery] = useState("")
+  const [searchFocused, setSearchFocused] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
 
   // Loaded once, when this tab is actually opened (this component only
@@ -184,13 +185,21 @@ export function SupportPanel() {
 
   const editingTxn = transactions.find((t) => t.transaction_id === editingId) ?? null
 
+  // Collapsed the moment the field is focused or has anything typed --
+  // this intro is only useful before you've started, and at four lines
+  // it was eating exactly the space results needed most once the keyboard
+  // was up and already covering half the sheet.
+  const searchActive = searchFocused || query.trim().length > 0
+
   return (
     <section className="mt-6">
-      <p className="text-[13px] text-ink-soft mb-4">
-        Find any transaction, regardless of who it belongs to or its status, to fix a mistake -- wrong amount,
-        bank, date, receipt, or status. This only corrects what&apos;s on record; it doesn&apos;t run approval
-        side effects like activating a loan, so use the Approvals tab for routine approvals.
-      </p>
+      {!searchActive && (
+        <p className="text-[13px] text-ink-soft mb-4">
+          Find any transaction, regardless of who it belongs to or its status, to fix a mistake -- wrong amount,
+          bank, date, receipt, or status. This only corrects what&apos;s on record; it doesn&apos;t run approval
+          side effects like activating a loan, so use the Approvals tab for routine approvals.
+        </p>
+      )}
 
       {loading && <p className="text-sm text-ink-soft">Loading…</p>}
       {loadError && <p className="text-sm text-rust">Couldn&apos;t load transactions: {loadError}</p>}
@@ -202,6 +211,8 @@ export function SupportPanel() {
             placeholder="Search by member, bank, description, amount, date…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
           />
 
           {query.trim() && (
