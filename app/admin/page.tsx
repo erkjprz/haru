@@ -7,7 +7,6 @@ import Navbar from "@/app/components/Navbar"
 import ReceiptModal from "@/app/components/ReceiptModal"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
-import { getPendingBankInterestGroups, distributeBankInterestGroup, type PendingBankInterestGroup } from "@/lib/bankInterest"
 import { SearchFixSheet } from "@/app/components/admin/SearchFixSheet"
 import { Sheet } from "@/app/components/Sheet"
 import {
@@ -46,7 +45,7 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
 // selectedBulkIds can't blanket-approve either of those two.
 const BULK_CLASSIFICATIONS = new Set(["Member Contribution", "Loan Repayment"])
 
-type Filter = "all" | "txn" | "distrib" | "signup"
+type Filter = "all" | "txn" | "signup"
 
 // Same global admin approvals queue for any admin viewing it -- no
 // per-user scoping needed, so a single fixed cache key covers everyone.
@@ -62,7 +61,6 @@ type AdminQueueSnapshot = {
   borrowerMembers: any[]
   unclaimedBorrowers: any[]
   linkedLoanNameByMemberId: Record<string, string>
-  pendingGroups: PendingBankInterestGroup[]
 }
 
 type ExportRow = {
@@ -148,10 +146,6 @@ export default function AdminPage() {
   const [borrowerLinkChoice, setBorrowerLinkChoice] = useState<Record<string, string>>({})
   const [borrowerBusyId, setBorrowerBusyId] = useState<string | null>(null)
 
-  const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>(cached?.pendingGroups ?? [])
-  const [distributingKey, setDistributingKey] = useState<string | null>(null)
-  const [distributeError, setDistributeError] = useState("")
-
   const [loadError, setLoadError] = useState("")
   const [actionError, setActionError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
@@ -172,8 +166,7 @@ export default function AdminPage() {
       pendingTxnsRes,
       borrowerMembersRes,
       unclaimedBorrowersRes,
-      linkedBorrowersRes,
-      pendingGroupsRes
+      linkedBorrowersRes
     ] = await Promise.all([
       // role='borrower' pending signups are handled entirely by the
       // Borrowers group (which offers borrower-record linking the generic
@@ -208,24 +201,14 @@ export default function AdminPage() {
         .eq("role", "borrower")
         .order("created_at", { ascending: false }),
       supabase.from("borrowers").select("borrower_id, name").is("member_id", null).order("name"),
-      supabase.from("borrowers").select("name, member_id").not("member_id", "is", null),
-      // getPendingBankInterestGroups() now throws on a query failure (see
-      // its own comment) instead of silently returning an empty list --
-      // caught and folded in here rather than left to reject the whole
-      // Promise.all, which would otherwise take every other query on this
-      // page down with it and leave loadData() stuck mid-await forever.
-      getPendingBankInterestGroups().then(
-        (groups) => ({ groups, error: null as string | null }),
-        (err) => ({ groups: [] as PendingBankInterestGroup[], error: err instanceof Error ? err.message : "Something went wrong." })
-      )
+      supabase.from("borrowers").select("name, member_id").not("member_id", "is", null)
     ])
 
     setPendingMembers(pendingMembersRes.data ?? [])
     setUnclaimedMembers(unclaimedMembersRes.data ?? [])
     setBanks(banksRes.data ?? [])
 
-    const combinedError = pendingTxnsRes.error?.message || pendingGroupsRes.error || ""
-    setLoadError(combinedError)
+    setLoadError(pendingTxnsRes.error?.message || "")
     setPendingTransactions(pendingTxnsRes.error ? [] : pendingTxnsRes.data ?? [])
 
     setBorrowerMembers(borrowerMembersRes.data ?? [])
@@ -235,8 +218,6 @@ export default function AdminPage() {
     )
     setLinkedLoanNameByMemberId(nextLinkedLoanNameByMemberId)
 
-    setPendingGroups(pendingGroupsRes.groups)
-
     writeCache<AdminQueueSnapshot>(ADMIN_QUEUE_CACHE_KEY, {
       pendingMembers: pendingMembersRes.data ?? [],
       unclaimedMembers: unclaimedMembersRes.data ?? [],
@@ -244,8 +225,7 @@ export default function AdminPage() {
       pendingTransactions: pendingTxnsRes.error ? [] : pendingTxnsRes.data ?? [],
       borrowerMembers: borrowerMembersRes.data ?? [],
       unclaimedBorrowers: unclaimedBorrowersRes.data ?? [],
-      linkedLoanNameByMemberId: nextLinkedLoanNameByMemberId,
-      pendingGroups: pendingGroupsRes.groups
+      linkedLoanNameByMemberId: nextLinkedLoanNameByMemberId
     })
   }
 
@@ -687,23 +667,6 @@ export default function AdminPage() {
     URL.revokeObjectURL(url)
   }
 
-  // ---- Distributions ----
-
-  async function distribute(group: PendingBankInterestGroup) {
-    const key = `${group.year}-${group.bank}`
-    setDistributingKey(key)
-    setDistributeError("")
-
-    try {
-      await distributeBankInterestGroup(group)
-      loadData()
-    } catch (err) {
-      setDistributeError(err instanceof Error ? err.message : "Something went wrong.")
-    } finally {
-      setDistributingKey(null)
-    }
-  }
-
   const bulkTransactions = pendingTransactions.filter((t) => BULK_CLASSIFICATIONS.has(t.classification))
   const reviewTransactions = pendingTransactions.filter((t) => !BULK_CLASSIFICATIONS.has(t.classification))
   const reviewingTxn = reviewTransactions.find((t) => t.transaction_id === reviewingTxnId) ?? null
@@ -721,17 +684,15 @@ export default function AdminPage() {
   const reviewingBorrower = pendingBorrowers.find((m) => m.member_id === reviewingBorrowerId) ?? null
 
   const signupsCount = pendingMembers.length + pendingBorrowers.length
-  const totalCount = pendingTransactions.length + pendingGroups.length + signupsCount
+  const totalCount = pendingTransactions.length + signupsCount
 
   const chips: { id: Filter; label: string; count: number }[] = [
     { id: "all", label: "All", count: totalCount },
     { id: "txn", label: "Transactions", count: pendingTransactions.length },
-    { id: "distrib", label: "Distrib.", count: pendingGroups.length },
     { id: "signup", label: "Signups", count: signupsCount }
   ]
 
   const showTxns = filter === "all" || filter === "txn"
-  const showDistrib = filter === "all" || filter === "distrib"
   const showSignups = filter === "all" || filter === "signup"
 
   if (checkingAccess) {
@@ -821,7 +782,7 @@ export default function AdminPage() {
                 <p className="text-2xl mb-2">🌱</p>
                 <p className="font-display font-medium">Nothing waiting here</p>
                 <p className="text-sm text-ink-soft mt-1">
-                  New signups, transactions, and interest ready to split will show up here.
+                  New signups and transactions will show up here.
                 </p>
               </div>
             )}
@@ -994,55 +955,6 @@ export default function AdminPage() {
                   className="mt-4 text-sm text-gold hover:underline"
                 >
                   View all transactions →
-                </button>
-              </section>
-            )}
-
-            {/* ---- Ready to distribute ---- */}
-            {showDistrib && pendingGroups.length > 0 && (
-              <section>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold">Ready to distribute</span>
-                  <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2.5 py-1">
-                    {pendingGroups.length}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-xs text-ink-soft">Approved interest that hasn&apos;t been split across members yet.</p>
-
-                <div className="mt-3 space-y-2">
-                  {pendingGroups.map((group) => {
-                    const key = `${group.year}-${group.bank}`
-                    return (
-                      <div key={key} className="bg-paper-2 border border-hairline rounded-md p-4 flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
-                            {group.bank} · {group.year}
-                          </p>
-                          <p className="font-mono [font-variant-numeric:tabular-nums] text-xl font-bold text-ink">
-                            ₱{fmt(Math.abs(group.totalAmount))}
-                          </p>
-                          <p className="text-xs text-ink-soft mt-0.5">
-                            {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined
-                          </p>
-                        </div>
-                        <button
-                          className="shrink-0 bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                          onClick={() => distribute(group)}
-                          disabled={distributingKey === key}
-                        >
-                          {distributingKey === key ? "Distributing..." : "Distribute"}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-                {distributeError && <p className="mt-2 text-sm text-rust">{distributeError}</p>}
-
-                <button
-                  onClick={() => router.push("/fund-breakdown?tab=banks")}
-                  className="mt-4 text-sm text-gold hover:underline"
-                >
-                  View bank interest history →
                 </button>
               </section>
             )}
