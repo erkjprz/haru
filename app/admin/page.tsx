@@ -883,7 +883,7 @@ export default function AdminPage() {
                   onClick={() => router.push("/transactions")}
                   className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                 >
-                  View all transactions →
+                  View all transactions
                 </button>
               </section>
             )}
@@ -901,7 +901,7 @@ export default function AdminPage() {
                   onClick={() => router.push("/transactions")}
                   className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                 >
-                  View all transactions →
+                  View all transactions
                 </button>
               </section>
             )}
@@ -961,7 +961,7 @@ export default function AdminPage() {
                   onClick={() => router.push("/transactions")}
                   className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                 >
-                  View all transactions →
+                  View all transactions
                 </button>
               </section>
             )}
@@ -1045,14 +1045,14 @@ export default function AdminPage() {
                     onClick={() => router.push("/admin/members")}
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                   >
-                    Manage members →
+                    Manage members
                   </button>
                   <button
                     type="button"
                     onClick={() => router.push("/admin/borrowers")}
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
                   >
-                    Manage borrowers →
+                    Manage borrowers
                   </button>
                 </div>
               </section>
