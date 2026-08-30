@@ -50,6 +50,30 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
 
 const STATUS_OPTIONS = ["pending", "approved", "rejected", "cancelled"]
 
+// Same thousands-comma display as TransactionFormUI's AmountHero, but sign-
+// aware -- this is the one amount field in the app that shows the raw
+// stored value "as stored, including sign" (outflows are negative), so it
+// can't reuse AmountHero directly: that component's own strip function
+// throws away any "-" as just another non-digit character, which would
+// silently flip a negative amount positive the moment someone touched it.
+function formatSignedAmountDisplay(raw: string): string {
+  if (!raw) return ""
+  const negative = raw.startsWith("-")
+  const unsigned = negative ? raw.slice(1) : raw
+  const dotIndex = unsigned.indexOf(".")
+  const intPart = dotIndex === -1 ? unsigned : unsigned.slice(0, dotIndex)
+  const decPart = dotIndex === -1 ? "" : unsigned.slice(dotIndex)
+  return (negative ? "-" : "") + intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + decPart
+}
+
+function stripSignedAmountFormatting(raw: string): string {
+  const negative = raw.trim().startsWith("-")
+  const cleaned = raw.replace(/[^\d.]/g, "")
+  const firstDot = cleaned.indexOf(".")
+  const digits = firstDot === -1 ? cleaned : cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "")
+  return negative ? `-${digits}` : digits
+}
+
 // Legacy migrated rows carry the bank as plain text in `bank` rather than a
 // real link via `bank_account_id` -- and the list display prefers that
 // legacy text whenever it's present (see bankBadge on the Transactions
@@ -520,10 +544,10 @@ function SupportEditForm({
         <div className="flex items-center justify-center gap-1.5">
           <span className="font-mono text-3xl font-bold text-ink-soft">₱</span>
           <input
-            type="number"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            type="text"
+            inputMode="decimal"
+            value={formatSignedAmountDisplay(amount)}
+            onChange={(e) => setAmount(stripSignedAmountFormatting(e.target.value))}
             className="text-size-intentional font-mono [font-variant-numeric:tabular-nums] text-4xl font-bold text-ink bg-transparent text-center w-full max-w-[220px] focus:outline-none"
           />
         </div>
