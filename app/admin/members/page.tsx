@@ -8,6 +8,7 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { readCache, writeCache } from "@/lib/cache"
 import { Sheet } from "@/app/components/Sheet"
+import { FieldRow, PersonIcon, MailIcon, StatusIcon, rowSelectClass, rowInputClass } from "@/app/components/TransactionFormUI"
 
 // Two independent loaders (loadMembers/loadUnclaimed) get two independent
 // cache keys -- same global admin data for any admin, no per-user scoping
@@ -282,38 +283,45 @@ export default function AdminMembersPage() {
           </p>
 
           {showAddForm && (
-            <Sheet title="Add Member" onClose={() => setShowAddForm(false)}>
-              <div className="space-y-3">
-                <input
-                  className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                  placeholder="Name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-
-                <input
-                  className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                  placeholder="Email (optional)"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-
-                <select
-                  className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                  <option value="borrower">Borrower</option>
-                </select>
-
+            <Sheet
+              title="Add Member"
+              onClose={() => setShowAddForm(false)}
+              footer={
                 <button
-                  className="bg-ink text-paper px-4 py-2 rounded-md w-full"
+                  type="button"
+                  className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97]"
                   onClick={addMember}
                 >
                   Add Member
                 </button>
+              }
+            >
+              <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                <FieldRow icon={<PersonIcon />}>
+                  <input
+                    className={rowInputClass}
+                    placeholder="Name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </FieldRow>
+
+                <FieldRow icon={<MailIcon />}>
+                  <input
+                    className={rowInputClass}
+                    placeholder="Email (optional)"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </FieldRow>
+
+                <FieldRow icon={<PersonIcon />}>
+                  <select className={rowSelectClass} value={role} onChange={(e) => setRole(e.target.value)}>
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                    <option value="borrower">Borrower</option>
+                  </select>
+                </FieldRow>
               </div>
             </Sheet>
           )}
@@ -449,63 +457,74 @@ export default function AdminMembersPage() {
       </main>
 
       {editingId && (
-        <Sheet title="Edit Member" onClose={cancelEditing}>
-          <div className="space-y-3">
-            <input
-              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-              placeholder="Name"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-            />
-            <input
-              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-              placeholder="Email"
-              value={editEmail}
-              onChange={(e) => setEditEmail(e.target.value)}
-            />
-            <select
-              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-              value={editRole}
-              onChange={(e) => setEditRole(e.target.value)}
-            >
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </select>
-            <select
-              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-              value={editStatus}
-              onChange={(e) => setEditStatus(e.target.value)}
-            >
-              <option value="approved">Approved</option>
-              <option value="pending">Pending</option>
-              <option value="inactive">Inactive</option>
-            </select>
-            <label className="flex items-center gap-2.5 text-sm text-ink-soft">
-              <input
-                type="checkbox"
-                checked={editStatus === "inactive" ? false : editGainSharingEligible}
-                onChange={(e) => setEditGainSharingEligible(e.target.checked)}
-                disabled={editStatus === "inactive"}
-                className="w-4 h-4 disabled:opacity-50"
-              />
-              Eligible for gain sharing
-              {editStatus === "inactive" && " (always off while inactive)"}
-            </label>
-            <div className="flex gap-2">
+        <Sheet
+          title="Edit Member"
+          onClose={cancelEditing}
+          footer={
+            <div className="flex items-center gap-3">
               <button
-                className="bg-ink text-paper px-4 py-2 rounded-md text-sm flex-1"
-                onClick={() => saveEdit(editingId)}
-              >
-                Save
-              </button>
-              <button
-                className="border border-hairline px-4 py-2 rounded-md text-sm flex-1"
+                type="button"
+                className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold"
                 onClick={cancelEditing}
               >
                 Cancel
               </button>
+              <button
+                type="button"
+                className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97]"
+                onClick={() => saveEdit(editingId)}
+              >
+                Save
+              </button>
             </div>
+          }
+        >
+          <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+            <FieldRow icon={<PersonIcon />}>
+              <input
+                className={rowInputClass}
+                placeholder="Name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </FieldRow>
+
+            <FieldRow icon={<MailIcon />}>
+              <input
+                className={rowInputClass}
+                placeholder="Email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+              />
+            </FieldRow>
+
+            <FieldRow icon={<PersonIcon />}>
+              <select className={rowSelectClass} value={editRole} onChange={(e) => setEditRole(e.target.value)}>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow icon={<StatusIcon />}>
+              <select className={rowSelectClass} value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
+                <option value="approved">Approved</option>
+                <option value="pending">Pending</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </FieldRow>
           </div>
+
+          <label className="flex items-start gap-2.5 text-sm text-ink-soft px-1 pt-4">
+            <input
+              type="checkbox"
+              checked={editStatus === "inactive" ? false : editGainSharingEligible}
+              onChange={(e) => setEditGainSharingEligible(e.target.checked)}
+              disabled={editStatus === "inactive"}
+              className="w-4 h-4 mt-0.5 shrink-0 disabled:opacity-50"
+            />
+            Eligible for gain sharing
+            {editStatus === "inactive" && " (always off while inactive)"}
+          </label>
         </Sheet>
       )}
     </>

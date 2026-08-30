@@ -18,9 +18,35 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
-import { ReceiptField, DateField } from "@/app/components/TransactionFormUI"
+import {
+  FlowBadge,
+  FieldRow,
+  ReceiptField,
+  DateField,
+  BankIcon,
+  NoteIcon,
+  StatusIcon,
+  rowSelectClass,
+  rowInputClass
+} from "@/app/components/TransactionFormUI"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 import { Sheet } from "@/app/components/Sheet"
+
+// Same in/out vocabulary as the transaction edit sheet's own FLOW map --
+// this panel deals in raw classification strings the same way, just with
+// its own local copy since importing admin/page.tsx's would reach across
+// an unrelated module for four lines.
+const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = {
+  "Member Contribution": { arrow: "↑", tone: "in" },
+  "Member Withdrawal": { arrow: "↓", tone: "out" },
+  "Loan Repayment": { arrow: "↑", tone: "in" },
+  "Loan Release": { arrow: "↓", tone: "out" },
+  "Bank Interest": { arrow: "↑", tone: "in" },
+  "Expense": { arrow: "↓", tone: "out" },
+  "Internal Transfer": { arrow: "⇄", tone: "neutral" },
+  "Investment": { arrow: "↓", tone: "out" },
+  "Investment Return": { arrow: "↑", tone: "in" }
+}
 
 const STATUS_OPTIONS = ["pending", "approved", "rejected", "cancelled"]
 
@@ -175,19 +201,17 @@ export function SupportPanel() {
           place underneath the row -- pushing every row below it down and
           fighting for space inside this sheet's own scroll area. */}
       {editingTxn && (
-        <Sheet title="Fix transaction" onClose={() => setEditingId(null)}>
-          <SupportEditForm
-            t={editingTxn}
-            banks={banks}
-            onSaved={(updated) => {
-              setTransactions((rows) =>
-                rows.map((r) => (r.transaction_id === updated.transaction_id ? { ...r, ...updated } : r))
-              )
-              setEditingId(null)
-            }}
-            onCancel={() => setEditingId(null)}
-          />
-        </Sheet>
+        <SupportEditForm
+          t={editingTxn}
+          banks={banks}
+          onSaved={(updated) => {
+            setTransactions((rows) =>
+              rows.map((r) => (r.transaction_id === updated.transaction_id ? { ...r, ...updated } : r))
+            )
+            setEditingId(null)
+          }}
+          onCancel={() => setEditingId(null)}
+        />
       )}
     </section>
   )
@@ -440,49 +464,109 @@ function SupportEditForm({
     onSaved(data)
   }
 
+  const displayName = t.members?.name || t.loans?.name || t.investments?.name || "Fund"
+
   return (
-    <div className="space-y-3">
+    <Sheet
+      title="Fix transaction"
+      onClose={onCancel}
+      footer={
+        <>
+          {message && <p className="text-sm text-rust mb-3">{message}</p>}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+              className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+              onClick={save}
+              disabled={saving}
+            >
+              {saving ? "Saving…" : "Save fix"}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+        <FieldRow icon={<FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "in" })} small />}>
+          <span className="flex-1 min-w-0 text-sm">
+            <span className="text-ink">{displayName}</span>
+            <span className="text-ink-soft"> · {typeLabels[t.classification] || t.classification}</span>
+          </span>
+          <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide font-mono ${statusColor[t.status] ?? "text-ink-soft"}`}>
+            {t.status}
+          </span>
+        </FieldRow>
+      </div>
+
       {t.classification === "Bank Interest" && t.interest_distributed && (
-        <p className="text-[11px] text-gold bg-gold/10 border border-gold rounded-md px-3 py-2">
+        <p className="text-[11px] text-gold bg-gold/10 border border-gold rounded-md px-3 py-2 mt-4">
           This interest has already been split across members. Changing the amount here only corrects this
           transaction -- it won&apos;t update what members were already credited in bank_interest_allocations.
         </p>
       )}
 
-      <div>
-        <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">
+      <div className="text-center pt-2 pb-5">
+        <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">
           Amount (as stored, including sign)
-        </label>
-        <input
-          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full font-mono [font-variant-numeric:tabular-nums]"
-          type="number"
-          step="0.01"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
+        </p>
+        <div className="flex items-center justify-center gap-1.5">
+          <span className="font-mono text-3xl font-bold text-ink-soft">₱</span>
+          <input
+            type="number"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="text-size-intentional font-mono [font-variant-numeric:tabular-nums] text-4xl font-bold text-ink bg-transparent text-center w-full max-w-[220px] focus:outline-none"
+          />
+        </div>
       </div>
 
       <div>
-        <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">Date</label>
-        <DateField value={txnDate ?? ""} onChange={setTxnDate} placeholder="Date" />
-      </div>
+        <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
+        <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+          <DateField value={txnDate ?? ""} onChange={setTxnDate} placeholder="Date" bare />
 
-      <div>
-        <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">Bank</label>
-        <select
-          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full"
-          value={bankAccountId}
-          onChange={(e) => setBankAccountId(e.target.value)}
-        >
-          <option value="">No bank linked</option>
-          {banks.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.account_name || b.bank_name}
-            </option>
-          ))}
-        </select>
+          <FieldRow icon={<BankIcon />}>
+            <select className={rowSelectClass} value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
+              <option value="">No bank linked</option>
+              {banks.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.account_name || b.bank_name}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+
+          <FieldRow icon={<StatusIcon />}>
+            <select className={rowSelectClass} value={status} onChange={(e) => setStatus(e.target.value)}>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+
+          <FieldRow icon={<NoteIcon />}>
+            <input
+              className={rowInputClass}
+              placeholder="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </FieldRow>
+        </div>
+
         {t.bank_account_id == null && t.bank && (
-          <p className="text-[11px] text-ink-soft mt-1.5">
+          <p className="px-1 pt-2 text-sm text-ink-soft">
             {legacyBankMatch
               ? `Currently showing "${t.bank}" as legacy text on the list -- pre-filled with the matching account above; saving will switch it to a real link.`
               : `Currently showing "${t.bank}" as legacy text on the list, with no matching bank account -- pick one above to link it properly, or leave as-is to keep the text.`}
@@ -490,28 +574,13 @@ function SupportEditForm({
         )}
       </div>
 
-      <div>
-        <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">Status</label>
-        <select
-          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {status === "rejected" && (
-        <div>
-          <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">
+        <div className="mt-4">
+          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
             Rejection reason (shown to the submitter)
-          </label>
+          </p>
           <textarea
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full"
+            className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3.5 py-3 w-full"
             rows={2}
             value={rejectionReason}
             onChange={(e) => setRejectionReason(e.target.value)}
@@ -520,17 +589,8 @@ function SupportEditForm({
         </div>
       )}
 
-      <div>
-        <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">Description</label>
-        <input
-          className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2.5 w-full"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </div>
-
-      <div>
-        <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">Receipt</label>
+      <div className="mt-4">
+        <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Receipt</p>
         <ReceiptField
           receipt={receipt}
           receiptPreview={receiptPreview}
@@ -541,21 +601,6 @@ function SupportEditForm({
           onFileChange={setReceiptFile}
         />
       </div>
-
-      {message && <p className="text-sm text-rust">{message}</p>}
-
-      <div className="flex gap-2">
-        <button
-          className="bg-ink text-paper px-4 py-2.5 rounded-sm text-sm font-semibold flex-1 disabled:opacity-50"
-          onClick={save}
-          disabled={saving}
-        >
-          {saving ? "Saving..." : "Save fix"}
-        </button>
-        <button className="border border-hairline rounded-sm px-4 py-2.5 text-sm" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-    </div>
+    </Sheet>
   )
 }

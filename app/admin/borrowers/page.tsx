@@ -9,6 +9,7 @@ import { SkeletonCardList } from "@/app/components/Skeleton"
 import { approveBorrowerMember, linkBorrowerRecord } from "@/lib/approveBorrower"
 import { readCache, writeCache } from "@/lib/cache"
 import { Sheet } from "@/app/components/Sheet"
+import { FieldRow, PersonIcon, rowSelectClass } from "@/app/components/TransactionFormUI"
 
 // Same global borrower-approvals queue for any admin -- no per-user
 // scoping needed, so a single fixed cache key covers everyone.
@@ -238,61 +239,68 @@ export default function AdminBorrowersPage() {
         if (!m) return null
         const linkedName = linkedNameByMemberId[m.member_id]
 
+        const primaryAction =
+          m.status === "pending" ? (
+            <button
+              type="button"
+              className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+              onClick={() => approveMember(m.member_id)}
+              disabled={busyId === m.member_id}
+            >
+              {busyId === m.member_id ? "Approving…" : linkChoice[m.member_id] ? "Approve & Link" : "Approve"}
+            </button>
+          ) : (
+            !linkedName &&
+            linkChoice[m.member_id] && (
+              <button
+                type="button"
+                className="w-full border border-hairline text-ink-soft px-6 py-3.5 rounded-full text-base font-semibold disabled:opacity-50"
+                onClick={() => linkOnly(m.member_id)}
+                disabled={busyId === m.member_id}
+              >
+                {busyId === m.member_id ? "Linking…" : "Link"}
+              </button>
+            )
+          )
+
         return (
-          <Sheet title="Borrower request" onClose={() => setOpenId(null)}>
-            <p className="font-display font-medium text-lg break-words">{m.name}</p>
-            <p className="text-sm text-ink-soft break-words">{m.email || "No email"}</p>
+          <Sheet title="Borrower request" onClose={() => setOpenId(null)} footer={primaryAction}>
+            <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+              <FieldRow icon={<PersonIcon />}>
+                <span className="flex-1 min-w-0 text-sm">
+                  <span className="font-semibold text-ink">{m.name}</span>
+                </span>
+              </FieldRow>
+            </div>
+            <p className="px-1 pt-2 text-xs text-ink-soft">{m.email || "No email"}</p>
 
             {linkedName ? (
-              <p className="mt-4 text-xs text-sage font-mono">Linked to loan record: {linkedName}</p>
+              <p className="mt-4 text-xs text-sage font-mono px-1">Linked to loan record: {linkedName}</p>
             ) : (
-              <div className="mt-4 space-y-2">
-                <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
+              <div className="mt-4">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
                   Link to an existing loan record (optional)
-                </label>
-                <select
-                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
-                  value={linkChoice[m.member_id] ?? ""}
-                  onChange={(e) =>
-                    setLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
-                  }
-                >
-                  <option value="">No existing loan record</option>
-                  {unclaimedBorrowers.map((b) => (
-                    <option key={b.borrower_id} value={b.borrower_id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+                </p>
+                <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                  <FieldRow icon={<PersonIcon />}>
+                    <select
+                      className={rowSelectClass}
+                      value={linkChoice[m.member_id] ?? ""}
+                      onChange={(e) =>
+                        setLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
+                      }
+                    >
+                      <option value="">No existing loan record</option>
+                      {unclaimedBorrowers.map((b) => (
+                        <option key={b.borrower_id} value={b.borrower_id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </FieldRow>
+                </div>
               </div>
             )}
-
-            <div className="mt-4 flex gap-2 flex-wrap">
-              {m.status === "pending" ? (
-                <button
-                  className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                  onClick={() => approveMember(m.member_id)}
-                  disabled={busyId === m.member_id}
-                >
-                  {busyId === m.member_id
-                    ? "Approving..."
-                    : linkChoice[m.member_id]
-                    ? "Approve & Link"
-                    : "Approve"}
-                </button>
-              ) : (
-                !linkedName &&
-                linkChoice[m.member_id] && (
-                  <button
-                    className="border border-hairline px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                    onClick={() => linkOnly(m.member_id)}
-                    disabled={busyId === m.member_id}
-                  >
-                    {busyId === m.member_id ? "Linking..." : "Link"}
-                  </button>
-                )
-              )}
-            </div>
           </Sheet>
         )
       })()}
