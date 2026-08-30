@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Navbar from "@/app/components/Navbar"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { readCache, writeCache } from "@/lib/cache"
+import { Sheet } from "@/app/components/Sheet"
 
 // Two independent loaders (loadMembers/loadUnclaimed) get two independent
 // cache keys -- same global admin data for any admin, no per-user scoping
@@ -33,17 +34,6 @@ export default function AdminMembersPage() {
   const [editRole, setEditRole] = useState("member")
   const [editStatus, setEditStatus] = useState("approved")
   const [editGainSharingEligible, setEditGainSharingEligible] = useState(true)
-  const editFormRef = useRef<HTMLDivElement | null>(null)
-
-  // Tapping Edit on a member further down the list expands a tall form in
-  // place, easily below the fold with nothing to indicate the tap
-  // registered. Scrolls it into view the moment it mounts (once per
-  // editingId change, not on every keystroke -- editFormRef is a stable
-  // object ref, only reassigned when the underlying DOM node itself
-  // mounts/unmounts).
-  useEffect(() => {
-    if (editingId) editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
-  }, [editingId])
 
   const [search, setSearch] = useState("")
 
@@ -274,9 +264,9 @@ export default function AdminMembersPage() {
             </div>
             <button
               className="shrink-0 bg-gold-soft text-ink px-4 py-2.5 rounded-sm text-sm font-semibold"
-              onClick={() => setShowAddForm(!showAddForm)}
+              onClick={() => setShowAddForm(true)}
             >
-              {showAddForm ? "Cancel" : "+ Add Member"}
+              + Add Member
             </button>
           </div>
 
@@ -292,42 +282,40 @@ export default function AdminMembersPage() {
           </p>
 
           {showAddForm && (
-            <div className="mt-6 bg-paper-2 border border-hairline rounded-md p-5 space-y-3">
-              <h2 className="font-display text-xl">
-                Add Member
-              </h2>
+            <Sheet title="Add Member" onClose={() => setShowAddForm(false)}>
+              <div className="space-y-3">
+                <input
+                  className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+                  placeholder="Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
 
-              <input
-                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                placeholder="Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+                <input
+                  className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+                  placeholder="Email (optional)"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
 
-              <input
-                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                placeholder="Email (optional)"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+                <select
+                  className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                  <option value="borrower">Borrower</option>
+                </select>
 
-              <select
-                className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-              >
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-                <option value="borrower">Borrower</option>
-              </select>
-
-              <button
-                className="bg-ink text-paper px-4 py-2 rounded-md w-full"
-                onClick={addMember}
-              >
-                Add Member
-              </button>
-            </div>
+                <button
+                  className="bg-ink text-paper px-4 py-2 rounded-md w-full"
+                  onClick={addMember}
+                >
+                  Add Member
+                </button>
+              </div>
+            </Sheet>
           )}
 
           {message && (
@@ -354,164 +342,99 @@ export default function AdminMembersPage() {
 
           <div className="mt-4 space-y-3">
             {filteredMembers.map((member) => (
-              <div
-                key={member.member_id}
-                ref={editingId === member.member_id ? editFormRef : undefined}
-                className="bg-paper-2 border border-hairline rounded-md p-5"
-              >
-                {editingId === member.member_id ? (
-                  <div className="space-y-3">
-                    <input
-                      className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                      placeholder="Name"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                    />
-                    <input
-                      className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                      placeholder="Email"
-                      value={editEmail}
-                      onChange={(e) => setEditEmail(e.target.value)}
-                    />
-                    <select
-                      className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                      value={editRole}
-                      onChange={(e) => setEditRole(e.target.value)}
+              <div key={member.member_id} className="bg-paper-2 border border-hairline rounded-md p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-display text-lg truncate">
+                      {member.name}
+                    </div>
+                    <div className="text-sm text-ink-soft truncate">
+                      {member.email || "No email"}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="text-[10px] uppercase font-mono border border-hairline rounded-full px-2 py-0.5 text-ink-soft">
+                      {member.role}
+                    </span>
+                    <span
+                      className={`text-[10px] uppercase font-mono border rounded-full px-2 py-0.5 ${
+                        statusColor[member.status] ?? "text-ink-soft border-hairline"
+                      }`}
                     >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <select
-                      className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
-                      value={editStatus}
-                      onChange={(e) => setEditStatus(e.target.value)}
+                      {member.status}
+                    </span>
+                    {member.gain_sharing_eligible === false && (
+                      <span className="text-[10px] uppercase font-mono border border-hairline rounded-full px-2 py-0.5 text-ink-soft">
+                        Not gain-sharing eligible
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex gap-2 flex-wrap">
+                  <button
+                    className="border border-hairline px-4 py-2 rounded-md text-sm"
+                    onClick={() => startEditing(member)}
+                  >
+                    Edit
+                  </button>
+                  {member.role === "borrower" && (
+                    <button
+                      className="border border-hairline px-4 py-2 rounded-md text-sm"
+                      onClick={() => router.push(`/admin/view-as/${member.member_id}`)}
                     >
-                      <option value="approved">Approved</option>
-                      <option value="pending">Pending</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                    <label className="flex items-center gap-2.5 text-sm text-ink-soft">
-                      <input
-                        type="checkbox"
-                        checked={editStatus === "inactive" ? false : editGainSharingEligible}
-                        onChange={(e) => setEditGainSharingEligible(e.target.checked)}
-                        disabled={editStatus === "inactive"}
-                        className="w-4 h-4 disabled:opacity-50"
-                      />
-                      Eligible for gain sharing
-                      {editStatus === "inactive" && " (always off while inactive)"}
+                      View as
+                    </button>
+                  )}
+                  {member.status === "inactive" ? (
+                    <button
+                      className="border border-sage text-sage px-4 py-2 rounded-md text-sm"
+                      onClick={() => reactivateMember(member.member_id, member.role === "borrower")}
+                    >
+                      Reactivate
+                    </button>
+                  ) : (
+                    <button
+                      className="border border-rust text-rust px-4 py-2 rounded-md text-sm"
+                      onClick={() => deactivateMember(member.member_id)}
+                    >
+                      Deactivate
+                    </button>
+                  )}
+                </div>
+
+                {member.status === "pending" && member.role === "member" && unclaimedMembers.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-hairline space-y-2">
+                    <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
+                      Link to existing member
                     </label>
+                    <p className="text-xs text-ink-soft">
+                      If this signup is actually one of the fund&apos;s existing members, link it to their record so their contributions, loans and investments carry over.
+                    </p>
                     <div className="flex gap-2">
-                      <button
-                        className="bg-ink text-paper px-4 py-2 rounded-md text-sm flex-1"
-                        onClick={() => saveEdit(member.member_id)}
+                      <select
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 flex-1"
+                        value={linkChoice[member.member_id] || ""}
+                        onChange={(e) =>
+                          setLinkChoice((prev) => ({ ...prev, [member.member_id]: e.target.value }))
+                        }
                       >
-                        Save
-                      </button>
+                        <option value="">Select a member</option>
+                        {unclaimedMembers.map((m) => (
+                          <option key={m.member_id} value={m.member_id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
                       <button
-                        className="border border-hairline px-4 py-2 rounded-md text-sm flex-1"
-                        onClick={cancelEditing}
+                        className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50 shrink-0"
+                        onClick={() => linkMember(member.member_id)}
+                        disabled={!linkChoice[member.member_id] || linkingId === member.member_id}
                       >
-                        Cancel
+                        {linkingId === member.member_id ? "Linking..." : "Link"}
                       </button>
                     </div>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-display text-lg truncate">
-                          {member.name}
-                        </div>
-                        <div className="text-sm text-ink-soft truncate">
-                          {member.email || "No email"}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-[10px] uppercase font-mono border border-hairline rounded-full px-2 py-0.5 text-ink-soft">
-                          {member.role}
-                        </span>
-                        <span
-                          className={`text-[10px] uppercase font-mono border rounded-full px-2 py-0.5 ${
-                            statusColor[member.status] ?? "text-ink-soft border-hairline"
-                          }`}
-                        >
-                          {member.status}
-                        </span>
-                        {member.gain_sharing_eligible === false && (
-                          <span className="text-[10px] uppercase font-mono border border-hairline rounded-full px-2 py-0.5 text-ink-soft">
-                            Not gain-sharing eligible
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex gap-2 flex-wrap">
-                      <button
-                        className="border border-hairline px-4 py-2 rounded-md text-sm"
-                        onClick={() => startEditing(member)}
-                      >
-                        Edit
-                      </button>
-                      {member.role === "borrower" && (
-                        <button
-                          className="border border-hairline px-4 py-2 rounded-md text-sm"
-                          onClick={() => router.push(`/admin/view-as/${member.member_id}`)}
-                        >
-                          View as
-                        </button>
-                      )}
-                      {member.status === "inactive" ? (
-                        <button
-                          className="border border-sage text-sage px-4 py-2 rounded-md text-sm"
-                          onClick={() => reactivateMember(member.member_id, member.role === "borrower")}
-                        >
-                          Reactivate
-                        </button>
-                      ) : (
-                        <button
-                          className="border border-rust text-rust px-4 py-2 rounded-md text-sm"
-                          onClick={() => deactivateMember(member.member_id)}
-                        >
-                          Deactivate
-                        </button>
-                      )}
-                    </div>
-
-                    {member.status === "pending" && member.role === "member" && unclaimedMembers.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-hairline space-y-2">
-                        <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
-                          Link to existing member
-                        </label>
-                        <p className="text-xs text-ink-soft">
-                          If this signup is actually one of the fund&apos;s existing members, link it to their record so their contributions, loans and investments carry over.
-                        </p>
-                        <div className="flex gap-2">
-                          <select
-                            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 flex-1"
-                            value={linkChoice[member.member_id] || ""}
-                            onChange={(e) =>
-                              setLinkChoice((prev) => ({ ...prev, [member.member_id]: e.target.value }))
-                            }
-                          >
-                            <option value="">Select a member</option>
-                            {unclaimedMembers.map((m) => (
-                              <option key={m.member_id} value={m.member_id}>
-                                {m.name}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50 shrink-0"
-                            onClick={() => linkMember(member.member_id)}
-                            disabled={!linkChoice[member.member_id] || linkingId === member.member_id}
-                          >
-                            {linkingId === member.member_id ? "Linking..." : "Link"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </>
                 )}
               </div>
             ))}
@@ -524,6 +447,67 @@ export default function AdminMembersPage() {
           </div>
         </div>
       </main>
+
+      {editingId && (
+        <Sheet title="Edit Member" onClose={cancelEditing}>
+          <div className="space-y-3">
+            <input
+              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+              placeholder="Name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+            />
+            <input
+              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+              placeholder="Email"
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+            />
+            <select
+              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+              value={editRole}
+              onChange={(e) => setEditRole(e.target.value)}
+            >
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+            </select>
+            <select
+              className="border border-hairline bg-paper px-3 py-2 rounded-md w-full"
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value)}
+            >
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <label className="flex items-center gap-2.5 text-sm text-ink-soft">
+              <input
+                type="checkbox"
+                checked={editStatus === "inactive" ? false : editGainSharingEligible}
+                onChange={(e) => setEditGainSharingEligible(e.target.checked)}
+                disabled={editStatus === "inactive"}
+                className="w-4 h-4 disabled:opacity-50"
+              />
+              Eligible for gain sharing
+              {editStatus === "inactive" && " (always off while inactive)"}
+            </label>
+            <div className="flex gap-2">
+              <button
+                className="bg-ink text-paper px-4 py-2 rounded-md text-sm flex-1"
+                onClick={() => saveEdit(editingId)}
+              >
+                Save
+              </button>
+              <button
+                className="border border-hairline px-4 py-2 rounded-md text-sm flex-1"
+                onClick={cancelEditing}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Sheet>
+      )}
     </>
   )
 }

@@ -15,11 +15,12 @@
 // just create a new inconsistency -- they show up in search but can't be
 // opened for editing.
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { getReceiptSignedUrl } from "@/lib/receiptUrl"
 import { ReceiptField, DateField } from "@/app/components/TransactionFormUI"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
+import { Sheet } from "@/app/components/Sheet"
 
 const STATUS_OPTIONS = ["pending", "approved", "rejected", "cancelled"]
 
@@ -56,15 +57,6 @@ export function SupportPanel() {
   const [loadError, setLoadError] = useState("")
   const [query, setQuery] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
-  const editFormRef = useRef<HTMLDivElement | null>(null)
-
-  // Same fix as BanksPanel/InvestmentsPanel: scroll the opened row's form
-  // into view the moment it mounts, once per editingId change (editFormRef
-  // is a stable object ref, only reassigned when the underlying DOM node
-  // itself mounts/unmounts).
-  useEffect(() => {
-    if (editingId) editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
-  }, [editingId])
 
   // Loaded once, when this tab is actually opened (this component only
   // mounts then) -- not up front with the rest of Admin's data, since this
@@ -140,6 +132,8 @@ export function SupportPanel() {
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+  const editingTxn = transactions.find((t) => t.transaction_id === editingId) ?? null
+
   return (
     <section className="mt-6">
       <p className="text-[13px] text-ink-soft mb-4">
@@ -169,24 +163,31 @@ export function SupportPanel() {
 
           <div className="mt-3 flex flex-col gap-3">
             {results.map((t) => (
-              <div key={t.transaction_id} ref={editingId === t.transaction_id ? editFormRef : undefined}>
-                <SupportRow
-                  t={t}
-                  banks={banks}
-                  fmt={fmt}
-                  isEditing={editingId === t.transaction_id}
-                  onToggle={() => setEditingId(editingId === t.transaction_id ? null : t.transaction_id)}
-                  onSaved={(updated) => {
-                    setTransactions((rows) =>
-                      rows.map((r) => (r.transaction_id === updated.transaction_id ? { ...r, ...updated } : r))
-                    )
-                    setEditingId(null)
-                  }}
-                />
-              </div>
+              <SupportRow key={t.transaction_id} t={t} fmt={fmt} onOpen={() => setEditingId(t.transaction_id)} />
             ))}
           </div>
         </>
+      )}
+
+      {/* Fixing a row opens as its own sheet, stacked on top of this one
+          (Sheet's body-lock effect captures/restores whatever was already
+          locked, so this nests cleanly), rather than expanding the form in
+          place underneath the row -- pushing every row below it down and
+          fighting for space inside this sheet's own scroll area. */}
+      {editingTxn && (
+        <Sheet title="Fix transaction" onClose={() => setEditingId(null)}>
+          <SupportEditForm
+            t={editingTxn}
+            banks={banks}
+            onSaved={(updated) => {
+              setTransactions((rows) =>
+                rows.map((r) => (r.transaction_id === updated.transaction_id ? { ...r, ...updated } : r))
+              )
+              setEditingId(null)
+            }}
+            onCancel={() => setEditingId(null)}
+          />
+        </Sheet>
       )}
     </section>
   )
@@ -194,49 +195,48 @@ export function SupportPanel() {
 
 function SupportRow({
   t,
-  banks,
   fmt,
-  isEditing,
-  onToggle,
-  onSaved
+  onOpen
 }: {
   t: any
-  banks: BankAccount[]
   fmt: (n: number) => string
-  isEditing: boolean
-  onToggle: () => void
-  onSaved: (updated: any) => void
+  onOpen: () => void
 }) {
   const isGainAllocation = t.classification === "Gain Allocation"
   const displayName = t.members?.name || t.loans?.name || t.investments?.name || "Fund"
 
+  const row = (
+    <div className="min-w-0 flex items-center justify-between gap-3 flex-1">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+          <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
+            {typeLabels[t.classification] || t.classification}
+          </span>
+          <span className={`text-[9px] uppercase font-mono ${statusColor[t.status] ?? "text-ink-soft"}`}>
+            {t.status}
+          </span>
+        </div>
+        <p className="text-sm text-ink truncate">{displayName}</p>
+        <p className="text-[11px] text-ink-soft font-mono">{t.txn_date ?? t.created_at?.slice(0, 10)}</p>
+      </div>
+      <div className="shrink-0 text-right">
+        <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-ink whitespace-nowrap">
+          ₱{fmt(Math.abs(Number(t.amount)))}
+        </p>
+        {!isGainAllocation && <p className="text-[11px] text-gold mt-0.5">Fix →</p>}
+      </div>
+    </div>
+  )
+
   return (
     <div className="bg-paper-2 border border-hairline rounded-md">
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={isGainAllocation}
-        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left disabled:cursor-default"
-      >
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap mb-1">
-            <span className="text-[9px] uppercase tracking-widest font-mono border border-hairline text-ink-soft rounded-full px-2 py-0.5">
-              {typeLabels[t.classification] || t.classification}
-            </span>
-            <span className={`text-[9px] uppercase font-mono ${statusColor[t.status] ?? "text-ink-soft"}`}>
-              {t.status}
-            </span>
-          </div>
-          <p className="text-sm text-ink truncate">{displayName}</p>
-          <p className="text-[11px] text-ink-soft font-mono">{t.txn_date ?? t.created_at?.slice(0, 10)}</p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-ink whitespace-nowrap">
-            ₱{fmt(Math.abs(Number(t.amount)))}
-          </p>
-          {!isGainAllocation && <p className="text-[11px] text-gold mt-0.5">{isEditing ? "Close" : "Fix →"}</p>}
-        </div>
-      </button>
+      {isGainAllocation ? (
+        <div className="flex items-center gap-3 px-4 py-3">{row}</div>
+      ) : (
+        <button type="button" onClick={onOpen} className="w-full flex items-center gap-3 px-4 py-3 text-left">
+          {row}
+        </button>
+      )}
 
       {isGainAllocation && (
         <p className="px-4 pb-3 text-[11px] text-ink-soft">
@@ -244,8 +244,6 @@ function SupportRow({
           this row.
         </p>
       )}
-
-      {isEditing && <SupportEditForm t={t} banks={banks} onSaved={onSaved} onCancel={onToggle} />}
     </div>
   )
 }
@@ -443,7 +441,7 @@ function SupportEditForm({
   }
 
   return (
-    <div className="border-t border-hairline px-4 pt-4 pb-4 space-y-3">
+    <div className="space-y-3">
       {t.classification === "Bank Interest" && t.interest_distributed && (
         <p className="text-[11px] text-gold bg-gold/10 border border-gold rounded-md px-3 py-2">
           This interest has already been split across members. Changing the amount here only corrects this

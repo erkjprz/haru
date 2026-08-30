@@ -8,6 +8,7 @@ import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { approveBorrowerMember, linkBorrowerRecord } from "@/lib/approveBorrower"
 import { readCache, writeCache } from "@/lib/cache"
+import { Sheet } from "@/app/components/Sheet"
 
 // Same global borrower-approvals queue for any admin -- no per-user
 // scoping needed, so a single fixed cache key covers everyone.
@@ -52,6 +53,7 @@ export default function AdminBorrowersPage() {
   const [linkChoice, setLinkChoice] = useState<Record<string, string>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
   const [message, setMessage] = useState("")
+  const [openId, setOpenId] = useState<string | null>(null)
 
   async function loadData() {
     // Only show the blocking loader on a true cold start -- if we already
@@ -115,6 +117,7 @@ export default function AdminBorrowersPage() {
     }
 
     setBusyId(null)
+    setOpenId(null)
     await loadData()
   }
 
@@ -134,6 +137,7 @@ export default function AdminBorrowersPage() {
     }
 
     setBusyId(null)
+    setOpenId(null)
     await loadData()
   }
 
@@ -182,73 +186,42 @@ export default function AdminBorrowersPage() {
           <div className="mt-8 space-y-3">
             {borrowerMembers.map((m) => {
               const linkedName = linkedNameByMemberId[m.member_id]
+              // Nothing left to do on an approved, already-linked borrower --
+              // no sheet to open, just a static row.
+              const hasAction = m.status === "pending" || !linkedName
 
-              return (
-                <div key={m.member_id} className="bg-paper-2 border border-hairline rounded-md p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-display text-lg truncate">{m.name}</div>
-                      <div className="text-sm text-ink-soft truncate">{m.email || "No email"}</div>
-                    </div>
+              const row = (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-display text-lg truncate">{m.name}</div>
+                    <div className="text-sm text-ink-soft truncate">{m.email || "No email"}</div>
+                    {linkedName && <p className="mt-1 text-xs text-sage font-mono">Linked to loan record: {linkedName}</p>}
+                  </div>
+                  <div className="shrink-0 flex flex-col items-end gap-1">
                     <span
-                      className={`text-[10px] uppercase font-mono border rounded-full px-2 py-0.5 shrink-0 ${
+                      className={`text-[10px] uppercase font-mono border rounded-full px-2 py-0.5 ${
                         statusColor[m.status] ?? "text-ink-soft border-hairline"
                       }`}
                     >
                       {m.status}
                     </span>
+                    {hasAction && <span className="text-[11px] font-mono text-gold">Review →</span>}
                   </div>
+                </div>
+              )
 
-                  {linkedName ? (
-                    <p className="mt-3 text-xs text-sage font-mono">Linked to loan record: {linkedName}</p>
-                  ) : (
-                    <div className="mt-4 space-y-2">
-                      <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
-                        Link to an existing loan record (optional)
-                      </label>
-                      <select
-                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
-                        value={linkChoice[m.member_id] ?? ""}
-                        onChange={(e) =>
-                          setLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
-                        }
-                      >
-                        <option value="">No existing loan record</option>
-                        {unclaimedBorrowers.map((b) => (
-                          <option key={b.borrower_id} value={b.borrower_id}>
-                            {b.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  <div className="mt-4 flex gap-2 flex-wrap">
-                    {m.status === "pending" ? (
-                      <button
-                        className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                        onClick={() => approveMember(m.member_id)}
-                        disabled={busyId === m.member_id}
-                      >
-                        {busyId === m.member_id
-                          ? "Approving..."
-                          : linkChoice[m.member_id]
-                          ? "Approve & Link"
-                          : "Approve"}
-                      </button>
-                    ) : (
-                      !linkedName &&
-                      linkChoice[m.member_id] && (
-                        <button
-                          className="border border-hairline px-4 py-2 rounded-md text-sm disabled:opacity-50"
-                          onClick={() => linkOnly(m.member_id)}
-                          disabled={busyId === m.member_id}
-                        >
-                          {busyId === m.member_id ? "Linking..." : "Link"}
-                        </button>
-                      )
-                    )}
-                  </div>
+              return hasAction ? (
+                <button
+                  key={m.member_id}
+                  type="button"
+                  onClick={() => setOpenId(m.member_id)}
+                  className="w-full text-left bg-paper-2 border border-hairline rounded-md p-5"
+                >
+                  {row}
+                </button>
+              ) : (
+                <div key={m.member_id} className="bg-paper-2 border border-hairline rounded-md p-5">
+                  {row}
                 </div>
               )
             })}
@@ -259,6 +232,70 @@ export default function AdminBorrowersPage() {
           </div>
         </div>
       </main>
+
+      {openId && (() => {
+        const m = borrowerMembers.find((row) => row.member_id === openId)
+        if (!m) return null
+        const linkedName = linkedNameByMemberId[m.member_id]
+
+        return (
+          <Sheet title="Borrower request" onClose={() => setOpenId(null)}>
+            <p className="font-display font-medium text-lg break-words">{m.name}</p>
+            <p className="text-sm text-ink-soft break-words">{m.email || "No email"}</p>
+
+            {linkedName ? (
+              <p className="mt-4 text-xs text-sage font-mono">Linked to loan record: {linkedName}</p>
+            ) : (
+              <div className="mt-4 space-y-2">
+                <label className="block text-xs uppercase tracking-wide text-ink-soft font-mono">
+                  Link to an existing loan record (optional)
+                </label>
+                <select
+                  className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
+                  value={linkChoice[m.member_id] ?? ""}
+                  onChange={(e) =>
+                    setLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
+                  }
+                >
+                  <option value="">No existing loan record</option>
+                  {unclaimedBorrowers.map((b) => (
+                    <option key={b.borrower_id} value={b.borrower_id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="mt-4 flex gap-2 flex-wrap">
+              {m.status === "pending" ? (
+                <button
+                  className="bg-ink text-paper px-4 py-2 rounded-md text-sm disabled:opacity-50"
+                  onClick={() => approveMember(m.member_id)}
+                  disabled={busyId === m.member_id}
+                >
+                  {busyId === m.member_id
+                    ? "Approving..."
+                    : linkChoice[m.member_id]
+                    ? "Approve & Link"
+                    : "Approve"}
+                </button>
+              ) : (
+                !linkedName &&
+                linkChoice[m.member_id] && (
+                  <button
+                    className="border border-hairline px-4 py-2 rounded-md text-sm disabled:opacity-50"
+                    onClick={() => linkOnly(m.member_id)}
+                    disabled={busyId === m.member_id}
+                  >
+                    {busyId === m.member_id ? "Linking..." : "Link"}
+                  </button>
+                )
+              )}
+            </div>
+          </Sheet>
+        )
+      })()}
     </>
   )
 }
