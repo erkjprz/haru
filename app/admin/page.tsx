@@ -461,8 +461,10 @@ export default function AdminPage() {
     })
   }
 
-  async function approveBulkSelected() {
-    const ids = Array.from(selectedBulkIds)
+  // Shared by the multi-select "Approve N" bar and the single-item card's
+  // own "Approve" button below -- a lone pending item skips ticking a
+  // checkbox entirely and calls this directly with just its own id.
+  async function approveBulkIds(ids: string[]) {
     if (ids.length === 0) return
     setBulkApproving(true)
     setActionError("")
@@ -495,6 +497,10 @@ export default function AdminPage() {
 
     setSelectedBulkIds(new Set())
     loadData()
+  }
+
+  async function approveBulkSelected() {
+    await approveBulkIds(Array.from(selectedBulkIds))
   }
 
   // Withdrawal and Loan Release amounts (and, for Loan Release, the loan's
@@ -794,13 +800,24 @@ export default function AdminPage() {
             {showTxns && bulkTransactions.length > 0 && (
               <section>
                 <div className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-2.5 text-sm font-semibold cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="w-[18px] h-[18px] accent-ink shrink-0"
-                      checked={bulkTransactions.every((t) => selectedBulkIds.has(t.transaction_id))}
-                      onChange={() => toggleSelectAllBulk(bulkTransactions.map((t) => t.transaction_id))}
-                    />
+                  <label
+                    className={`flex items-center gap-2.5 text-sm font-semibold ${
+                      bulkTransactions.length > 1 ? "cursor-pointer" : ""
+                    }`}
+                  >
+                    {/* A single pending item has nothing to batch with, so
+                        the select-all checkbox (and each row's own
+                        checkbox below) only earns its place once there's
+                        more than one -- otherwise it's a tick that gates
+                        nothing. */}
+                    {bulkTransactions.length > 1 && (
+                      <input
+                        type="checkbox"
+                        className="w-[18px] h-[18px] accent-ink shrink-0"
+                        checked={bulkTransactions.every((t) => selectedBulkIds.has(t.transaction_id))}
+                        onChange={() => toggleSelectAllBulk(bulkTransactions.map((t) => t.transaction_id))}
+                      />
+                    )}
                     Confirmed money
                   </label>
                   <span className="shrink-0 text-[11px] font-mono uppercase tracking-wide text-ink-soft border border-hairline rounded-full px-2.5 py-1">
@@ -815,12 +832,14 @@ export default function AdminPage() {
                   {bulkTransactions.map((t) => (
                     <div key={t.transaction_id} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
                       <div className="flex items-center gap-3 px-4 py-3">
-                        <input
-                          type="checkbox"
-                          className="w-[18px] h-[18px] accent-ink shrink-0"
-                          checked={selectedBulkIds.has(t.transaction_id)}
-                          onChange={() => toggleBulkSelected(t.transaction_id)}
-                        />
+                        {bulkTransactions.length > 1 && (
+                          <input
+                            type="checkbox"
+                            className="w-[18px] h-[18px] accent-ink shrink-0"
+                            checked={selectedBulkIds.has(t.transaction_id)}
+                            onChange={() => toggleBulkSelected(t.transaction_id)}
+                          />
+                        )}
                         <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "in" })} small />
                         <div className="min-w-0 flex-1">
                           <p className="font-display font-medium truncate text-sm">{t.members?.name || "Fund"}</p>
@@ -854,11 +873,27 @@ export default function AdminPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Nothing left to select against, so the approve
+                          action lives right on the card instead of behind
+                          the tick-then-bulk-bar flow below. */}
+                      {bulkTransactions.length === 1 && (
+                        <div className="px-4 pb-3.5">
+                          <button
+                            type="button"
+                            onClick={() => approveBulkIds([t.transaction_id])}
+                            disabled={bulkApproving}
+                            className="w-full bg-ink text-paper px-4 py-3 rounded-full text-sm font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                          >
+                            {bulkApproving ? "Approving…" : `Approve ₱${fmt(t.amount)}`}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
 
-                {selectedBulkIds.size > 0 && (
+                {bulkTransactions.length > 1 && selectedBulkIds.size > 0 && (
                   <div className="sticky bottom-4 z-10 mt-3 flex items-center justify-between gap-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg">
                     <span className="text-sm font-mono">{selectedBulkIds.size} selected</span>
                     <div className="flex gap-2">
