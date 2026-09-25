@@ -6,12 +6,6 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Testing against the real Supabase project
 
-> **All notifications are currently turned off** (in-app, push and
-> Telegram) by `supabase/migrations/20260925000001_disable_all_notifications.sql`,
-> which disables every notification trigger. While that's in effect, skip
-> the disable/re-enable dance below — and in particular don't run the
-> `enable trigger` step, since that would switch push delivery back on.
-
 This app's only Supabase project is production — there is no separate
 staging database. Real members (including admins with push notifications
 enabled) can be notified by test activity if you're not careful.
