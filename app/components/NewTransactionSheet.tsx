@@ -6,9 +6,8 @@ import { useAuth } from "@/app/auth-context"
 import { Sheet } from "@/app/components/Sheet"
 import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
 import { InvestmentPickerSheet, InvestmentRowIcon } from "@/app/components/InvestmentPickerSheet"
-import { InterestRatePickerSheet } from "@/app/components/InterestRatePickerSheet"
-import { TermPickerSheet } from "@/app/components/TermPickerSheet"
 import { TypePickerSheet, TypeBadge } from "@/app/components/TypePickerSheet"
+import { LoanTermsCard } from "@/app/components/LoanTermsCard"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import {
   AmountHero,
@@ -21,9 +20,6 @@ import {
   BankIcon,
   NoteIcon,
   PersonIcon,
-  InterestIcon,
-  ClockIcon,
-  RepeatIcon,
   FieldRow,
   rowSelectClass,
   rowInputClass
@@ -124,13 +120,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [selectedLoanId, setSelectedLoanId] = useState("")
   const [showLoanPicker, setShowLoanPicker] = useState(false)
   const [showInvestmentPicker, setShowInvestmentPicker] = useState(false)
-  const [showInterestRatePicker, setShowInterestRatePicker] = useState(false)
-  const [showTermPicker, setShowTermPicker] = useState(false)
-  // Picker is the default interaction for both -- these only flip to true
-  // when someone explicitly picks "Custom" from the sheet, swapping the
-  // row over to the plain number input for direct typing.
-  const [interestRateCustom, setInterestRateCustom] = useState(false)
-  const [termCustom, setTermCustom] = useState(false)
 
   const [contributionDefault, setContributionDefault] = useState<number | null>(cached?.contributionDefault ?? null)
   const [contributionBankDefault, setContributionBankDefault] = useState<string | null>(cached?.contributionBankDefault ?? null)
@@ -286,11 +275,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     (interestType === "rate" ? isValidPositiveNumber(interestRate, true) : isValidPositiveNumber(interestAmount, true))
       ? totalRepayable(Number(amount), interestType, Number(interestRate || 0), Number(interestAmount || 0))
       : 0
-
-  const previewPerInstallment =
-    previewTotalRepayable && isValidPositiveNumber(termMonths) && repaymentFrequency === "monthly"
-      ? previewTotalRepayable / Number(termMonths)
-      : previewTotalRepayable
 
   function setReceiptFile(file: File | null) {
     setReceipt(file)
@@ -901,171 +885,19 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                     </div>
 
                     <div className="mt-4">
-                      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Loan Terms</p>
-                      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
-                        {/* Toggle + value share one row instead of stacking (toggle, then a
-                            second full-width input below it) -- the toggle only ever needs
-                            two glyphs' worth of width once it's not also carrying "Rate (%)"/
-                            "Fixed amount (₱)" as button text. */}
-                        <FieldRow icon={<InterestIcon />}>
-                          {interestType === "rate" && !interestRateCustom ? (
-                            // Picker is the default way in -- tapping the
-                            // value area itself opens the same sheet the
-                            // trailing ▾ does, not just a narrow target.
-                            <button
-                              type="button"
-                              onClick={() => setShowInterestRatePicker(true)}
-                              className="flex-1 min-w-0 text-left text-sm"
-                            >
-                              {interestRate ? (
-                                <span className="text-ink">{interestRate}%</span>
-                              ) : (
-                                <span className="text-ink-soft">Interest rate, e.g. 5</span>
-                              )}
-                            </button>
-                          ) : (
-                            <input
-                              className={rowInputClass}
-                              type="number"
-                              inputMode="decimal"
-                              min="0"
-                              step="0.01"
-                              placeholder={interestType === "rate" ? "Interest rate, e.g. 5" : "Interest amount, e.g. 5000"}
-                              value={interestType === "rate" ? interestRate : interestAmount}
-                              onChange={(e) =>
-                                interestType === "rate" ? setInterestRate(e.target.value) : setInterestAmount(e.target.value)
-                              }
-                              autoFocus={interestType === "rate" && interestRateCustom}
-                            />
-                          )}
-                          <div className="flex border border-hairline rounded-sm overflow-hidden shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => setInterestType("rate")}
-                              aria-label="Interest as a rate"
-                              className={`w-8 py-1.5 text-xs font-semibold transition-colors ${
-                                interestType === "rate" ? "bg-ink text-paper" : "text-ink-soft"
-                              }`}
-                            >
-                              %
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setInterestType("amount")}
-                              aria-label="Interest as a fixed amount"
-                              className={`w-8 py-1.5 text-xs font-semibold border-l border-hairline transition-colors ${
-                                interestType === "amount" ? "bg-ink text-paper" : "text-ink-soft"
-                              }`}
-                            >
-                              ₱
-                            </button>
-                          </div>
-                          {/* Fixed peso amounts have no sensible universal
-                              presets, so the picker shortcut only applies
-                              to the rate side -- the input itself stays the
-                              only way to enter a fixed amount either way. */}
-                          {interestType === "rate" && (
-                            <button
-                              type="button"
-                              onClick={() => setShowInterestRatePicker(true)}
-                              aria-label="Choose a common interest rate"
-                              className="text-ink-soft text-xs shrink-0 px-1"
-                            >
-                              ▾
-                            </button>
-                          )}
-                        </FieldRow>
-
-                        <FieldRow icon={<ClockIcon />}>
-                          {!termCustom ? (
-                            <button
-                              type="button"
-                              onClick={() => setShowTermPicker(true)}
-                              className="flex-1 min-w-0 text-left text-sm"
-                            >
-                              {termMonths ? (
-                                <span className="text-ink">
-                                  {termMonths} {termMonths === "1" ? "month" : "months"}
-                                </span>
-                              ) : (
-                                <span className="text-ink-soft">Term, e.g. 6</span>
-                              )}
-                            </button>
-                          ) : (
-                            <>
-                              <input
-                                className={rowInputClass}
-                                type="number"
-                                inputMode="numeric"
-                                min="1"
-                                step="1"
-                                placeholder="Term, e.g. 6"
-                                value={termMonths}
-                                onChange={(e) => setTermMonths(e.target.value)}
-                                autoFocus
-                              />
-                              <span className="text-xs text-ink-soft shrink-0">months</span>
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setShowTermPicker(true)}
-                            aria-label="Choose a common payment term"
-                            className="text-ink-soft text-xs shrink-0 px-1"
-                          >
-                            ▾
-                          </button>
-                        </FieldRow>
-
-                        <FieldRow icon={<RepeatIcon />}>
-                          <div className="flex-1 flex border border-hairline rounded-sm overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => setRepaymentFrequency("monthly")}
-                              className={`flex-1 text-xs font-semibold py-2 transition-colors ${
-                                repaymentFrequency === "monthly" ? "bg-ink text-paper" : "text-ink-soft"
-                              }`}
-                            >
-                              Monthly
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setRepaymentFrequency("lump_sum")}
-                              className={`flex-1 text-xs font-semibold py-2 border-l border-hairline transition-colors ${
-                                repaymentFrequency === "lump_sum" ? "bg-ink text-paper" : "text-ink-soft"
-                              }`}
-                            >
-                              Lump sum
-                            </button>
-                          </div>
-                        </FieldRow>
-
-                        {/* Right in the same card, directly under the fields that produce
-                            it -- previously a separate box below the card, easy to miss
-                            without scrolling since nothing here visually tied it to Interest/
-                            Term/Repayment above it. bg-gold/10 is the app's own "highlighted
-                            result" accent (StepTrack, the selected row in a dropdown, the FAB
-                            glow) rather than the plain bg-paper the old box used, which in
-                            dark mode is darker than the card itself and read as dead. */}
-                        {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                          <>
-                            <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
-                              <span className="text-sm font-semibold text-ink">Total repayable</span>
-                              <span className="text-sm font-bold font-mono [font-variant-numeric:tabular-nums] text-gold">
-                                ₱{fmt(previewTotalRepayable)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
-                              <span className="text-sm text-ink-soft">
-                                {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
-                              </span>
-                              <span className="text-sm font-semibold font-mono [font-variant-numeric:tabular-nums] text-ink">
-                                ₱{fmt(previewPerInstallment)}
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      <LoanTermsCard
+                        amount={amount}
+                        interestType={interestType}
+                        setInterestType={setInterestType}
+                        interestRate={interestRate}
+                        setInterestRate={setInterestRate}
+                        interestAmount={interestAmount}
+                        setInterestAmount={setInterestAmount}
+                        termMonths={termMonths}
+                        setTermMonths={setTermMonths}
+                        repaymentFrequency={repaymentFrequency}
+                        setRepaymentFrequency={setRepaymentFrequency}
+                      />
                     </div>
                   </>
                 )}
@@ -1124,38 +956,6 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         onSelect={(investment) => {
           setInvestmentId(investment.investment_id)
           setShowInvestmentPicker(false)
-        }}
-      />
-    )}
-
-    {showInterestRatePicker && (
-      <InterestRatePickerSheet
-        value={interestRate}
-        onClose={() => setShowInterestRatePicker(false)}
-        onSelect={(rate) => {
-          setInterestRate(String(rate))
-          setInterestRateCustom(false)
-          setShowInterestRatePicker(false)
-        }}
-        onCustom={() => {
-          setInterestRateCustom(true)
-          setShowInterestRatePicker(false)
-        }}
-      />
-    )}
-
-    {showTermPicker && (
-      <TermPickerSheet
-        value={termMonths}
-        onClose={() => setShowTermPicker(false)}
-        onSelect={(months) => {
-          setTermMonths(String(months))
-          setTermCustom(false)
-          setShowTermPicker(false)
-        }}
-        onCustom={() => {
-          setTermCustom(true)
-          setShowTermPicker(false)
         }}
       />
     )}

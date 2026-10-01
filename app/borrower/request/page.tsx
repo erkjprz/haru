@@ -7,7 +7,16 @@ import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import SubmitConfirmation from "@/app/components/SubmitConfirmation"
-import { AmountHero, FieldGroup, RequiredMark } from "@/app/components/TransactionFormUI"
+import { LoanTermsCard } from "@/app/components/LoanTermsCard"
+import {
+  AmountHero,
+  FieldGroup,
+  FieldRow,
+  NoteIcon,
+  ReviewRow,
+  StepTrack,
+  rowInputClass
+} from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 
 function isValidPositiveNumber(value: string, allowZero = false): boolean {
@@ -33,6 +42,9 @@ export default function BorrowerRequestLoanPage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState("")
   const [submitted, setSubmitted] = useState(false)
+  // Same Details -> Review sub-flow a member's Loan Request uses in
+  // NewTransactionSheet.
+  const [formStep, setFormStep] = useState<1 | 2>(1)
 
   useEffect(() => {
     if (authLoading) return
@@ -63,31 +75,34 @@ export default function BorrowerRequestLoanPage() {
       ? totalRepayable(Number(amount), interestType, Number(interestRate || 0), Number(interestAmount || 0))
       : 0
 
-  const previewPerInstallment =
-    previewTotalRepayable && isValidPositiveNumber(termMonths) && repaymentFrequency === "monthly"
-      ? previewTotalRepayable / Number(termMonths)
-      : previewTotalRepayable
+  function detailsError(): string {
+    if (!isValidPositiveNumber(amount)) return "Enter a valid amount greater than zero."
+    if (interestType === "rate" && !isValidPositiveNumber(interestRate, true)) {
+      return "Enter a valid interest rate (0 or higher)."
+    }
+    if (interestType === "amount" && !isValidPositiveNumber(interestAmount, true)) {
+      return "Enter a valid interest amount (0 or higher)."
+    }
+    if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
+    return ""
+  }
+
+  function handleContinueToReview() {
+    const error = detailsError()
+    if (error) {
+      setMessage(error)
+      return
+    }
+    setMessage("")
+    setFormStep(2)
+  }
 
   async function handleSubmit() {
     setMessage("")
 
-    if (!isValidPositiveNumber(amount)) {
-      setMessage("Enter a valid amount greater than zero.")
-      return
-    }
-
-    if (interestType === "rate" && !isValidPositiveNumber(interestRate, true)) {
-      setMessage("Enter a valid interest rate (0 or higher).")
-      return
-    }
-
-    if (interestType === "amount" && !isValidPositiveNumber(interestAmount, true)) {
-      setMessage("Enter a valid interest amount (0 or higher).")
-      return
-    }
-
-    if (!isValidPositiveNumber(termMonths)) {
-      setMessage("Enter a valid term, in months greater than zero.")
+    const detailsMessage = detailsError()
+    if (detailsMessage) {
+      setMessage(detailsMessage)
       return
     }
 
@@ -172,128 +187,81 @@ export default function BorrowerRequestLoanPage() {
           <div className="text-xs tracking-[0.18em] uppercase text-gold font-mono mb-2">Request a Loan</div>
           <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-2">How much do you need?</h1>
 
-          <AmountHero value={amount} onChange={setAmount} label="Amount to borrow" />
+          <AmountHero value={amount} onChange={setAmount} />
 
           <div className="space-y-4 mt-4">
-            <FieldGroup label="Details">
-              <div className="space-y-4">
+            <StepTrack step={formStep} labels={["Details", "Review"]} />
+
+            {formStep === 1 && (
+              <>
                 <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Interest
-                    <RequiredMark />
-                  </label>
-                  <div className="flex border border-hairline rounded-sm overflow-hidden mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setInterestType("rate")}
-                      className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                        interestType === "rate" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                      }`}
-                    >
-                      Rate (%)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setInterestType("amount")}
-                      className={`flex-1 text-sm font-semibold py-2.5 transition-colors ${
-                        interestType === "amount" ? "bg-ink text-paper" : "bg-paper text-ink-soft"
-                      }`}
-                    >
-                      Fixed amount (₱)
-                    </button>
+                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
+                  <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                    <FieldRow icon={<NoteIcon />}>
+                      <input
+                        className={rowInputClass}
+                        placeholder="What's it for? (name & date already saved)"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                      />
+                    </FieldRow>
                   </div>
-                  {interestType === "rate" ? (
-                    <input
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="e.g. 5"
-                      value={interestRate}
-                      onChange={(e) => setInterestRate(e.target.value)}
-                    />
-                  ) : (
-                    <input
-                      className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="e.g. 5000"
-                      value={interestAmount}
-                      onChange={(e) => setInterestAmount(e.target.value)}
-                    />
-                  )}
                 </div>
 
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Term (months)
-                    <RequiredMark />
-                  </label>
-                  <input
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-                    type="number"
-                    min="1"
-                    step="1"
-                    placeholder="e.g. 6"
-                    value={termMonths}
-                    onChange={(e) => setTermMonths(e.target.value)}
-                  />
-                </div>
+                <LoanTermsCard
+                  amount={amount}
+                  interestType={interestType}
+                  setInterestType={setInterestType}
+                  interestRate={interestRate}
+                  setInterestRate={setInterestRate}
+                  interestAmount={interestAmount}
+                  setInterestAmount={setInterestAmount}
+                  termMonths={termMonths}
+                  setTermMonths={setTermMonths}
+                  repaymentFrequency={repaymentFrequency}
+                  setRepaymentFrequency={setRepaymentFrequency}
+                />
+              </>
+            )}
 
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    Repayment mode
-                  </label>
-                  <select
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    value={repaymentFrequency}
-                    onChange={(e) => setRepaymentFrequency(e.target.value)}
-                  >
-                    <option value="monthly">Monthly installments</option>
-                    <option value="lump_sum">One lump sum at end of term</option>
-                  </select>
-                </div>
-
-                {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
-                  <div className="border border-hairline rounded-md p-4 bg-paper">
-                    <p className="text-sm text-ink-soft font-mono mb-2">Estimated repayment</p>
-                    <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums]">
-                      <span className="text-ink-soft">Total repayable</span>
-                      <span>₱{fmt(previewTotalRepayable)}</span>
-                    </div>
-                    <div className="flex justify-between text-base font-mono [font-variant-numeric:tabular-nums] mt-1">
-                      <span className="text-ink-soft">
-                        {repaymentFrequency === "monthly" ? `Per month × ${termMonths}` : `Due at ${termMonths} months`}
-                      </span>
-                      <span className="font-semibold">₱{fmt(previewPerInstallment)}</span>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-                    What's it for?
-                  </label>
-                  <input
-                    className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                    placeholder="Notes (name & date already saved)"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </div>
-              </div>
-            </FieldGroup>
+            {formStep === 2 && (
+              <FieldGroup>
+                <ReviewRow label="Amount to borrow" value={`₱${fmt(isValidPositiveNumber(amount) ? Number(amount) : 0)}`} />
+                <ReviewRow
+                  label="Interest"
+                  value={interestType === "rate" ? `${interestRate || 0}%` : `₱${fmt(Number(interestAmount) || 0)} fixed`}
+                />
+                <ReviewRow label="Term" value={`${termMonths || 0} months`} />
+                <ReviewRow
+                  label="Repayment"
+                  value={repaymentFrequency === "monthly" ? "Monthly installments" : "Lump sum at end of term"}
+                />
+                {previewTotalRepayable > 0 && <ReviewRow label="Est. total repayable" value={`₱${fmt(previewTotalRepayable)}`} />}
+                {description && <ReviewRow label="Description" value={description} />}
+              </FieldGroup>
+            )}
 
             {message && <p className="text-sm text-rust">{message}</p>}
 
-            <button
-              className="w-full bg-ink text-paper px-4 py-3.5 rounded-md text-sm font-bold disabled:opacity-50"
-              onClick={handleSubmit}
-              disabled={submitting}
-            >
-              {submitting ? "Submitting..." : "Submit Request"}
-            </button>
+            <div className="flex items-center gap-3">
+              {formStep === 2 && (
+                <button
+                  type="button"
+                  className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold"
+                  onClick={() => setFormStep(1)}
+                >
+                  Back
+                </button>
+              )}
+              <button
+                type="button"
+                className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                onClick={formStep === 1 ? handleContinueToReview : handleSubmit}
+                disabled={submitting}
+              >
+                {submitting ? "Submitting…" : formStep === 1 ? "Continue" : "Submit Request"}
+              </button>
+            </div>
           </div>
         </div>
       </main>
