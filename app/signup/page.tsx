@@ -86,7 +86,7 @@ export default function SignupPage() {
           </h1>
 
           <p className="text-sm text-ink-soft mt-2">
-            {isBorrower ? "Create an account to manage your loan." : "Create your shared fund account."}
+            {isBorrower ? "Create an account to request or repay a loan." : "Create your shared fund account."}
           </p>
 
         </div>
@@ -126,7 +126,7 @@ export default function SignupPage() {
                   accountType === "borrower" ? "bg-gold-soft text-ink" : "bg-paper text-ink-soft"
                 }`}
               >
-                Repaying a loan
+                Borrow money
               </button>
             </div>
 
@@ -167,7 +167,7 @@ export default function SignupPage() {
 
               {isBorrower && (
                 <p className="mt-2 text-xs text-ink-soft">
-                  An admin will approve your account and link it to your loan.
+                  An admin will approve your account before you can request or repay a loan.
                 </p>
               )}
 
@@ -357,7 +357,7 @@ export default function SignupPage() {
 
         <p className="mt-6 text-center text-xs text-ink-soft">
           {isBorrower
-            ? "Your account will be reviewed before you can manage your loan."
+            ? "Your account will be reviewed before you can request or repay a loan."
             : "Your account will be reviewed before joining the fund."}
         </p>
 

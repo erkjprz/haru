@@ -386,7 +386,7 @@ const borrowerSections: FaqSection[] = [
         q: "How do I sign up as a borrower?",
         a: (
           <p>
-            Tap <strong>Sign Up</strong> and choose <strong>Borrower</strong> instead of Member. Your account
+            Tap <strong>Sign Up</strong> and choose <strong>Borrow money</strong> instead of Join the fund. Your account
             starts as <strong>Pending</strong> until an admin approves it.
           </p>
         )
