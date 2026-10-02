@@ -26,8 +26,8 @@ export function MessagesButton() {
     <button
       onClick={() => router.push("/messages")}
       className="shrink-0 relative inline-flex items-center justify-center w-9 h-9 text-ink-soft border border-hairline rounded-full hover:bg-paper-2 hover:text-ink transition-colors"
-      title="Messages"
-      aria-label={unread > 0 ? `Messages, ${unread} unread` : "Messages"}
+      title="Member questions"
+      aria-label={unread > 0 ? `Member questions, ${unread} unread` : "Member questions"}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
         <path d="M4 5h16v11H8l-4 4V5z" />

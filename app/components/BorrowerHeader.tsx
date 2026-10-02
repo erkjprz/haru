@@ -78,7 +78,7 @@ function MenuDropdown({ onAccount, onPreferences }: { onAccount: boolean; onPref
             onClick={() => go("/messages")}
             className="w-full text-left px-4 py-2.5 text-sm text-ink-soft hover:text-ink hover:bg-paper-2 transition-colors border-b border-hairline"
           >
-            Messages
+            Ask the Admins
           </button>
           <button
             onClick={() => go("/notifications")}

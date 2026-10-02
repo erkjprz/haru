@@ -83,6 +83,15 @@ function MessagesInbox() {
   }
 
   const Header = member?.role === "borrower" ? BorrowerHeader : Navbar
+  // Back goes to wherever this page is reached from: the Admin page for
+  // admins, the borrower home (its header menu) for borrowers, and the
+  // Menu page for everyone else.
+  const back =
+    isAdmin
+      ? { label: "Admin", path: "/admin" }
+      : member?.role === "borrower"
+        ? { label: "Home", path: "/borrower" }
+        : { label: "Menu", path: "/menu" }
 
   if (authLoading || !member || member.status !== "approved" || dataLoading) {
     return (
@@ -107,16 +116,24 @@ function MessagesInbox() {
       <Header />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(3rem+var(--dock-h)+env(safe-area-inset-bottom))]">
+          <button
+            onClick={() => router.push(back.path)}
+            className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
+          >
+            ← {back.label}
+          </button>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
                 {isAdmin ? "Administration" : "Support"}
               </div>
-              <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">Messages</h1>
+              <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
+                {isAdmin ? "Member Questions" : "Ask the Admins"}
+              </h1>
               <p className="text-[13px] text-ink-soft mb-6">
                 {isAdmin
-                  ? "Conversations between members and the admin team."
-                  : "Questions for the admins? Every admin can see and reply."}
+                  ? "Questions and conversations between members and the admin team."
+                  : "Have a question about your account, a transaction, or a loan? Send it here and any admin can reply."}
               </p>
             </div>
             <button
@@ -147,7 +164,11 @@ function MessagesInbox() {
 
           {!loadError && visible.length === 0 && (
             <p className="text-sm text-ink-soft text-center py-12 bg-paper-2 border border-hairline rounded-md">
-              {isAdmin && filter === "closed" ? "No closed conversations." : "No conversations yet."}
+              {isAdmin && filter === "closed"
+                ? "No closed conversations."
+                : isAdmin
+                  ? "No member questions yet."
+                  : "You haven't asked anything yet. Tap + New to send the admins a question."}
             </p>
           )}
 
@@ -250,7 +271,7 @@ function ComposeSheet({
 
   return (
     <Sheet
-      title={isAdmin ? "Message a Member" : "Message the Admins"}
+      title={isAdmin ? "Message a Member" : "Ask the Admins"}
       onClose={onClose}
       footer={
         <button

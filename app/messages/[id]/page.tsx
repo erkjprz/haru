@@ -197,7 +197,7 @@ export default function ConversationPage() {
             onClick={() => router.push("/messages")}
             className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors"
           >
-            ← Messages
+            ← {isAdmin ? "Member Questions" : "Ask the Admins"}
           </button>
 
           {loadError || !conversation ? (
