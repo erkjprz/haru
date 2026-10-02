@@ -20,6 +20,8 @@ import {
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 
+const MISSING_PAYOUT_MESSAGE = "Add your bank or e-wallet details, or a QR code, so we know where to send the money."
+
 function isValidPositiveNumber(value: string, allowZero = false): boolean {
   if (!value.trim()) return false
   const n = Number(value)
@@ -82,9 +84,16 @@ export default function BorrowerRequestLoanPage() {
       ? totalRepayable(Number(amount), interestType, Number(interestRate || 0), Number(interestAmount || 0))
       : 0
 
+  // Once they've added payout info, the "where do we send it" error no
+  // longer applies -- clear it right away instead of on the next Continue.
+  function clearMissingPayoutMessage() {
+    if (message === MISSING_PAYOUT_MESSAGE) setMessage("")
+  }
+
   function setPayoutQrFile(file: File | null) {
     setPayoutQr(file)
     setPayoutQrPreview(file ? URL.createObjectURL(file) : null)
+    if (file) clearMissingPayoutMessage()
   }
 
   function detailsError(): string {
@@ -96,9 +105,7 @@ export default function BorrowerRequestLoanPage() {
       return "Enter a valid interest amount (0 or higher)."
     }
     if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
-    if (!payoutDetails.trim() && !payoutQr) {
-      return "Add your bank or e-wallet details, or a QR code, so we know where to send the money."
-    }
+    if (!payoutDetails.trim() && !payoutQr) return MISSING_PAYOUT_MESSAGE
     return ""
   }
 
@@ -267,7 +274,10 @@ export default function BorrowerRequestLoanPage() {
                       className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft resize-none"
                       placeholder={"Bank or e-wallet, account name & number\ne.g. GCash · Juan Dela Cruz · 0917 123 4567"}
                       value={payoutDetails}
-                      onChange={(e) => setPayoutDetails(e.target.value)}
+                      onChange={(e) => {
+                        setPayoutDetails(e.target.value)
+                        if (e.target.value.trim()) clearMissingPayoutMessage()
+                      }}
                     />
                     <ReceiptField
                       receipt={payoutQr}
