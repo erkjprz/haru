@@ -22,6 +22,7 @@ import { approveBorrowerMember } from "@/lib/approveBorrower"
 import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 import { readCache, writeCache } from "@/lib/cache"
+import { MessagesButton } from "@/app/components/admin/MessagesButton"
 
 // Same in/out vocabulary as the transaction edit page's FLOW map -- money
 // coming in (Contribution, Loan Repayment) has nothing left for an admin
@@ -735,6 +736,9 @@ export default function AdminPage() {
               </h1>
             </div>
 
+            <div className="shrink-0 flex items-center gap-2">
+            <MessagesButton />
+
             {/* Page-level action, not scoped to any group -- always exports
                 the full transaction history regardless of what's filtered
                 below. */}
@@ -753,6 +757,7 @@ export default function AdminPage() {
                 </svg>
               )}
             </button>
+            </div>
           </div>
           {exportError && (
             <p className="mt-1.5 text-xs text-rust text-right">Couldn&apos;t export: {exportError}</p>

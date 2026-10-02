@@ -204,13 +204,22 @@ export default function Navbar() {
   // -- on the Menu page -- so Menu reads as "active" while browsing any of
   // it, the same way Transactions stays active on a transaction's own
   // pages even though there's no separate "Transactions" sub-route tab.
-  const MENU_OWNED_PREFIXES = ["/menu", "/account", "/help"]
+  const MENU_OWNED_PREFIXES = ["/menu", "/account", "/help", ...(isAdmin ? [] : ["/messages"])]
 
   const dockItems: DockItem[] = [
     { label: "Dashboard", path: "/dashboard", icon: IconHome },
     { label: "Transactions", path: "/transactions", icon: IconTransactions },
     { label: "Breakdown", path: "/fund-breakdown", icon: IconBreakdown },
-    ...(isAdmin ? [{ label: "Admin", path: "/admin", icon: IconAdmin } as DockItem] : []),
+    ...(isAdmin
+      ? [
+          {
+            label: "Admin",
+            path: "/admin",
+            icon: IconAdmin,
+            activeWhen: (p: string) => ["/admin", "/messages"].some((prefix) => p === prefix || p.startsWith(prefix + "/"))
+          } as DockItem
+        ]
+      : []),
     {
       label: "Menu",
       path: "/menu",

@@ -387,6 +387,14 @@ export default function AdminMembersPage() {
                   >
                     Edit
                   </button>
+                  {member.status === "approved" && (
+                    <button
+                      className="border border-hairline px-4 py-2 rounded-md text-sm"
+                      onClick={() => router.push(`/messages?to=${member.member_id}`)}
+                    >
+                      Message
+                    </button>
+                  )}
                   {member.role === "borrower" && (
                     <button
                       className="border border-hairline px-4 py-2 rounded-md text-sm"
