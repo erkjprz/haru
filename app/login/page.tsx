@@ -6,14 +6,30 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 
+// Arriving from a confirmation link that didn't work (see app/page.tsx):
+// explain it and offer a fresh link. Safe to read during the first render --
+// the page stays blank until auth finishes loading, so this never shows up
+// in server-rendered markup.
+function linkErrorMessage() {
+  if (typeof window === "undefined") return ""
+
+  const params = new URLSearchParams(window.location.hash.slice(1))
+  const errorCode = params.get("error_code")
+  if (!errorCode) return ""
+
+  return errorCode === "otp_expired"
+    ? "That confirmation link has expired or was already used. Enter your email and tap below to get a new one."
+    : `That confirmation link didn't work (${params.get("error_description") ?? errorCode}). Enter your email and tap below to get a new one.`
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const { loading: authLoading, user, member } = useAuth()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [message, setMessage] = useState("")
-  const [needsConfirmation, setNeedsConfirmation] = useState(false)
+  const [message, setMessage] = useState(linkErrorMessage)
+  const [needsConfirmation, setNeedsConfirmation] = useState(() => linkErrorMessage() !== "")
   const [resent, setResent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -25,6 +41,14 @@ export default function LoginPage() {
       router.replace("/dashboard")
     }
   }, [authLoading, user, member, router])
+
+  // Strip a failed confirmation link's hash (read by linkErrorMessage
+  // above) so a refresh doesn't show the error again.
+  useEffect(() => {
+    if (window.location.hash.includes("error_code=")) {
+      window.history.replaceState(window.history.state, "", window.location.pathname)
+    }
+  }, [])
 
   // A signed-in auth user with no matching members row (signup's insert
   // failed partway, or the row was removed) would otherwise bounce forever
@@ -50,7 +74,7 @@ export default function LoginPage() {
     if (error) {
       if (error.code === "email_not_confirmed") {
         setNeedsConfirmation(true)
-        setMessage("Confirm your email address before signing in — check the inbox for the link we sent when you signed up.")
+        setMessage("Confirm your email address before signing in. Confirmation links expire, so if the one we sent you doesn't work, get a new one below.")
       } else {
         setMessage(error.message)
       }
@@ -60,7 +84,12 @@ export default function LoginPage() {
   }
 
   async function resendConfirmation() {
-    if (loading || !email) return
+    if (loading) return
+
+    if (!email) {
+      setMessage("Enter your email above, then tap below to get a new confirmation link.")
+      return
+    }
 
     setLoading(true)
 
@@ -254,7 +283,7 @@ export default function LoginPage() {
                 {needsConfirmation && (
                   resent ? (
                     <p className="text-sm text-ink-soft mt-2">
-                      Confirmation email resent — check your inbox.
+                      New confirmation link sent — check your inbox and tap the newest email.
                     </p>
                   ) : (
                     <button
@@ -263,7 +292,7 @@ export default function LoginPage() {
                       disabled={loading}
                       className="mt-2 text-sm font-medium text-gold hover:underline disabled:opacity-60"
                     >
-                      Resend confirmation email
+                      Send a new confirmation link
                     </button>
                   )
                 )}
