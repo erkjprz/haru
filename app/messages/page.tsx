@@ -128,7 +128,7 @@ function MessagesInbox() {
                 {isAdmin ? "Administration" : "Support"}
               </div>
               <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
-                {isAdmin ? "Member Questions" : "Ask the Admins"}
+                {isAdmin ? "Member Questions" : "Chat with Est. 2017"}
               </h1>
               <p className="text-[13px] text-ink-soft mb-6">
                 {isAdmin
@@ -271,7 +271,7 @@ function ComposeSheet({
 
   return (
     <Sheet
-      title={isAdmin ? "Message a Member" : "Ask the Admins"}
+      title={isAdmin ? "Message a Member" : "Chat with Est. 2017"}
       onClose={onClose}
       footer={
         <button
