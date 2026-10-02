@@ -226,7 +226,8 @@ export function ReceiptField({
   existingReceiptSignedUrl,
   dragActive,
   setDragActive,
-  onFileChange
+  onFileChange,
+  emptyLabel = "Tap to upload a photo"
 }: {
   receipt: File | null
   receiptPreview: string | null
@@ -235,6 +236,7 @@ export function ReceiptField({
   dragActive: boolean
   setDragActive: (v: boolean) => void
   onFileChange: (file: File | null) => void
+  emptyLabel?: string
 }) {
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
@@ -304,7 +306,7 @@ export function ReceiptField({
       }`}
     >
       <span className="text-base shrink-0">📎</span>
-      <span className="text-sm text-ink-soft">Tap to upload a photo</span>
+      <span className="text-sm text-ink-soft">{emptyLabel}</span>
       <input
         type="file"
         accept="image/*"

@@ -269,16 +269,14 @@ export default function BorrowerRequestLoanPage() {
                       value={payoutDetails}
                       onChange={(e) => setPayoutDetails(e.target.value)}
                     />
-                    <div>
-                      <p className="text-xs text-ink-soft mb-2">Or add your QR code</p>
-                      <ReceiptField
-                        receipt={payoutQr}
-                        receiptPreview={payoutQrPreview}
-                        dragActive={qrDragActive}
-                        setDragActive={setQrDragActive}
-                        onFileChange={setPayoutQrFile}
-                      />
-                    </div>
+                    <ReceiptField
+                      receipt={payoutQr}
+                      receiptPreview={payoutQrPreview}
+                      dragActive={qrDragActive}
+                      setDragActive={setQrDragActive}
+                      onFileChange={setPayoutQrFile}
+                      emptyLabel="Or upload QR code"
+                    />
                   </div>
                 </div>
               </>
