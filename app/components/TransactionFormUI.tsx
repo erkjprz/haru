@@ -204,7 +204,9 @@ export function StepTrack({ step, labels }: { step: 1 | 2; labels: [string, stri
 export function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-2.5 border-b border-hairline last:border-b-0">
-      <span className="text-sm text-ink-soft">{label}</span>
+      {/* Labels are short -- keep them on one line and let a long value
+          (e.g. a loan request's payout details) do the wrapping. */}
+      <span className="shrink-0 whitespace-nowrap text-sm text-ink-soft">{label}</span>
       <span className="text-sm font-semibold font-mono [font-variant-numeric:tabular-nums] text-ink text-right">
         {value}
       </span>
@@ -226,7 +228,8 @@ export function ReceiptField({
   existingReceiptSignedUrl,
   dragActive,
   setDragActive,
-  onFileChange
+  onFileChange,
+  emptyLabel = "Tap to upload a photo"
 }: {
   receipt: File | null
   receiptPreview: string | null
@@ -235,6 +238,7 @@ export function ReceiptField({
   dragActive: boolean
   setDragActive: (v: boolean) => void
   onFileChange: (file: File | null) => void
+  emptyLabel?: string
 }) {
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
@@ -304,7 +308,7 @@ export function ReceiptField({
       }`}
     >
       <span className="text-base shrink-0">📎</span>
-      <span className="text-sm text-ink-soft">Tap to upload a photo</span>
+      <span className="text-sm text-ink-soft">{emptyLabel}</span>
       <input
         type="file"
         accept="image/*"

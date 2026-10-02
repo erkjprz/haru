@@ -13,11 +13,14 @@ import {
   FieldGroup,
   FieldRow,
   NoteIcon,
+  ReceiptField,
   ReviewRow,
   StepTrack,
   rowInputClass
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
+
+const MISSING_PAYOUT_MESSAGE = "Add your bank or e-wallet details, or a QR code, so we know where to send the money."
 
 function isValidPositiveNumber(value: string, allowZero = false): boolean {
   if (!value.trim()) return false
@@ -39,6 +42,12 @@ export default function BorrowerRequestLoanPage() {
   const [termMonths, setTermMonths] = useState("")
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
   const [description, setDescription] = useState("")
+  // Where the admin should send the money: typed bank/e-wallet details,
+  // a photo of the borrower's payment QR code, or both.
+  const [payoutDetails, setPayoutDetails] = useState("")
+  const [payoutQr, setPayoutQr] = useState<File | null>(null)
+  const [payoutQrPreview, setPayoutQrPreview] = useState<string | null>(null)
+  const [qrDragActive, setQrDragActive] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState("")
   const [submitted, setSubmitted] = useState(false)
@@ -75,6 +84,18 @@ export default function BorrowerRequestLoanPage() {
       ? totalRepayable(Number(amount), interestType, Number(interestRate || 0), Number(interestAmount || 0))
       : 0
 
+  // Once they've added payout info, the "where do we send it" error no
+  // longer applies -- clear it right away instead of on the next Continue.
+  function clearMissingPayoutMessage() {
+    if (message === MISSING_PAYOUT_MESSAGE) setMessage("")
+  }
+
+  function setPayoutQrFile(file: File | null) {
+    setPayoutQr(file)
+    setPayoutQrPreview(file ? URL.createObjectURL(file) : null)
+    if (file) clearMissingPayoutMessage()
+  }
+
   function detailsError(): string {
     if (!isValidPositiveNumber(amount)) return "Enter a valid amount greater than zero."
     if (interestType === "rate" && !isValidPositiveNumber(interestRate, true)) {
@@ -84,6 +105,7 @@ export default function BorrowerRequestLoanPage() {
       return "Enter a valid interest amount (0 or higher)."
     }
     if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
+    if (!payoutDetails.trim() && !payoutQr) return MISSING_PAYOUT_MESSAGE
     return ""
   }
 
@@ -108,6 +130,22 @@ export default function BorrowerRequestLoanPage() {
 
     setSubmitting(true)
 
+    // Named "<member_id>-..." like repayment receipts, so the Receipts
+    // bucket's storage policy still lets the borrower view their own file.
+    let qrPath: string | null = null
+    if (payoutQr) {
+      qrPath = `${member!.member_id}-payout-${Date.now()}-${payoutQr.name}`
+      const { error: uploadError } = await supabase.storage
+        .from("Receipts")
+        .upload(qrPath, payoutQr, { contentType: payoutQr.type })
+
+      if (uploadError) {
+        setSubmitting(false)
+        setMessage(uploadError.message)
+        return
+      }
+    }
+
     // Both the loans row and its paired "Loan Release" transaction are
     // written in one atomic RPC call -- previously these were two separate
     // client-side inserts, and a failure on the second one (dropped
@@ -124,12 +162,16 @@ export default function BorrowerRequestLoanPage() {
       p_repayment_frequency: repaymentFrequency,
       p_start_date: new Date().toISOString().slice(0, 10),
       p_notes: description,
-      p_description: description
+      p_description: description,
+      p_payout_details: payoutDetails,
+      p_payout_qr_path: qrPath
     })
 
     setSubmitting(false)
 
     if (error) {
+      // The QR already uploaded -- don't leave it orphaned in storage.
+      if (qrPath) await supabase.storage.from("Receipts").remove([qrPath])
       setMessage(error.message)
       return
     }
@@ -221,6 +263,32 @@ export default function BorrowerRequestLoanPage() {
                   repaymentFrequency={repaymentFrequency}
                   setRepaymentFrequency={setRepaymentFrequency}
                 />
+
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
+                    Where should we send it?
+                  </p>
+                  <div className="bg-paper-2 border border-hairline rounded-md p-4 space-y-3">
+                    <textarea
+                      rows={3}
+                      className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft resize-none"
+                      placeholder={"Bank or e-wallet, account name & number\ne.g. GCash · Juan Dela Cruz · 0917 123 4567"}
+                      value={payoutDetails}
+                      onChange={(e) => {
+                        setPayoutDetails(e.target.value)
+                        if (e.target.value.trim()) clearMissingPayoutMessage()
+                      }}
+                    />
+                    <ReceiptField
+                      receipt={payoutQr}
+                      receiptPreview={payoutQrPreview}
+                      dragActive={qrDragActive}
+                      setDragActive={setQrDragActive}
+                      onFileChange={setPayoutQrFile}
+                      emptyLabel="Or upload QR code"
+                    />
+                  </div>
+                </div>
               </>
             )}
 
@@ -238,6 +306,8 @@ export default function BorrowerRequestLoanPage() {
                 />
                 {previewTotalRepayable > 0 && <ReviewRow label="Est. total repayable" value={`₱${fmt(previewTotalRepayable)}`} />}
                 {description && <ReviewRow label="Description" value={description} />}
+                {payoutDetails.trim() && <ReviewRow label="Send to" value={payoutDetails.trim()} />}
+                {payoutQr && <ReviewRow label="QR code" value="Attached" />}
               </FieldGroup>
             )}
 

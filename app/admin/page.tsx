@@ -189,7 +189,7 @@ export default function AdminPage() {
           members!transactions_member_id_fkey ( name, email ),
           submitted_by_member:members!transactions_submitted_by_fkey ( name ),
           bank_accounts!transactions_bank_account_id_fkey ( bank_name, account_name ),
-          loans!transactions_loan_id_fkey ( interest_type, interest_rate, interest_amount, term_months ),
+          loans!transactions_loan_id_fkey ( interest_type, interest_rate, interest_amount, term_months, payout_details, payout_qr_path ),
           investments!transactions_investment_id_fkey ( name )
         `
         )
@@ -1236,6 +1236,28 @@ export default function AdminPage() {
             >
               {savingEditId === t.transaction_id ? "Saving…" : "Save changes"}
             </button>
+
+            {/* Where the borrower asked for the money to go -- set on
+                their loan request. */}
+            {needsLoanBank && (t.loans?.payout_details || t.loans?.payout_qr_path) && (
+              <div className="mb-4">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Send to</p>
+                <div className="bg-paper-2 border border-hairline rounded-md px-4 py-3.5 space-y-3">
+                  {t.loans?.payout_details && (
+                    <p className="text-sm text-ink whitespace-pre-line break-words">{t.loans.payout_details}</p>
+                  )}
+                  {t.loans?.payout_qr_path && (
+                    <button
+                      type="button"
+                      onClick={() => setOpenReceiptUrl(t.loans.payout_qr_path)}
+                      className="inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
+                    >
+                      View QR code
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div>
               <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
