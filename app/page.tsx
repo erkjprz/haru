@@ -24,6 +24,14 @@ export default function Home() {
     if (loading || started.current) return
     started.current = true
 
+    // A signup confirmation link that failed (expired, already used) lands
+    // here with the reason in the hash -- carry it to /login, which explains
+    // it, instead of dropping it on a silent redirect.
+    if (window.location.hash.includes("error_code=")) {
+      router.replace("/login" + window.location.hash)
+      return
+    }
+
     if (!user || !member) {
       router.replace("/login")
       return
