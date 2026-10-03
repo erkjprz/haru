@@ -1426,6 +1426,7 @@ type Loan = {
   interest_amount: number | null
   repayment_frequency: string | null
   last_repayment_date: string | null
+  due_day: number | null
 }
 
 function termLabel(loan: Loan): string | null {
@@ -1656,7 +1657,13 @@ function LoanCard({
   const repaidPct = loan.total_repayable > 0 ? Math.min(100, (loan.repayment / loan.total_repayable) * 100) : 0
   const fullyRepaid = loan.repayment >= loan.total_repayable
 
-  const overdueLabel = paymentOverdueLabel(loan.status, loan.repayment_frequency, loan.start_date, loan.last_repayment_date)
+  const overdueLabel = paymentOverdueLabel(
+    loan.status,
+    loan.repayment_frequency,
+    loan.start_date,
+    loan.last_repayment_date,
+    loan.due_day
+  )
 
   const subtitleParts = [
     termLabel(loan),

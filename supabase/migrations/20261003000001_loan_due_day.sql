@@ -83,4 +83,77 @@ $function$;
 grant execute on function public.submit_loan_request(uuid, numeric, text, numeric, numeric, integer, text, date, text, text, uuid, text, text, smallint)
   to anon, authenticated, service_role;
 
+-- Expose due_day on v_loan_summary (appended last, as create or replace
+-- view requires) so the overdue flag can count from the actual due date.
+-- security_invoker restated so the replace can't drop it.
+create or replace view public.v_loan_summary
+with (security_invoker = true) as
+ SELECT l.loan_id,
+    l.name AS loan,
+    l.status,
+    l.start_date,
+    l.principal,
+    l.interest_rate,
+    l.term_months,
+    l.notes,
+    COALESCE(b.name, m.name) AS borrower,
+    l.member_id AS borrower_member_id,
+    COALESCE(sum(
+        CASE
+            WHEN t.classification = 'Loan Repayment'::text THEN t.amount
+            ELSE 0::numeric
+        END), 0::numeric) AS repayment,
+    COALESCE(sum(
+        CASE
+            WHEN t.classification = 'Loan Repayment'::text THEN t.amount
+            ELSE 0::numeric
+        END), 0::numeric) - l.principal AS gain,
+        CASE
+            WHEN l.status = 'closed'::text THEN 0::numeric
+            ELSE GREATEST(0::numeric, l.principal +
+            CASE
+                WHEN l.interest_type = 'amount'::text THEN COALESCE(l.interest_amount, 0::numeric)
+                ELSE l.principal * COALESCE(l.interest_rate, 0::numeric) / 100::numeric
+            END - COALESCE(sum(
+            CASE
+                WHEN t.classification = 'Loan Repayment'::text THEN t.amount
+                ELSE 0::numeric
+            END), 0::numeric))
+        END AS outstanding,
+    COALESCE(lga.closed_date,
+        CASE
+            WHEN l.status = 'closed'::text THEN max(
+            CASE
+                WHEN t.classification = 'Loan Repayment'::text THEN t.txn_date
+                ELSE NULL::date
+            END)
+            ELSE NULL::date
+        END) AS closed_date,
+    l.interest_type,
+    l.interest_amount,
+    l.principal +
+        CASE
+            WHEN l.interest_type = 'amount'::text THEN COALESCE(l.interest_amount, 0::numeric)
+            ELSE l.principal * COALESCE(l.interest_rate, 0::numeric) / 100::numeric
+        END AS total_repayable,
+    l.repayment_frequency,
+    max(
+        CASE
+            WHEN t.classification = 'Loan Repayment'::text THEN t.txn_date
+            ELSE NULL::date
+        END) AS last_repayment_date,
+    l.due_day
+   FROM loans l
+     LEFT JOIN borrowers b ON b.borrower_id = l.borrower_id
+     LEFT JOIN members m ON m.member_id = l.member_id
+     LEFT JOIN transactions t ON t.loan_id = l.loan_id AND t.status = 'approved'::text
+     LEFT JOIN ( SELECT loan_gain_allocations.loan_id,
+            max(loan_gain_allocations.allocation_date) AS closed_date
+           FROM loan_gain_allocations
+          GROUP BY loan_gain_allocations.loan_id) lga ON lga.loan_id = l.loan_id
+  GROUP BY l.loan_id, l.name, l.status, l.start_date, l.principal, l.interest_rate, l.term_months, l.notes, l.repayment_frequency, b.name, m.name, l.member_id, lga.closed_date, l.interest_type, l.interest_amount, l.due_day
+  ORDER BY l.start_date;
+
+revoke all on public.v_loan_summary from anon;
+
 notify pgrst, 'reload schema';

@@ -30,6 +30,8 @@ import { dateOnly } from "@/lib/currentValue"
 import { getCachedTransactionFormData, loadTransactionFormData } from "@/lib/transactionFormPrefetch"
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 
+const MISSING_DUE_DAY_MESSAGE = "Pick the day of the month the payment is due."
+
 // The FAB's quick-entry sheet covers the types every member reaches for
 // constantly (Contribution/Withdrawal/Loan Request/Loan Payment), plus
 // Investment Return open to every member the same way, plus the
@@ -346,7 +348,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         return "Enter a valid interest amount (0 or higher)."
       }
       if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
-      if (repaymentFrequency === "monthly" && !dueDay) return "Pick the day of the month the payment is due."
+      if (repaymentFrequency === "monthly" && !dueDay) return MISSING_DUE_DAY_MESSAGE
     }
     return ""
   }
@@ -393,7 +395,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       return
     }
     if (isLoanRequest && repaymentFrequency === "monthly" && !dueDay) {
-      setMessage("Pick the day of the month the payment is due.")
+      setMessage(MISSING_DUE_DAY_MESSAGE)
       return
     }
     if (isLoanPayment && !selectedLoanId) {
@@ -907,7 +909,10 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                         repaymentFrequency={repaymentFrequency}
                         setRepaymentFrequency={setRepaymentFrequency}
                         dueDay={dueDay}
-                        setDueDay={setDueDay}
+                        setDueDay={(v) => {
+                          setDueDay(v)
+                          if (message === MISSING_DUE_DAY_MESSAGE) setMessage("")
+                        }}
                       />
                     </div>
                   </>

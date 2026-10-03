@@ -21,6 +21,7 @@ import {
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
 import { ordinalDay } from "@/lib/loanFormat"
 
+const MISSING_DUE_DAY_MESSAGE = "Pick the day of the month your payment is due."
 const MISSING_PAYOUT_MESSAGE = "Add your bank or e-wallet details, or a QR code, so we know where to send the money."
 
 function isValidPositiveNumber(value: string, allowZero = false): boolean {
@@ -107,7 +108,7 @@ export default function BorrowerRequestLoanPage() {
       return "Enter a valid interest amount (0 or higher)."
     }
     if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
-    if (repaymentFrequency === "monthly" && !dueDay) return "Pick the day of the month your payment is due."
+    if (repaymentFrequency === "monthly" && !dueDay) return MISSING_DUE_DAY_MESSAGE
     if (!payoutDetails.trim() && !payoutQr) return MISSING_PAYOUT_MESSAGE
     return ""
   }
@@ -267,7 +268,10 @@ export default function BorrowerRequestLoanPage() {
                   repaymentFrequency={repaymentFrequency}
                   setRepaymentFrequency={setRepaymentFrequency}
                   dueDay={dueDay}
-                  setDueDay={setDueDay}
+                  setDueDay={(v) => {
+                    setDueDay(v)
+                    if (message === MISSING_DUE_DAY_MESSAGE) setMessage("")
+                  }}
                 />
 
                 <div>

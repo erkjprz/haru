@@ -34,26 +34,75 @@ export function durationLabel(startDate: string, closedDate: string | null): str
   return remMonths > 0 ? `${years} yr ${remMonths} mo` : `${years} yr`
 }
 
-// Flags an active monthly loan that's gone quiet -- lump_sum loans have no
-// periodic cadence to miss, so only 'monthly' is checked. Grace of 45 days
-// (vs. a strict 30) absorbs normal payment-date drift between cycles
-// (e.g. paid the 29th one month, the 15th the next) without false-flagging.
-// Measured from the last approved "Loan Repayment" txn_date, or start_date
-// if the loan hasn't had one yet.
+// Flags an active monthly loan that's behind -- lump_sum loans have no
+// periodic cadence to miss, so only 'monthly' is checked.
+//
+// With a due day set, it counts from the next due date after the last
+// approved "Loan Repayment" (or start_date if none yet): overdue once that
+// date has passed unpaid. A payment counts toward the due date nearest it,
+// so paying a few days early or late doesn't flag the very next cycle --
+// see nextDueDate.
+//
+// Older loans with no due day keep the original heuristic: 45 days of
+// silence (vs. a strict 30, absorbing payment-date drift between cycles).
 export function paymentOverdueLabel(
   status: "requested" | "active" | "closed",
   repaymentFrequency: string | null | undefined,
   startDate: string,
-  lastRepaymentDate: string | null
+  lastRepaymentDate: string | null,
+  dueDay?: number | null,
+  today: Date = new Date()
 ): string | null {
   if (status !== "active" || repaymentFrequency !== "monthly") return null
 
   const since = lastRepaymentDate ?? startDate
-  const days = Math.round((Date.now() - new Date(since).getTime()) / 86400000)
+
+  if (dueDay) {
+    const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+    let due = nextDueDate(since, dueDay)
+    let missed = 0
+    while (due < todayUtc) {
+      missed++
+      due = dueDateInMonth(new Date(due).getUTCFullYear(), new Date(due).getUTCMonth() + 1, dueDay)
+    }
+    if (missed === 0) return null
+    return missed === 1 ? "Payment overdue" : `${missed} payments overdue`
+  }
+
+  const days = Math.round((today.getTime() - new Date(since).getTime()) / 86400000)
   if (days <= 45) return null
 
   const monthsLate = Math.max(1, Math.floor(days / 30.44))
   return monthsLate === 1 ? "Payment overdue" : `${monthsLate} mo overdue`
+}
+
+// The due day in a given month, clamped to that month's last day (a 31st
+// due day falls on Feb 28/29, Apr 30, ...). UTC midnight, in ms.
+function dueDateInMonth(year: number, monthIndex: number, dueDay: number): number {
+  const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+  return Date.UTC(year, monthIndex, Math.min(dueDay, lastDay))
+}
+
+// First due date more than 15 days after `from` (a YYYY-MM-DD date): the
+// next installment owed after a payment or release on that date. The
+// 15-day gap is what lets a payment cover the due date it was nearest to
+// -- paid on the 13th for a 15th due day, the next one owed is next
+// month's 15th, not two days later.
+export function nextDueDate(from: string, dueDay: number): number {
+  const [y, m, d] = from.split("-").map(Number)
+  const threshold = Date.UTC(y, m - 1, d + 15)
+  let year = y
+  let month = m - 1
+  let due = dueDateInMonth(year, month, dueDay)
+  while (due <= threshold) {
+    month++
+    if (month > 11) {
+      month = 0
+      year++
+    }
+    due = dueDateInMonth(year, month, dueDay)
+  }
+  return due
 }
 
 // 1 -> "1st", 22 -> "22nd", 13 -> "13th" -- for a loan's monthly due day.

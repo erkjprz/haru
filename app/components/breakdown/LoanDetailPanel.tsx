@@ -40,6 +40,7 @@ type Loan = {
   notes: string | null
   repayment_frequency: string | null
   last_repayment_date: string | null
+  due_day: number | null
 }
 
 type GainShare = {
@@ -602,7 +603,13 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         year: "numeric"
       })
     : null
-  const overdueLabel = paymentOverdueLabel(loan.status, loan.repayment_frequency, loan.start_date, loan.last_repayment_date)
+  const overdueLabel = paymentOverdueLabel(
+    loan.status,
+    loan.repayment_frequency,
+    loan.start_date,
+    loan.last_repayment_date,
+    loan.due_day
+  )
 
   const totalShared = shares.reduce((sum, s) => sum + s.amount, 0)
   const totalHold = holds.reduce((sum, h) => sum + h.share * principalOutstanding, 0)
