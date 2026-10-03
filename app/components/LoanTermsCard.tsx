@@ -3,8 +3,17 @@
 import { useState } from "react"
 import { InterestRatePickerSheet } from "@/app/components/InterestRatePickerSheet"
 import { TermPickerSheet } from "@/app/components/TermPickerSheet"
-import { FieldRow, InterestIcon, ClockIcon, RepeatIcon, rowInputClass } from "@/app/components/TransactionFormUI"
+import { DueDayPickerSheet } from "@/app/components/DueDayPickerSheet"
+import {
+  FieldRow,
+  InterestIcon,
+  ClockIcon,
+  RepeatIcon,
+  CalendarIcon,
+  rowInputClass
+} from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
+import { ordinalDay } from "@/lib/loanFormat"
 
 function isValidPositiveNumber(value: string, allowZero = false): boolean {
   if (!value.trim()) return false
@@ -32,7 +41,9 @@ export function LoanTermsCard({
   termMonths,
   setTermMonths,
   repaymentFrequency,
-  setRepaymentFrequency
+  setRepaymentFrequency,
+  dueDay,
+  setDueDay
 }: {
   amount: string
   interestType: InterestType
@@ -45,9 +56,12 @@ export function LoanTermsCard({
   setTermMonths: (v: string) => void
   repaymentFrequency: string
   setRepaymentFrequency: (v: string) => void
+  dueDay: string
+  setDueDay: (v: string) => void
 }) {
   const [showInterestRatePicker, setShowInterestRatePicker] = useState(false)
   const [showTermPicker, setShowTermPicker] = useState(false)
+  const [showDueDayPicker, setShowDueDayPicker] = useState(false)
   // Picker is the default interaction for both -- these only flip to true
   // when someone explicitly picks "Custom" from the sheet, swapping the
   // row over to the plain number input for direct typing.
@@ -207,6 +221,32 @@ export function LoanTermsCard({
           </div>
         </FieldRow>
 
+        {/* Only monthly loans have a recurring due date -- a lump sum is
+            simply due at the end of the term. */}
+        {repaymentFrequency === "monthly" && (
+          <FieldRow icon={<CalendarIcon />}>
+            <button
+              type="button"
+              onClick={() => setShowDueDayPicker(true)}
+              className="flex-1 min-w-0 text-left text-sm"
+            >
+              {dueDay ? (
+                <span className="text-ink">Due on the {ordinalDay(Number(dueDay))} of each month</span>
+              ) : (
+                <span className="text-ink-soft">Due day each month, e.g. 15th</span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDueDayPicker(true)}
+              aria-label="Choose the monthly due day"
+              className="text-ink-soft text-xs shrink-0 px-1"
+            >
+              ▾
+            </button>
+          </FieldRow>
+        )}
+
         {/* Right in the same card, directly under the fields that produce
             it -- previously a separate box below the card, easy to miss
             without scrolling since nothing here visually tied it to Interest/
@@ -247,6 +287,17 @@ export function LoanTermsCard({
         onCustom={() => {
           setInterestRateCustom(true)
           setShowInterestRatePicker(false)
+        }}
+      />
+    )}
+
+    {showDueDayPicker && (
+      <DueDayPickerSheet
+        value={dueDay}
+        onClose={() => setShowDueDayPicker(false)}
+        onSelect={(day) => {
+          setDueDay(String(day))
+          setShowDueDayPicker(false)
         }}
       />
     )}

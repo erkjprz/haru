@@ -25,9 +25,12 @@ import {
   rowInputClass
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
+import { ordinalDay } from "@/lib/loanFormat"
 import { dateOnly } from "@/lib/currentValue"
 import { getCachedTransactionFormData, loadTransactionFormData } from "@/lib/transactionFormPrefetch"
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
+
+const MISSING_DUE_DAY_MESSAGE = "Pick the day of the month the payment is due."
 
 // The FAB's quick-entry sheet covers the types every member reaches for
 // constantly (Contribution/Withdrawal/Loan Request/Loan Payment), plus
@@ -117,6 +120,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [interestAmount, setInterestAmount] = useState("")
   const [termMonths, setTermMonths] = useState("")
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
+  const [dueDay, setDueDay] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState("")
   const [showLoanPicker, setShowLoanPicker] = useState(false)
   const [showInvestmentPicker, setShowInvestmentPicker] = useState(false)
@@ -294,6 +298,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     setInterestAmount("")
     setTermMonths("")
     setRepaymentFrequency("monthly")
+    setDueDay("")
     setSelectedLoanId("")
     setInvestmentId("")
     setSaveAsDefault(false)
@@ -343,6 +348,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         return "Enter a valid interest amount (0 or higher)."
       }
       if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
+      if (repaymentFrequency === "monthly" && !dueDay) return MISSING_DUE_DAY_MESSAGE
     }
     return ""
   }
@@ -388,6 +394,10 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       setMessage("Enter a valid term, in months greater than zero.")
       return
     }
+    if (isLoanRequest && repaymentFrequency === "monthly" && !dueDay) {
+      setMessage(MISSING_DUE_DAY_MESSAGE)
+      return
+    }
     if (isLoanPayment && !selectedLoanId) {
       setMessage("Select which loan you're paying.")
       return
@@ -429,7 +439,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         p_start_date: txnDate,
         p_notes: description,
         p_description: description,
-        p_submitted_by: submittedByForOnBehalf
+        p_submitted_by: submittedByForOnBehalf,
+        p_due_day: repaymentFrequency === "monthly" ? Number(dueDay) : null
       })
 
       setSubmitting(false)
@@ -897,6 +908,11 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                         setTermMonths={setTermMonths}
                         repaymentFrequency={repaymentFrequency}
                         setRepaymentFrequency={setRepaymentFrequency}
+                        dueDay={dueDay}
+                        setDueDay={(v) => {
+                          setDueDay(v)
+                          if (message === MISSING_DUE_DAY_MESSAGE) setMessage("")
+                        }}
                       />
                     </div>
                   </>
@@ -926,6 +942,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                       label="Repayment"
                       value={repaymentFrequency === "monthly" ? "Monthly installments" : "Lump sum at end of term"}
                     />
+                    {repaymentFrequency === "monthly" && dueDay && (
+                      <ReviewRow label="Due date" value={`${ordinalDay(Number(dueDay))} of each month`} />
+                    )}
                     {previewTotalRepayable > 0 && <ReviewRow label="Est. total repayable" value={`₱${fmt(previewTotalRepayable)}`} />}
                     {description && <ReviewRow label="Description" value={description} />}
                   </FieldGroup>
