@@ -10,6 +10,7 @@ import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 import { DateField } from "@/app/components/TransactionFormUI"
 import { readCache, writeCache } from "@/lib/cache"
+import { useHydrated } from "@/lib/useHydrated"
 import { TRANSACTIONS_CHANGED_EVENT } from "@/lib/transactionEvents"
 import { fetchTransactionsFields, bankAccountLabel, TRANSACTIONS_CACHE_KEY, type TransactionsSnapshot } from "@/lib/transactionsSnapshot"
 import { cacheTransactionRow } from "@/lib/transactionRowCache"
@@ -202,6 +203,7 @@ function TransactionsPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { loading: authLoading, member } = useAuth()
+  const hydrated = useHydrated()
   const isAdmin = member?.role === "admin"
   const cached = readCache<TransactionsSnapshot>(TRANSACTIONS_CACHE_KEY)
 
@@ -452,7 +454,7 @@ function TransactionsPageInner() {
   // Drives both the filter icon's badge count and the removable chip row --
   // one list of "what's currently filtered," each with its own clear
   // action, instead of maintaining the count and the chips separately.
-  const activeChips = [
+  const filterChips = [
     loanFilter && { key: "loan", label: `Loan: ${loanFilterLabel}`, onClear: () => setLoanFilter("") },
     investmentFilter && {
       key: "investment",
@@ -474,6 +476,14 @@ function TransactionsPageInner() {
       }
     }
   ].filter(Boolean) as { key: string; label: string; onClear: () => void }[]
+  // The default "your own transactions" member filter is applied from the
+  // cached member on the client's first render, which the server never
+  // sees -- showing its chip/badge during hydration is a mismatch (React
+  // error #418), so they appear right after instead.
+  const activeChips = hydrated ? filterChips : []
+  // Same reason: the server always renders the skeleton (it has no cache),
+  // so the cached list only takes over once hydration is done.
+  const showLoading = dataLoading || !hydrated
 
   return (
     <>
@@ -555,7 +565,7 @@ function TransactionsPageInner() {
             </div>
           )}
 
-          {!dataLoading && (
+          {!showLoading && (
             <div className="mt-4 text-xs text-ink-soft font-mono [font-variant-numeric:tabular-nums]">
               Showing {filteredTransactions.length} of {totalCount}
               {debouncedSearchQuery && ` matching "${debouncedSearchQuery}"`}
@@ -563,8 +573,8 @@ function TransactionsPageInner() {
           )}
 
           <div className="mt-4">
-            {dataLoading && <SkeletonCardList rows={5} />}
-            {!dataLoading && filteredTransactions.map((transaction, idx) => {
+            {showLoading && <SkeletonCardList rows={5} />}
+            {!showLoading && filteredTransactions.map((transaction, idx) => {
               const memberName = transaction.members?.name || null
               const isLoanTxn =
                 transaction.classification === "Loan Release" ||
@@ -800,7 +810,7 @@ function TransactionsPageInner() {
               )
             })}
 
-            {!dataLoading && filteredTransactions.length === 0 && !loadError && (
+            {!showLoading && filteredTransactions.length === 0 && !loadError && (
               <p className="py-8 text-sm text-ink-soft text-center">No transactions found.</p>
             )}
           </div>

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
 import { NotificationBell } from "@/app/components/NotificationBell"
+import { useHydrated } from "@/lib/useHydrated"
 import { NewTransactionSheet } from "@/app/components/NewTransactionSheet"
 import { Toast } from "@/app/components/Toast"
 import { notifyTransactionsChanged } from "@/lib/transactionEvents"
@@ -104,7 +105,11 @@ export default function Navbar() {
   const router = useRouter()
   const pathname = usePathname()
   const { member } = useAuth()
-  const isAdmin = member?.role === "admin"
+  // The cached member can say "admin" on the client's first render, but
+  // the server rendered without one -- hold the Admin tab back until
+  // hydration so both sides agree.
+  const hydrated = useHydrated()
+  const isAdmin = hydrated && member?.role === "admin"
   const navRef = useRef<HTMLElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
   const fabRef = useRef<HTMLButtonElement>(null)
@@ -204,7 +209,7 @@ export default function Navbar() {
   // -- on the Menu page -- so Menu reads as "active" while browsing any of
   // it, the same way Transactions stays active on a transaction's own
   // pages even though there's no separate "Transactions" sub-route tab.
-  const MENU_OWNED_PREFIXES = ["/menu", "/account", "/help", ...(isAdmin ? [] : ["/messages"])]
+  const MENU_OWNED_PREFIXES = ["/menu", "/account", "/notifications", "/help", ...(isAdmin ? [] : ["/messages"])]
 
   const dockItems: DockItem[] = [
     { label: "Dashboard", path: "/dashboard", icon: IconHome },

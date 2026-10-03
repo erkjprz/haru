@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { isPushSupported, getExistingSubscription, subscribeToPush } from "@/lib/push"
 import { readCache, writeCache } from "@/lib/cache"
+import { useHydrated } from "@/lib/useHydrated"
 
 type Notification = {
   id: string
@@ -23,6 +24,7 @@ const VIEWPORT_MARGIN = 16
 export function NotificationBell() {
   const router = useRouter()
   const { member } = useAuth()
+  const hydrated = useHydrated()
   // Navbar (and this bell) remounts on every page navigation, so without a
   // cache the badge would reset to 0 and pop back to its real count after
   // every single page load -- a small but constant flicker across the
@@ -168,7 +170,9 @@ export function NotificationBell() {
     router.push("/notifications")
   }
 
-  if (!member) return null
+  // `member` (and the badge count) can come from localStorage on the
+  // client's very first render, which the server never has.
+  if (!member || !hydrated) return null
 
   return (
     <div className="relative" ref={containerRef}>
