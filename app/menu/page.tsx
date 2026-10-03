@@ -94,6 +94,7 @@ export default function MenuPage() {
             <ChevronRow label="Account" onClick={() => router.push("/account")} />
             <ChevronRow label="Preferences" onClick={() => router.push("/account/preferences")} />
             <ChevronRow label="Notifications" onClick={() => router.push("/notifications")} />
+            <ChevronRow label="Chat with Est. 2017" onClick={() => router.push("/messages")} />
             <ChevronRow label="Help" onClick={() => router.push("/help")} />
           </MenuSection>
 
