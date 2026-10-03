@@ -18,6 +18,7 @@ import {
   InterestIcon,
   ClockIcon,
   RepeatIcon,
+  CalendarIcon,
   FieldRow,
   rowSelectClass,
   rowInputClass
@@ -28,6 +29,8 @@ import { LoanPickerSheet, LoanRowIcon } from "@/app/components/LoanPickerSheet"
 import { InvestmentPickerSheet, InvestmentRowIcon } from "@/app/components/InvestmentPickerSheet"
 import { InterestRatePickerSheet } from "@/app/components/InterestRatePickerSheet"
 import { TermPickerSheet } from "@/app/components/TermPickerSheet"
+import { DueDayPickerSheet } from "@/app/components/DueDayPickerSheet"
+import { ordinalDay } from "@/lib/loanFormat"
 import { notifyTransactionsChanged } from "@/lib/transactionEvents"
 import { getCachedTransactionRow } from "@/lib/transactionRowCache"
 import { getCachedTransactionFormData } from "@/lib/transactionFormPrefetch"
@@ -120,6 +123,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
   const [interestAmount, setInterestAmount] = useState("")
   const [termMonths, setTermMonths] = useState("")
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
+  const [dueDay, setDueDay] = useState("")
   // Picker sheets replace plain <select>/<input> for these four fields,
   // matching NewTransactionSheet's pattern -- interestRateCustom/termCustom
   // default to false (picker-driven) same as there, regardless of whether
@@ -130,6 +134,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
   const [showInvestmentPicker, setShowInvestmentPicker] = useState(false)
   const [showInterestRatePicker, setShowInterestRatePicker] = useState(false)
   const [showTermPicker, setShowTermPicker] = useState(false)
+  const [showDueDayPicker, setShowDueDayPicker] = useState(false)
   const [interestRateCustom, setInterestRateCustom] = useState(false)
   const [termCustom, setTermCustom] = useState(false)
   const [description, setDescription] = useState("")
@@ -317,6 +322,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
         setInterestAmount(loanRecord.interest_amount != null ? String(Number(loanRecord.interest_amount)) : "")
         setTermMonths(loanRecord.term_months != null ? String(loanRecord.term_months) : "")
         setRepaymentFrequency(loanRecord.repayment_frequency ?? "monthly")
+        setDueDay(loanRecord.due_day != null ? String(loanRecord.due_day) : "")
       } else {
         setLoanId(txn.loan_id ?? "")
         setAmount(String(Math.abs(Number(txn.amount))))
@@ -534,6 +540,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
           interest_amount: interestType === "amount" ? Number(interestAmount) : null,
           term_months: Number(termMonths),
           repayment_frequency: repaymentFrequency,
+          due_day: repaymentFrequency === "monthly" && dueDay ? Number(dueDay) : null,
           notes: description
         })
         .eq("loan_id", loanId)
@@ -1123,6 +1130,30 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
                     </div>
                   </FieldRow>
 
+                  {repaymentFrequency === "monthly" && (
+                    <FieldRow icon={<CalendarIcon />}>
+                      <button
+                        type="button"
+                        onClick={() => setShowDueDayPicker(true)}
+                        className="flex-1 min-w-0 text-left text-sm"
+                      >
+                        {dueDay ? (
+                          <span className="text-ink">Due on the {ordinalDay(Number(dueDay))} of each month</span>
+                        ) : (
+                          <span className="text-ink-soft">Due day each month, e.g. 15th</span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowDueDayPicker(true)}
+                        aria-label="Choose the monthly due day"
+                        className="text-ink-soft text-xs shrink-0 px-1"
+                      >
+                        ▾
+                      </button>
+                    </FieldRow>
+                  )}
+
                   {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
                     <>
                       <div className="flex items-center justify-between px-4 py-3 bg-gold/10">
@@ -1174,6 +1205,9 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
                   label="Repayment"
                   value={repaymentFrequency === "monthly" ? "Monthly installments" : "Lump sum at end of term"}
                 />
+                {repaymentFrequency === "monthly" && dueDay && (
+                  <ReviewRow label="Due date" value={`${ordinalDay(Number(dueDay))} of each month`} />
+                )}
                 {previewTotalRepayable > 0 && (
                   <ReviewRow label="Est. total repayable" value={`₱${fmt(previewTotalRepayable)}`} />
                 )}
@@ -1220,6 +1254,17 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
         onCustom={() => {
           setInterestRateCustom(true)
           setShowInterestRatePicker(false)
+        }}
+      />
+    )}
+
+    {showDueDayPicker && (
+      <DueDayPickerSheet
+        value={dueDay}
+        onClose={() => setShowDueDayPicker(false)}
+        onSelect={(day) => {
+          setDueDay(String(day))
+          setShowDueDayPicker(false)
         }}
       />
     )}

@@ -55,3 +55,11 @@ export function paymentOverdueLabel(
   const monthsLate = Math.max(1, Math.floor(days / 30.44))
   return monthsLate === 1 ? "Payment overdue" : `${monthsLate} mo overdue`
 }
+
+// 1 -> "1st", 22 -> "22nd", 13 -> "13th" -- for a loan's monthly due day.
+export function ordinalDay(day: number): string {
+  const mod100 = day % 100
+  if (mod100 >= 11 && mod100 <= 13) return `${day}th`
+  const suffix = { 1: "st", 2: "nd", 3: "rd" }[day % 10] ?? "th"
+  return `${day}${suffix}`
+}

@@ -19,6 +19,7 @@ import {
   rowInputClass
 } from "@/app/components/TransactionFormUI"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
+import { ordinalDay } from "@/lib/loanFormat"
 
 const MISSING_PAYOUT_MESSAGE = "Add your bank or e-wallet details, or a QR code, so we know where to send the money."
 
@@ -41,6 +42,7 @@ export default function BorrowerRequestLoanPage() {
   const [interestAmount, setInterestAmount] = useState("")
   const [termMonths, setTermMonths] = useState("")
   const [repaymentFrequency, setRepaymentFrequency] = useState("monthly")
+  const [dueDay, setDueDay] = useState("")
   const [description, setDescription] = useState("")
   // Where the admin should send the money: typed bank/e-wallet details,
   // a photo of the borrower's payment QR code, or both.
@@ -105,6 +107,7 @@ export default function BorrowerRequestLoanPage() {
       return "Enter a valid interest amount (0 or higher)."
     }
     if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
+    if (repaymentFrequency === "monthly" && !dueDay) return "Pick the day of the month your payment is due."
     if (!payoutDetails.trim() && !payoutQr) return MISSING_PAYOUT_MESSAGE
     return ""
   }
@@ -164,7 +167,8 @@ export default function BorrowerRequestLoanPage() {
       p_notes: description,
       p_description: description,
       p_payout_details: payoutDetails,
-      p_payout_qr_path: qrPath
+      p_payout_qr_path: qrPath,
+      p_due_day: repaymentFrequency === "monthly" ? Number(dueDay) : null
     })
 
     setSubmitting(false)
@@ -262,6 +266,8 @@ export default function BorrowerRequestLoanPage() {
                   setTermMonths={setTermMonths}
                   repaymentFrequency={repaymentFrequency}
                   setRepaymentFrequency={setRepaymentFrequency}
+                  dueDay={dueDay}
+                  setDueDay={setDueDay}
                 />
 
                 <div>
@@ -304,6 +310,9 @@ export default function BorrowerRequestLoanPage() {
                   label="Repayment"
                   value={repaymentFrequency === "monthly" ? "Monthly installments" : "Lump sum at end of term"}
                 />
+                {repaymentFrequency === "monthly" && dueDay && (
+                  <ReviewRow label="Due date" value={`${ordinalDay(Number(dueDay))} of each month`} />
+                )}
                 {previewTotalRepayable > 0 && <ReviewRow label="Est. total repayable" value={`₱${fmt(previewTotalRepayable)}`} />}
                 {description && <ReviewRow label="Description" value={description} />}
                 {payoutDetails.trim() && <ReviewRow label="Send to" value={payoutDetails.trim()} />}

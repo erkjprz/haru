@@ -427,6 +427,15 @@ export function ClockIcon() {
   )
 }
 
+export function CalendarIcon() {
+  return (
+    <RowIcon>
+      <rect x="3.5" y="5" width="17" height="16" rx="2" />
+      <path d="M8 3v4M16 3v4M3.5 10h17" strokeLinecap="round" />
+    </RowIcon>
+  )
+}
+
 // Same shape as Dashboard's "Repay Loan" shortcut icon.
 export function RepeatIcon() {
   return (

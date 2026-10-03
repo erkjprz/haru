@@ -13,7 +13,7 @@ import { closeLoanAndDistributeGain } from "@/lib/closeLoan"
 import { approveLoanRelease } from "@/lib/approveLoan"
 import { dateOnly } from "@/lib/currentValue"
 import { totalRepayable, type InterestType } from "@/lib/loanMath"
-import { formatInterestLabel, durationLabel, paymentOverdueLabel } from "@/lib/loanFormat"
+import { formatInterestLabel, durationLabel, paymentOverdueLabel, ordinalDay } from "@/lib/loanFormat"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
@@ -74,6 +74,7 @@ type AdminLoan = {
   interest_amount: number
   term_months: number | null
   repayment_frequency: string
+  due_day: number | null
   notes: string | null
   disbursed: number
   repaid: number
@@ -132,6 +133,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
   const [editInterestAmount, setEditInterestAmount] = useState("")
   const [editTermMonths, setEditTermMonths] = useState("")
   const [editRepaymentFrequency, setEditRepaymentFrequency] = useState("monthly")
+  const [editDueDay, setEditDueDay] = useState("")
   const [editNotes, setEditNotes] = useState("")
   const [savingEdit, setSavingEdit] = useState(false)
 
@@ -311,6 +313,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       interest_amount: Number(rawLoan.interest_amount ?? 0),
       term_months: rawLoan.term_months,
       repayment_frequency: rawLoan.repayment_frequency ?? "monthly",
+      due_day: rawLoan.due_day ?? null,
       notes: rawLoan.notes,
       disbursed,
       repaid,
@@ -381,6 +384,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
     setEditInterestAmount(String(adminLoan.interest_amount))
     setEditTermMonths(String(adminLoan.term_months ?? ""))
     setEditRepaymentFrequency(adminLoan.repayment_frequency)
+    setEditDueDay(adminLoan.due_day != null ? String(adminLoan.due_day) : "")
     setEditNotes(adminLoan.notes ?? "")
     setManageError("")
     setIsEditing(true)
@@ -416,6 +420,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         interest_amount: editInterestType === "amount" ? Number(editInterestAmount) : null,
         term_months: Number(editTermMonths),
         repayment_frequency: editRepaymentFrequency,
+        due_day: editRepaymentFrequency === "monthly" && editDueDay ? Number(editDueDay) : null,
         notes: editNotes
       }
 
@@ -760,6 +765,14 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                           {adminLoan.repayment_frequency === "monthly" ? "monthly" : "lump sum"}
                         </span>
                       </div>
+                      {adminLoan.repayment_frequency === "monthly" && adminLoan.due_day != null && (
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="text-[13px] text-ink-soft">Due date</span>
+                          <span className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink whitespace-nowrap">
+                            {ordinalDay(adminLoan.due_day)} monthly
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -950,6 +963,26 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
                       <option value="lump_sum">One lump sum at end of term</option>
                     </select>
                   </div>
+
+                  {editRepaymentFrequency === "monthly" && (
+                    <div>
+                      <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
+                        Due date each month
+                      </label>
+                      <select
+                        className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-2 w-full"
+                        value={editDueDay}
+                        onChange={(e) => setEditDueDay(e.target.value)}
+                      >
+                        <option value="">Not set</option>
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                          <option key={day} value={day}>
+                            {ordinalDay(day)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block mb-1 text-xs uppercase tracking-wide text-ink-soft font-mono">
