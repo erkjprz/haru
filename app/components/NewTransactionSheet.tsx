@@ -68,6 +68,20 @@ const FLOW: Record<string, { arrow: string; tone: "in" | "out" | "neutral" }> = 
   investment: { arrow: "↓", tone: "out" }
 }
 
+// Per-type example for the notes field -- members kept typing their name,
+// date or month there, so show what a useful note looks like instead.
+const NOTES_PLACEHOLDER: Record<string, string> = {
+  contribution: "Anything unusual? e.g. paid via GCash",
+  withdrawal: "What's it for? e.g. tuition, emergency",
+  loan_request: "What's it for? e.g. tuition, house repair",
+  loan_payment: "Anything unusual? e.g. partial payment",
+  investment: "Details, e.g. 1-year time deposit",
+  investment_return: "Details, e.g. maturity payout",
+  bank_interest: "Anything unusual? e.g. net of tax",
+  expense: "What's it for? e.g. bank fee, supplies",
+  bank_transfer: "Why the transfer? e.g. moving funds for payout"
+}
+
 function isValidPositiveNumber(value: string, allowZero = false): boolean {
   if (!value.trim()) return false
   const n = Number(value)
@@ -811,7 +825,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                       <div className="flex-1 min-w-0">
                         <input
                           className={`${rowInputClass} w-full`}
-                          placeholder="Anything unusual? e.g. split payment"
+                          placeholder={NOTES_PLACEHOLDER[selectedType] ?? "Anything unusual?"}
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
                         />
@@ -889,7 +903,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                           <div className="flex-1 min-w-0">
                             <input
                               className={`${rowInputClass} w-full`}
-                              placeholder="Anything unusual? e.g. split payment"
+                              placeholder={NOTES_PLACEHOLDER[selectedType] ?? "Anything unusual?"}
                               value={description}
                               onChange={(e) => setDescription(e.target.value)}
                             />
