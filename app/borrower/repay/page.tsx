@@ -311,10 +311,11 @@ export default function BorrowerRepayPage() {
                       </label>
                       <input
                         className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-                        placeholder="Notes (name & date already saved)"
+                        placeholder="Additional notes"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                       />
+                      <p className="mt-1 text-[11px] text-ink-soft">Name, month &amp; date are saved automatically.</p>
                     </div>
                   </div>
                 </FieldGroup>

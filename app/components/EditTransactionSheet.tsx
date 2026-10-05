@@ -952,12 +952,15 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
                 )}
 
                 <FieldRow icon={<NoteIcon />}>
-                  <input
-                    className={rowInputClass}
-                    placeholder="Notes (name & date already saved)"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
+                  <div className="flex-1 min-w-0">
+                    <input
+                      className={`${rowInputClass} w-full`}
+                      placeholder="Additional notes"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                    />
+                    <p className="mt-0.5 text-[11px] text-ink-soft">Name, month &amp; date are saved automatically.</p>
+                  </div>
                 </FieldRow>
               </div>
 
@@ -1174,12 +1177,15 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
                   )}
 
                   <FieldRow icon={<NoteIcon />}>
-                    <input
-                      className={rowInputClass}
-                      placeholder="Notes (name & date already saved)"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                    />
+                    <div className="flex-1 min-w-0">
+                      <input
+                        className={`${rowInputClass} w-full`}
+                        placeholder="Additional notes"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                      />
+                      <p className="mt-0.5 text-[11px] text-ink-soft">Name, month &amp; date are saved automatically.</p>
+                    </div>
                   </FieldRow>
                 </div>
               </div>
