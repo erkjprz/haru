@@ -34,9 +34,19 @@ function canOfferNotifications() {
     isPushSupported() &&
     typeof Notification !== "undefined" &&
     Notification.permission === "default" &&
-    // iOS only exposes Web Push to the installed home-screen app.
-    (!isIOS() || isStandalone())
+    (isInstalled() || browserCannotInstall())
   )
+}
+
+// A plain browser tab only gets the notifications step where install isn't
+// a thing at all (Firefox, desktop Safari). Chromium fires
+// beforeinstallprompt whenever it decides to -- often well after the
+// sheet's own delay -- so "no prompt yet" there doesn't mean "can't
+// install", and offering notifications in the meantime would skip the
+// install step. iOS is excluded too: it only exposes Web Push to the
+// installed home-screen app.
+function browserCannotInstall() {
+  return !isIOS() && !("onbeforeinstallprompt" in window)
 }
 
 function canOfferInstall() {
@@ -45,8 +55,8 @@ function canOfferInstall() {
 
 function pickStep(): OnboardingStep | null {
   // While install is still on the table, it's the only thing offered --
-  // notifications come after it (and on iOS can't come before it at all),
-  // so snoozing install snoozes the whole sheet rather than skipping ahead.
+  // notifications come after it, so snoozing install snoozes the whole
+  // sheet rather than skipping ahead.
   if (canOfferInstall()) return isSnoozed("install") ? null : "install"
   if (canOfferNotifications() && !isSnoozed("notify")) return "notify"
   return null
