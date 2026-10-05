@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { NotificationBell } from "@/app/components/NotificationBell"
+import { ChatButton } from "@/app/components/ChatButton"
 import { useTheme } from "@/app/components/ThemeProvider"
 
 function MenuIcon() {
@@ -141,6 +142,7 @@ export default function BorrowerHeader() {
           Est. 2017
         </button>
         <div className="flex items-center gap-2">
+          <ChatButton />
           <NotificationBell />
           <MenuDropdown onAccount={onAccount} onPreferences={onPreferences} />
         </div>
