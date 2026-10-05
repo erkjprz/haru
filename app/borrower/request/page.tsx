@@ -283,8 +283,8 @@ export default function BorrowerRequestLoanPage() {
                   </p>
                   <div className="bg-paper-2 border border-hairline rounded-md p-4 space-y-3">
                     <textarea
-                      rows={3}
-                      className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft resize-none"
+                      rows={2}
+                      className="block w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft resize-none"
                       placeholder={"Bank or e-wallet, account name & number\ne.g. GCash · Juan Dela Cruz · 0917 123 4567"}
                       value={payoutDetails}
                       onChange={(e) => {
