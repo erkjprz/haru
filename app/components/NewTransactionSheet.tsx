@@ -815,7 +815,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
                         />
-                        <p className="mt-0.5 text-[11px] text-ink-soft">Name, date &amp; month are saved automatically.</p>
+                        <p className="mt-0.5 text-[11px] text-ink-soft">Name, month &amp; date are saved automatically.</p>
                       </div>
                     </FieldRow>
                   </div>
@@ -893,7 +893,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                               value={description}
                               onChange={(e) => setDescription(e.target.value)}
                             />
-                            <p className="mt-0.5 text-[11px] text-ink-soft">Name, date &amp; month are saved automatically.</p>
+                            <p className="mt-0.5 text-[11px] text-ink-soft">Name, month &amp; date are saved automatically.</p>
                           </div>
                         </FieldRow>
                       </div>
