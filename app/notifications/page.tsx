@@ -7,7 +7,7 @@ import Navbar from "@/app/components/Navbar"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
-import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/push"
+import { PushNotificationsCard } from "@/app/components/PushNotificationsCard"
 import { readCache, writeCache } from "@/lib/cache"
 
 type Notification = {
@@ -18,70 +18,6 @@ type Notification = {
   link: string | null
   read: boolean
   created_at: string
-}
-
-function PushToggle({ memberId }: { memberId: string }) {
-  const [supported] = useState(() => isPushSupported())
-  const [subscribed, setSubscribed] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState("")
-  // Nothing to check when unsupported -- start "checked" already, so the
-  // effect below only ever needs to setState from its async callback.
-  const [checked, setChecked] = useState(() => !isPushSupported())
-
-  useEffect(() => {
-    if (!supported) return
-    getExistingSubscription()
-      .then((sub) => setSubscribed(!!sub))
-      .finally(() => setChecked(true))
-  }, [supported])
-
-  async function toggle() {
-    setBusy(true)
-    setError("")
-    try {
-      if (subscribed) {
-        await unsubscribeFromPush()
-        setSubscribed(false)
-      } else {
-        await subscribeToPush(memberId)
-        setSubscribed(true)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!checked) return null
-
-  return (
-    <div className="bg-paper-2 border border-hairline rounded-md p-5 mb-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="font-display text-lg font-medium text-ink">Push Notifications</h2>
-          <p className="text-[13px] text-ink-soft mt-0.5">
-            {supported
-              ? "Get notified on this device even when Est. 2017 isn't open."
-              : "This browser doesn't support push notifications."}
-          </p>
-        </div>
-        {supported && (
-          <button
-            onClick={toggle}
-            disabled={busy}
-            className={`shrink-0 px-4 py-2 rounded-md text-sm font-semibold disabled:opacity-60 ${
-              subscribed ? "bg-paper border border-hairline text-ink" : "bg-gold-soft text-ink"
-            }`}
-          >
-            {busy ? "..." : subscribed ? "Disable" : "Enable"}
-          </button>
-        )}
-      </div>
-      {error && <p className="text-sm text-rust mt-3">{error}</p>}
-    </div>
-  )
 }
 
 export default function NotificationsPage() {
@@ -183,7 +119,9 @@ export default function NotificationsPage() {
           <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">Notifications</h1>
           <p className="text-[13px] text-ink-soft mb-6">Everything Est. 2017 has sent you, newest first.</p>
 
-          <PushToggle memberId={member.member_id} />
+          <div className="mb-6">
+            <PushNotificationsCard memberId={member.member_id} />
+          </div>
 
           {loadError && <p className="text-sm text-rust mb-4">Couldn&apos;t load notifications: {loadError}</p>}
 

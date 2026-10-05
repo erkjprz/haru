@@ -7,6 +7,7 @@ import { ScrollToTop } from "@/app/scroll-to-top";
 import { AuthProvider } from "@/app/auth-context";
 import { ServiceWorkerRegister } from "@/app/components/ServiceWorkerRegister";
 import { EditTransactionSheetHost } from "@/app/components/EditTransactionSheetHost";
+import { PwaOnboardingSheet } from "@/app/components/PwaOnboardingSheet";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -91,6 +92,9 @@ export default function RootLayout({
               able to open this, and the FAB's own NewTransactionSheet only
               lives in Navbar, which borrowers never see. */}
           <EditTransactionSheetHost />
+          {/* Install + notifications onboarding -- decides for itself
+              whether there's anything to offer on this device. */}
+          <PwaOnboardingSheet />
         </AuthProvider>
         <Analytics />
         {/* iOS only recomputes a `position: fixed` element's layout in
