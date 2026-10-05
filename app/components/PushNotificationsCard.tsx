@@ -84,7 +84,7 @@ export function PushNotificationsCard({ memberId }: { memberId: string }) {
     <div className="bg-paper-2 border border-hairline rounded-md p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="font-display text-lg font-medium text-ink">Notifications</h2>
+          <h2 className="font-display text-lg font-medium text-ink">Push Notifications</h2>
           <p className="text-[13px] text-ink-soft mt-0.5">{description}</p>
         </div>
         {supported && !blocked && (

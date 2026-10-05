@@ -7,7 +7,6 @@ import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
-import { PushNotificationsCard } from "@/app/components/PushNotificationsCard"
 import { readCache, writeCache } from "@/lib/cache"
 
 function isValidNonNegativeNumber(value: string): boolean {
@@ -293,8 +292,6 @@ export default function PreferencesPage() {
               saving={savingLoanPayment}
               message={loanPaymentMessage}
             />
-
-            <PushNotificationsCard memberId={member.member_id} />
           </div>
 
         </div>

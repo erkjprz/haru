@@ -157,7 +157,7 @@ export function PwaOnboardingSheet() {
     } catch (err) {
       if (typeof Notification !== "undefined" && Notification.permission === "denied") {
         // Declined at the browser prompt -- nothing left for this sheet to
-        // offer; Preferences explains how to undo it.
+        // offer; the Notifications page explains how to undo it.
         setStep(null)
       } else {
         setError(err instanceof Error ? err.message : "Something went wrong.")
@@ -209,7 +209,7 @@ export function PwaOnboardingSheet() {
         <p className="text-[15px] leading-relaxed text-ink-soft text-center">
           {step === "install"
             ? "Open it straight from your home screen, full-screen, like any other app."
-            : "Get an alert on this device when something needs your attention, like a transaction being reviewed. You can change this any time in Preferences."}
+            : "Get an alert on this device when something needs your attention, like a transaction being reviewed. You can change this any time in Notifications."}
         </p>
 
         {showIOSInstructions && (
