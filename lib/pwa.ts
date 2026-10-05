@@ -73,7 +73,7 @@ export function subscribeToInstallState(fn: () => void): () => void {
   }
 }
 
-const SNOOZE_DAYS: Record<OnboardingStep, number> = { install: 7, notify: 3 }
+const SNOOZE_DAYS: Record<OnboardingStep, number> = { install: 1, notify: 1 }
 const DAY_MS = 24 * 60 * 60 * 1000
 
 function snoozeKey(step: OnboardingStep) {
