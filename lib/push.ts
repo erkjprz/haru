@@ -15,6 +15,28 @@ export function isPushSupported(): boolean {
   return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window
 }
 
+// Set when the member taps Disable. Unsubscribing leaves the browser's
+// permission at "granted", so without this syncPushSubscription() below
+// would quietly re-subscribe them on the next page load.
+const OPT_OUT_KEY = "push-opted-out"
+
+function isOptedOut(): boolean {
+  try {
+    return localStorage.getItem(OPT_OUT_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+function setOptedOut(optedOut: boolean) {
+  try {
+    if (optedOut) localStorage.setItem(OPT_OUT_KEY, "1")
+    else localStorage.removeItem(OPT_OUT_KEY)
+  } catch {
+    // Storage blocked -- worst case a Disable gets undone on a later visit.
+  }
+}
+
 export async function getExistingSubscription(): Promise<PushSubscription | null> {
   if (!isPushSupported()) return null
   const registration = await navigator.serviceWorker.ready
@@ -34,7 +56,11 @@ export async function subscribeToPush(memberId: string): Promise<void> {
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
   if (!vapidPublicKey) throw new Error("Push notifications aren't configured yet.")
 
-  const permission = await Notification.requestPermission()
+  // Already granted (e.g. switched on in iOS Settings / site settings) means
+  // there's nothing to ask -- skip requestPermission, which some browsers
+  // only allow from a tap, so syncPushSubscription() can run without one.
+  const permission =
+    Notification.permission === "granted" ? "granted" : await Notification.requestPermission()
   if (permission !== "granted") throw new Error("Notification permission was denied.")
 
   const registration = await navigator.serviceWorker.ready
@@ -61,6 +87,38 @@ export async function subscribeToPush(memberId: string): Promise<void> {
   )
 
   if (error) throw new Error(error.message)
+  setOptedOut(false)
+}
+
+let syncInFlight: Promise<boolean> | null = null
+
+/**
+ * Creates the push subscription when the browser already allows
+ * notifications but this device has none -- e.g. the member tapped "Don't
+ * Allow", then switched notifications on in iOS Settings, which grants the
+ * permission without the app ever getting a chance to subscribe. Never
+ * prompts (it does nothing unless permission is already "granted"), and
+ * respects an explicit Disable. Resolves to whether this device is
+ * subscribed afterwards. Concurrent callers (the bell and the Notifications
+ * card both run it) share one attempt.
+ */
+export function syncPushSubscription(memberId: string): Promise<boolean> {
+  if (!isPushSupported() || typeof Notification === "undefined" || Notification.permission !== "granted") {
+    return getExistingSubscription().then((sub) => !!sub).catch(() => false)
+  }
+  syncInFlight ??= (async () => {
+    try {
+      if (await getExistingSubscription()) return true
+      if (isOptedOut()) return false
+      await subscribeToPush(memberId)
+      return true
+    } catch {
+      return false
+    } finally {
+      syncInFlight = null
+    }
+  })()
+  return syncInFlight
 }
 
 export async function unsubscribeFromPush(): Promise<void> {
@@ -70,4 +128,5 @@ export async function unsubscribeFromPush(): Promise<void> {
   const endpoint = subscription.endpoint
   await subscription.unsubscribe()
   await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint)
+  setOptedOut(true)
 }

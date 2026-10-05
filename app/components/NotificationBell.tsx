@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
-import { isPushSupported, getExistingSubscription, subscribeToPush } from "@/lib/push"
+import { isPushSupported, subscribeToPush, syncPushSubscription } from "@/lib/push"
 import { readCache, writeCache } from "@/lib/cache"
 import { useHydrated } from "@/lib/useHydrated"
 
@@ -86,11 +86,22 @@ export function NotificationBell() {
     }
   }, [member])
 
+  // syncPushSubscription also quietly subscribes when notifications were
+  // allowed outside the app (iOS Settings, site settings) -- re-run on
+  // returning to the foreground, which is exactly what coming back from
+  // Settings looks like. Lives here because the bell is on every page.
   useEffect(() => {
     if (!member || !pushSupported) return
-    getExistingSubscription()
-      .then((sub) => setPushSubscribed(!!sub))
-      .finally(() => setPushChecked(true))
+    const memberId = member.member_id
+    function refresh() {
+      if (document.visibilityState !== "visible") return
+      syncPushSubscription(memberId)
+        .then(setPushSubscribed)
+        .finally(() => setPushChecked(true))
+    }
+    refresh()
+    document.addEventListener("visibilitychange", refresh)
+    return () => document.removeEventListener("visibilitychange", refresh)
   }, [member, pushSupported])
 
   useEffect(() => {

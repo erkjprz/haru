@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/push"
+import { isPushSupported, subscribeToPush, syncPushSubscription, unsubscribeFromPush } from "@/lib/push"
 import { isIOS, isStandalone } from "@/lib/pwa"
 
 // Once a site's permission is "denied", Notification.requestPermission()
@@ -31,12 +31,22 @@ export function PushNotificationsCard({ memberId }: { memberId: string }) {
   // effect below only ever needs to setState from its async callback.
   const [checked, setChecked] = useState(() => !isPushSupported())
 
+  // Re-checked whenever the app comes back to the foreground, not just on
+  // mount -- coming back from iOS Settings (or the browser's site settings)
+  // after allowing notifications there should just show them as on.
   useEffect(() => {
     if (!supported) return
-    getExistingSubscription()
-      .then((sub) => setSubscribed(!!sub))
-      .finally(() => setChecked(true))
-  }, [supported])
+    function refresh() {
+      if (document.visibilityState !== "visible") return
+      setPermission(Notification.permission)
+      syncPushSubscription(memberId)
+        .then(setSubscribed)
+        .finally(() => setChecked(true))
+    }
+    refresh()
+    document.addEventListener("visibilitychange", refresh)
+    return () => document.removeEventListener("visibilitychange", refresh)
+  }, [supported, memberId])
 
   async function toggle() {
     setBusy(true)
