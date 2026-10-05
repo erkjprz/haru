@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
 import { NotificationBell } from "@/app/components/NotificationBell"
+import { ChatButton } from "@/app/components/ChatButton"
 import { useHydrated } from "@/lib/useHydrated"
 import { NewTransactionSheet } from "@/app/components/NewTransactionSheet"
 import { Toast } from "@/app/components/Toast"
@@ -253,7 +254,10 @@ export default function Navbar() {
           >
             Est. 2017
           </button>
-          <NotificationBell />
+          <div className="flex items-center gap-1">
+            <ChatButton />
+            <NotificationBell />
+          </div>
         </div>
       </nav>
 
