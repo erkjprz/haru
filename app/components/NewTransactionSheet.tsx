@@ -31,6 +31,7 @@ import { getCachedTransactionFormData, loadTransactionFormData } from "@/lib/tra
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
 
 const MISSING_DUE_DAY_MESSAGE = "Pick the day of the month the payment is due."
+const MISSING_PAYOUT_MESSAGE = "Add bank or e-wallet details, or a QR code, so we know where to send the money."
 
 // The FAB's quick-entry sheet covers the types every member reaches for
 // constantly (Contribution/Withdrawal/Loan Request/Loan Payment), plus
@@ -112,6 +113,13 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [receipt, setReceipt] = useState<File | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
+  // Loan Request only: where the admin should send the money -- typed
+  // bank/e-wallet details, a photo of a payment QR code, or both. Same
+  // section as the borrower's request page.
+  const [payoutDetails, setPayoutDetails] = useState("")
+  const [payoutQr, setPayoutQr] = useState<File | null>(null)
+  const [payoutQrPreview, setPayoutQrPreview] = useState<string | null>(null)
+  const [qrDragActive, setQrDragActive] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState("")
 
@@ -285,6 +293,18 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     setReceiptPreview(file ? URL.createObjectURL(file) : null)
   }
 
+  // Once they've added payout info, the "where do we send it" error no
+  // longer applies -- clear it right away instead of on the next Continue.
+  function clearMissingPayoutMessage() {
+    if (message === MISSING_PAYOUT_MESSAGE) setMessage("")
+  }
+
+  function setPayoutQrFile(file: File | null) {
+    setPayoutQr(file)
+    setPayoutQrPreview(file ? URL.createObjectURL(file) : null)
+    if (file) clearMissingPayoutMessage()
+  }
+
   async function handleTypeChange(newType: string) {
     setSelectedType(newType)
     setFormStep(1)
@@ -299,6 +319,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     setTermMonths("")
     setRepaymentFrequency("monthly")
     setDueDay("")
+    setPayoutDetails("")
+    setPayoutQrFile(null)
     setSelectedLoanId("")
     setInvestmentId("")
     setSaveAsDefault(false)
@@ -349,6 +371,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       }
       if (!isValidPositiveNumber(termMonths)) return "Enter a valid term, in months greater than zero."
       if (repaymentFrequency === "monthly" && !dueDay) return MISSING_DUE_DAY_MESSAGE
+      if (!payoutDetails.trim() && !payoutQr) return MISSING_PAYOUT_MESSAGE
     }
     return ""
   }
@@ -398,6 +421,10 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       setMessage(MISSING_DUE_DAY_MESSAGE)
       return
     }
+    if (isLoanRequest && !payoutDetails.trim() && !payoutQr) {
+      setMessage(MISSING_PAYOUT_MESSAGE)
+      return
+    }
     if (isLoanPayment && !selectedLoanId) {
       setMessage("Select which loan you're paying.")
       return
@@ -428,6 +455,21 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     }
 
     if (isLoanRequest) {
+      // Named "<member_id>-..." like receipts, so the Receipts bucket's
+      // storage policy still lets the member view their own file.
+      let qrPath: string | null = null
+      if (payoutQr) {
+        qrPath = `${effectiveMemberId}-payout-${Date.now()}-${payoutQr.name}`
+        const { error: uploadError } = await supabase.storage
+          .from("Receipts")
+          .upload(qrPath, payoutQr, { contentType: payoutQr.type })
+        if (uploadError) {
+          setMessage(uploadError.message)
+          setSubmitting(false)
+          return
+        }
+      }
+
       const { error } = await supabase.rpc("submit_loan_request", {
         p_member_id: effectiveMemberId,
         p_principal: Number(amount),
@@ -440,11 +482,15 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         p_notes: description,
         p_description: description,
         p_submitted_by: submittedByForOnBehalf,
+        p_payout_details: payoutDetails,
+        p_payout_qr_path: qrPath,
         p_due_day: repaymentFrequency === "monthly" ? Number(dueDay) : null
       })
 
       setSubmitting(false)
       if (error) {
+        // The QR already uploaded -- don't leave it orphaned in storage.
+        if (qrPath) await supabase.storage.from("Receipts").remove([qrPath])
         setMessage(error.message)
         return
       }
@@ -921,6 +967,32 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                         }}
                       />
                     </div>
+
+                    <div className="mt-4">
+                      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
+                        Where should we send it?
+                      </p>
+                      <div className="bg-paper-2 border border-hairline rounded-md p-4 space-y-3">
+                        <textarea
+                          rows={2}
+                          className="block w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft resize-none"
+                          placeholder={"Bank or e-wallet, account name & number\ne.g. GCash · Juan Dela Cruz · 0917 123 4567"}
+                          value={payoutDetails}
+                          onChange={(e) => {
+                            setPayoutDetails(e.target.value)
+                            if (e.target.value.trim()) clearMissingPayoutMessage()
+                          }}
+                        />
+                        <ReceiptField
+                          receipt={payoutQr}
+                          receiptPreview={payoutQrPreview}
+                          dragActive={qrDragActive}
+                          setDragActive={setQrDragActive}
+                          onFileChange={setPayoutQrFile}
+                          emptyLabel="Or upload QR code"
+                        />
+                      </div>
+                    </div>
                   </>
                 )}
 
@@ -953,6 +1025,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                     )}
                     {previewTotalRepayable > 0 && <ReviewRow label="Est. total repayable" value={`₱${fmt(previewTotalRepayable)}`} />}
                     {description && <ReviewRow label="Description" value={description} />}
+                    {payoutDetails.trim() && <ReviewRow label="Send to" value={payoutDetails.trim()} />}
+                    {payoutQr && <ReviewRow label="QR code" value="Attached" />}
                   </FieldGroup>
                 )}
               </>

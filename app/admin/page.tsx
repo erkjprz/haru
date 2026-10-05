@@ -1242,7 +1242,7 @@ export default function AdminPage() {
               {savingEditId === t.transaction_id ? "Saving…" : "Save changes"}
             </button>
 
-            {/* Where the borrower asked for the money to go -- set on
+            {/* Where the member or borrower asked for the money to go -- set on
                 their loan request. */}
             {needsLoanBank && (t.loans?.payout_details || t.loans?.payout_qr_path) && (
               <div className="mb-4">
