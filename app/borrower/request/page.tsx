@@ -245,12 +245,15 @@ export default function BorrowerRequestLoanPage() {
                   <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
                   <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
                     <FieldRow icon={<NoteIcon />}>
-                      <input
-                        className={rowInputClass}
-                        placeholder="What's it for? (name & date already saved)"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                      />
+                      <div className="flex-1 min-w-0">
+                        <input
+                          className={`${rowInputClass} w-full`}
+                          placeholder="What's it for?"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                        />
+                        <p className="mt-0.5 text-[11px] text-ink-soft">Name, month &amp; date are saved automatically.</p>
+                      </div>
                     </FieldRow>
                   </div>
                 </div>
