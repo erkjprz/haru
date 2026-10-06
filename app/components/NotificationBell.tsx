@@ -61,6 +61,7 @@ export function NotificationBell() {
         .select("id", { count: "exact", head: true })
         .eq("member_id", member!.member_id)
         .eq("read", false)
+        .neq("type", "message")
 
       const next = count ?? 0
       setUnreadCount(next)
@@ -141,6 +142,10 @@ export function NotificationBell() {
       .from("notifications")
       .select("id, title, body, link, read, created_at")
       .eq("member_id", member.member_id)
+      // Chat messages have their own badge on ChatButton -- counting them
+      // here too double-badged every new message. They still land in the
+      // full /notifications history.
+      .neq("type", "message")
       .order("created_at", { ascending: false })
       .limit(PREVIEW_LIMIT)
 
