@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/app/auth-context"
+import { supabase } from "@/lib/supabase"
 import { listConversations } from "@/lib/conversations"
 import { readCache, writeCache } from "@/lib/cache"
 
@@ -10,7 +11,8 @@ import { readCache, writeCache } from "@/lib/cache"
 // otherwise only reachable from the Menu page / dropdown, which made it
 // easy to miss. Badged with the number of unread conversations, cached the
 // same way the bell's count is so it doesn't flicker on every navigation
-// (the header remounts per page).
+// (the header remounts per page). The bell leaves 'message' notifications
+// out of its own count so a new message isn't badged twice.
 export function ChatButton() {
   const router = useRouter()
   const pathname = usePathname()
@@ -20,15 +22,39 @@ export function ChatButton() {
 
   useEffect(() => {
     if (!member || member.status !== "approved") return
+    const memberId = member.member_id
     let cancelled = false
-    listConversations().then(({ data }) => {
-      if (cancelled || !data) return
-      const next = data.filter((c) => c.unread).length
-      setUnreadCount(next)
-      writeCache(`chat-badge:${member.member_id}`, next)
-    })
+
+    function loadCount() {
+      listConversations().then(({ data }) => {
+        if (cancelled || !data) return
+        const next = data.filter((c) => c.unread).length
+        setUnreadCount(next)
+        writeCache(`chat-badge:${memberId}`, next)
+      })
+    }
+
+    loadCount()
+
+    // Every new chat message also creates a 'message' notification for its
+    // recipients, so listening there keeps this badge live (e.g. an admin
+    // replies while you're on another page) without a separate realtime
+    // feed on the conversation tables.
+    const channel = supabase
+      .channel(`chat-badge-${memberId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications", filter: `member_id=eq.${memberId}` },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { type?: string } | undefined
+          if (!row?.type || row.type === "message") loadCount()
+        }
+      )
+      .subscribe()
+
     return () => {
       cancelled = true
+      supabase.removeChannel(channel)
     }
     // pathname: re-count after leaving a thread, which marks it read.
   }, [member, pathname])
