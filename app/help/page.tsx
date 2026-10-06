@@ -468,7 +468,9 @@ const borrowerSections: FaqSection[] = [
           <p>
             Yes. You get a notification 3 days before each payment is due, on the due date itself, and the
             day after if it hasn&apos;t been paid yet. Monthly loans are due on the loan&apos;s due day each
-            month; a lump-sum loan is due once, at the end of its term. Reminders pause while a repayment
+            month; a lump-sum loan is due once, at the end of its term. An older monthly loan with no due
+            day set instead gets an overdue reminder once 45 days pass without a payment, then every 30
+            days after that. Reminders pause while a repayment
             you submitted is waiting for approval. Turn on <strong>Push Notifications</strong> to get them on
             your device.
           </p>

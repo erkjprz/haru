@@ -7,7 +7,10 @@
 --
 -- Monthly loans use due_day; lump-sum loans are due once, at start_date +
 -- term_months. Monthly loans with no due_day (created before that column
--- existed) are skipped -- an admin can set one from the loan's edit form.
+-- existed) have no date to remind ahead of, so they fall back to the same
+-- 45-day rule as paymentOverdueLabel: an overdue reminder on the first day
+-- past 45 days since the last approved repayment (or start_date), then
+-- every 30 days after that while still unpaid.
 --
 -- "Paid" mirrors paymentOverdueLabel/nextDueDate in lib/loanFormat.ts: a
 -- monthly due date is covered once the first due date more than 15 days
@@ -82,6 +85,7 @@ declare
   v_next date;
   v_day date;
   v_missed integer;
+  v_days integer;
   v_kind text;
   v_due date;
   v_title text;
@@ -134,6 +138,16 @@ begin
         v_kind := 'overdue';
         v_due := v_day;
       end if;
+    elsif r.repayment_frequency = 'monthly' then
+      -- No due_day: 45-day fallback. Day 46 is the first day the app's
+      -- overdue flag shows; repeats every 30 days after. Logged under
+      -- today's date, since there's no real due date to key on.
+      v_days := p_today - coalesce(r.last_repayment_date, r.start_date);
+      v_amount := least(r.outstanding, round(r.total_repayable / nullif(r.term_months, 0), 2));
+      if v_days > 45 and (v_days - 46) % 30 = 0 then
+        v_kind := 'overdue';
+        v_due := p_today;
+      end if;
     elsif r.repayment_frequency = 'lump_sum' and r.term_months is not null then
       v_due := (r.start_date + make_interval(months => r.term_months))::date;
       v_amount := r.outstanding;
@@ -162,7 +176,9 @@ begin
       v_body := 'Your ' || v_amount_text || ' payment for ' || r.loan || ' is due today.';
     else
       v_title := 'Loan Payment Overdue';
-      if r.repayment_frequency = 'monthly' then
+      if r.repayment_frequency = 'monthly' and r.due_day is null then
+        v_missed := 0;
+      elsif r.repayment_frequency = 'monthly' then
         -- Every due date from the first unpaid one through yesterday.
         select count(*) into v_missed
         from generate_series(date_trunc('month', v_next), date_trunc('month', v_due), interval '1 month') g
@@ -172,6 +188,9 @@ begin
         v_missed := 1;
       end if;
       v_body := case
+        when v_missed = 0 then 'It''s been ' || v_days || ' days since '
+          || case when r.last_repayment_date is null then r.loan || ' was released' else 'your last payment on ' || r.loan end
+          || '. Your ' || v_amount_text || ' monthly payment is overdue.'
         when v_missed > 1 then r.loan || ' has ' || v_missed || ' missed payments. Please make a repayment as soon as you can.'
         else 'Your ' || v_amount_text || ' payment for ' || r.loan || ' was due on '
           || trim(to_char(v_due, 'Mon FMDD')) || ' and hasn''t been received yet.'
