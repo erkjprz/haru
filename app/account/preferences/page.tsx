@@ -45,7 +45,7 @@ function AmountField({
 
       <div className="mt-4 space-y-3">
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft font-mono">₱</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft text-base">₱</span>
           <input
             type="number"
             inputMode="decimal"
@@ -54,7 +54,7 @@ function AmountField({
             placeholder="Not set"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="border border-hairline bg-paper pl-7 pr-3 py-2 rounded-md w-full text-base font-mono [font-variant-numeric:tabular-nums] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="border border-hairline bg-paper pl-7 pr-3 py-2 rounded-md w-full text-base [font-variant-numeric:tabular-nums] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
         </div>
 
@@ -63,7 +63,7 @@ function AmountField({
             Bank the transfer goes to
           </label>
           <select
-            className="border border-hairline bg-paper text-ink text-sm rounded-md px-3 py-2 w-full"
+            className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-2 w-full"
             value={bankId}
             onChange={(e) => onBankChange(e.target.value)}
           >
