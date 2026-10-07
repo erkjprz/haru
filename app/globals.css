@@ -30,6 +30,18 @@
   --card-radius: 1.25rem;
   --card-shadow: 0 2px 14px rgba(17, 17, 26, 0.05);
 
+  /* Bottom dock (Navbar). Light mode is a frosted-white pill with a thin
+     gray outline, a soft gray pill behind the active tab, gray inactive
+     icons and dark labels; dark mode keeps the original dock styling. */
+  --dock-bg: rgba(255, 255, 255, 0.9);
+  --dock-border: rgba(17, 17, 26, 0.14);
+  --dock-shadow: 0 8px 28px rgba(17, 17, 26, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --dock-active-bg: rgba(17, 17, 26, 0.07);
+  --dock-icon: #a6a6ad;
+  --dock-icon-active: var(--gold);
+  --dock-label: var(--ink);
+  --dock-label-active: var(--ink);
+
   /* Clearance needed above the fixed bottom dock (Navbar) -- every page
      that renders the dock adds this on top of its usual bottom padding so
      content never ends up hidden under it. Pages that hide the dock
@@ -65,6 +77,15 @@
   --card-border: var(--hairline);
   --card-radius: 0.375rem;
   --card-shadow: none;
+
+  --dock-bg: var(--paper-2);
+  --dock-border: var(--hairline);
+  --dock-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --dock-active-bg: color-mix(in oklab, var(--gold) 10%, transparent);
+  --dock-icon: var(--ink);
+  --dock-icon-active: var(--ink);
+  --dock-label: var(--ink-soft);
+  --dock-label-active: var(--gold);
 }
 
 @theme inline {

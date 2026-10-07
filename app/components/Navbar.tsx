@@ -269,9 +269,9 @@ export default function Navbar() {
               // `position: fixed` is a known WebKit bug on iOS where the
               // element visually detaches and lags behind during momentum
               // scrolling, snapping back into place once scrolling settles.
-              // bg-paper-2 is opaque enough on its own that the blur wasn't
+              // --dock-bg is opaque enough on its own that the blur wasn't
               // adding much.
-              className="flex items-stretch bg-paper-2 border border-hairline rounded-full shadow-lg px-1.5 py-1"
+              className="flex items-stretch bg-(--dock-bg) border border-(--dock-border) rounded-full shadow-(--dock-shadow) p-1.5"
               // iOS Safari can flicker/hide a `fixed` element mid-touch-drag
               // (e.g. swiping Fund Breakdown's member carousel while this
               // dock sits over a scrollable page) unless it's promoted to
@@ -285,12 +285,16 @@ export default function Navbar() {
                   <button
                     key={item.label}
                     onClick={() => router.push(item.path)}
-                    className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-full transition-colors ${
-                      active ? "bg-gold/10" : ""
+                    className={`flex-1 flex flex-col items-center gap-0.5 py-2 rounded-full transition-colors ${
+                      active ? "bg-(--dock-active-bg) text-(--dock-icon-active)" : "text-(--dock-icon)"
                     }`}
                   >
                     <Icon active={active} />
-                    <span className={`text-[10px] font-mono ${active ? "text-gold font-semibold" : "text-ink-soft"}`}>
+                    <span
+                      className={`text-[10px] font-mono ${
+                        active ? "text-(--dock-label-active) font-semibold" : "text-(--dock-label)"
+                      }`}
+                    >
                       {item.label}
                     </span>
                   </button>
