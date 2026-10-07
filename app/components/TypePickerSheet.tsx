@@ -45,7 +45,7 @@ export function TypePickerSheet({
             key={o.key}
             onClick={() => onSelect(o.key)}
             className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${
-              o.key === value ? "bg-gold/10" : ""
+              o.key === value ? "bg-(--selected-bg)" : ""
             }`}
           >
             <TypeBadge arrow={o.arrow} tone={o.tone} selected={o.key === value} />

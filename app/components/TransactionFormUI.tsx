@@ -147,7 +147,7 @@ export function TypeDropdown({
                 setOpen(false)
               }}
               className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 text-sm text-left border-b border-hairline last:border-b-0 transition-colors ${
-                o.key === value ? "bg-gold/10 text-ink font-semibold" : "bg-paper text-ink-soft"
+                o.key === value ? "bg-(--selected-bg) text-ink font-semibold" : "bg-paper text-ink-soft"
               }`}
             >
               <span className="flex items-center gap-2.5 min-w-0">

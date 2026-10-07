@@ -4,12 +4,12 @@
 
 :root {
   --background: #f5f5f9;
-  --foreground: #1f1b16;
+  --foreground: #1c1c1e;
 
   --paper: #f5f5f9;
-  --paper-2: #f0ebe1;
-  --ink: #1f1b16;
-  --ink-soft: #6b5f4f;
+  --paper-2: #ffffff;
+  --ink: #1c1c1e;
+  --ink-soft: #6e6e73;
   --gold: #a8761f;
   /* Lighter gold for primary buttons and active/selected pills, light mode
      only -- --gold itself stays the stronger accent color (labels, links,
@@ -20,7 +20,7 @@
   --sage: #4f6f4f;
   --rust: #96432f;
   --slate: #4d6273;
-  --hairline: #e3dccc;
+  --hairline: #e5e5ea;
 
   /* Surface cards (the `card` utility below). Light mode uses white,
      borderless, rounder cards lifted off the cool gray page by a soft
@@ -30,13 +30,21 @@
   --card-radius: 1.25rem;
   --card-shadow: 0 2px 14px rgba(17, 17, 26, 0.05);
 
+  /* Bottom sheets. Light mode uses the gray page color so the white cards
+     inside a sheet stand out the same way they do on a page. */
+  --sheet-bg: var(--background);
+
+  /* Highlight behind the selected option in pickers and the active dock
+     tab: neutral gray in light mode, a gold tint in dark mode. */
+  --selected-bg: rgba(17, 17, 26, 0.07);
+
   /* Bottom dock (Navbar). Light mode is a frosted-white pill with a thin
      gray outline, a soft gray pill behind the active tab, gray inactive
      icons and dark labels; dark mode keeps the original dock styling. */
   --dock-bg: rgba(255, 255, 255, 0.9);
   --dock-border: rgba(17, 17, 26, 0.14);
   --dock-shadow: 0 8px 28px rgba(17, 17, 26, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --dock-active-bg: rgba(17, 17, 26, 0.07);
+  --dock-active-bg: var(--selected-bg);
   --dock-icon: #a6a6ad;
   --dock-icon-active: var(--gold);
   --dock-label: var(--ink);
@@ -78,10 +86,14 @@
   --card-radius: 0.375rem;
   --card-shadow: none;
 
+  --sheet-bg: var(--paper-2);
+
+  --selected-bg: color-mix(in oklab, var(--gold) 10%, transparent);
+
   --dock-bg: var(--paper-2);
   --dock-border: var(--hairline);
   --dock-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --dock-active-bg: color-mix(in oklab, var(--gold) 10%, transparent);
+  --dock-active-bg: var(--selected-bg);
   --dock-icon: var(--ink);
   --dock-icon-active: var(--ink);
   --dock-label: var(--ink-soft);

@@ -29,7 +29,7 @@ export function TermPickerSheet({
             key={months}
             onClick={() => onSelect(months)}
             className={`w-full px-4 py-3.5 text-left text-sm font-semibold text-ink transition-colors ${
-              selected === months ? "bg-gold/10" : ""
+              selected === months ? "bg-(--selected-bg)" : ""
             }`}
           >
             {months} {months === 1 ? "month" : "months"}
