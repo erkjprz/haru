@@ -271,7 +271,7 @@ export default function Navbar() {
               // scrolling, snapping back into place once scrolling settles.
               // --dock-bg is opaque enough on its own that the blur wasn't
               // adding much.
-              className="flex items-stretch bg-(--dock-bg) border border-(--dock-border) rounded-full shadow-(--dock-shadow) p-1.5"
+              className="flex items-stretch bg-(--dock-bg) border border-(--dock-border) rounded-full shadow-(--dock-shadow) p-1.5 dark:px-1.5 dark:py-1"
               // iOS Safari can flicker/hide a `fixed` element mid-touch-drag
               // (e.g. swiping Fund Breakdown's member carousel while this
               // dock sits over a scrollable page) unless it's promoted to
@@ -285,7 +285,7 @@ export default function Navbar() {
                   <button
                     key={item.label}
                     onClick={() => router.push(item.path)}
-                    className={`flex-1 flex flex-col items-center gap-0.5 py-2 rounded-full transition-colors ${
+                    className={`flex-1 flex flex-col items-center gap-0.5 py-2 dark:py-1.5 rounded-full transition-colors ${
                       active ? "bg-(--dock-active-bg) text-(--dock-icon-active)" : "text-(--dock-icon)"
                     }`}
                   >

@@ -94,8 +94,8 @@
   --dock-border: var(--hairline);
   --dock-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --dock-active-bg: var(--selected-bg);
-  --dock-icon: var(--ink);
-  --dock-icon-active: var(--ink);
+  --dock-icon: var(--foreground);
+  --dock-icon-active: var(--foreground);
   --dock-label: var(--ink-soft);
   --dock-label-active: var(--gold);
 }
