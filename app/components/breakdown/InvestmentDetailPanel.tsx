@@ -388,7 +388,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
       </p>
 
       {/* Gain/loss overview */}
-      <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5">
+      <div className="card px-5 pt-4 pb-3.5">
         <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
           Net Gain / Loss
         </p>
@@ -402,7 +402,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
       </div>
 
       {/* Invested / Returned */}
-      <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
+      <div className="card p-5 mt-4">
         <InfoBox label="Cash Flow">
           <InfoRow label="Invested" value={`₱${fmt(investment.invested)}`} />
           <InfoRow label="Returned" value={`₱${fmt(investment.returned)}`} />
@@ -503,7 +503,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         {loadError && <p className="text-sm text-rust mb-3">{loadError}</p>}
 
         {memberShares.length > 0 && (
-          <div className="bg-paper-2 border border-hairline rounded-md px-5 mb-3">
+          <div className="card px-5 mb-3">
             {memberShares.map((s, i) => (
               <div
                 key={s.member_id}
@@ -532,7 +532,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         )}
 
         {memberShares.length > 0 && (
-          <div className="bg-paper-2 border border-hairline rounded-md px-5 py-3 flex justify-between items-center">
+          <div className="card px-5 py-3 flex justify-between items-center">
             <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">
               Split among {memberShares.length} member{memberShares.length === 1 ? "" : "s"} total
             </p>
@@ -547,7 +547,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         )}
 
         {memberShares.length === 0 && !loadError && !showDistributeForm && (
-          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+          <p className="text-sm text-ink-soft text-center py-8 card">
             No allocation on record for this investment.
           </p>
         )}
@@ -566,7 +566,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         </div>
 
         {recentTransactions.length > 0 ? (
-          <div className="bg-paper-2 border border-hairline rounded-md px-5">
+          <div className="card px-5">
             {recentTransactions.map((t, i) => (
               <div
                 key={t.transaction_id}
@@ -597,7 +597,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
             ))}
           </div>
         ) : (
-          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+          <p className="text-sm text-ink-soft text-center py-8 card">
             No transactions recorded for this investment yet.
           </p>
         )}
@@ -639,7 +639,7 @@ function DistributeForm({
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   return (
-    <div className={`bg-paper-2 border border-hairline rounded-md relative overflow-hidden ${className}`}>
+    <div className={`card relative overflow-hidden ${className}`}>
       <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
       <div className="pl-6 pr-5 py-6 space-y-4">
         <p className="font-display text-lg font-medium">

@@ -718,7 +718,7 @@ function TransactionsPageInner() {
                       button -- stays the last thing in the card regardless
                       of which optional lines appear above it. */}
                   <div
-                    className={`flex flex-col gap-1 bg-paper-2 border border-hairline rounded-md px-4 py-3.5 ${
+                    className={`flex flex-col gap-1 card px-4 py-3.5 ${
                       showMonthHeader ? "" : "mt-3"
                     }`}
                   >

@@ -294,7 +294,7 @@ function SupportRow({
   )
 
   return (
-    <div className="bg-paper-2 border border-hairline rounded-md">
+    <div className="card">
       {isGainAllocation ? (
         <div className="flex items-center gap-3 px-4 py-3">{row}</div>
       ) : (
@@ -535,7 +535,7 @@ function SupportEditForm({
         </>
       }
     >
-      <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+      <div className="card overflow-hidden">
         <FieldRow icon={<FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "in" })} small />}>
           <span className="flex-1 min-w-0 text-sm">
             <span className="text-ink">{displayName}</span>
@@ -572,7 +572,7 @@ function SupportEditForm({
 
       <div>
         <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
-        <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+        <div className="card divide-y divide-hairline overflow-hidden">
           <DateField value={txnDate ?? ""} onChange={setTxnDate} placeholder="Date" bare />
 
           <FieldRow icon={<BankIcon />}>

@@ -39,7 +39,7 @@ function AmountField({
   message: string
 }) {
   return (
-    <div className="bg-paper-2 border border-hairline rounded-md p-5">
+    <div className="card p-5">
       <h2 className="font-display text-lg font-medium text-ink mb-1">{label}</h2>
       <p className="text-[13px] text-ink-soft">{helper}</p>
 

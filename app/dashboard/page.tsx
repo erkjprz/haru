@@ -180,7 +180,7 @@ export default function DashboardPage() {
 
           <button
             onClick={() => router.push("/fund-breakdown?tab=fund&view=you")}
-            className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 hover:bg-paper transition-colors"
+            className="w-full text-left card px-5 pt-4 pb-3.5 hover:bg-paper transition-colors"
           >
             <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
               My Available Balance
@@ -193,7 +193,7 @@ export default function DashboardPage() {
 
           <button
             onClick={() => router.push("/fund-breakdown?tab=fund")}
-            className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 mt-3 hover:bg-paper transition-colors"
+            className="w-full text-left card px-5 pt-4 pb-3.5 mt-3 hover:bg-paper transition-colors"
           >
             <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
               Fund Available Balance
@@ -216,7 +216,7 @@ export default function DashboardPage() {
           </div>
 
           {recentTransactions.length > 0 ? (
-            <div className="bg-paper-2 border border-hairline rounded-md px-5">
+            <div className="card px-5">
               {recentTransactions.map((t, i) => (
                 <div
                   key={t.transaction_id}
@@ -248,7 +248,7 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+            <p className="text-sm text-ink-soft text-center py-8 card">
               No transactions recorded yet.
             </p>
           )}

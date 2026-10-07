@@ -126,7 +126,7 @@ export default function NotificationsPage() {
           {loadError && <p className="text-sm text-rust mb-4">Couldn&apos;t load notifications: {loadError}</p>}
 
           {!loadError && notifications.length === 0 && (
-            <p className="text-sm text-ink-soft text-center py-12 bg-paper-2 border border-hairline rounded-md">
+            <p className="text-sm text-ink-soft text-center py-12 card">
               Nothing yet.
             </p>
           )}
@@ -144,7 +144,7 @@ export default function NotificationsPage() {
           )}
 
           {notifications.length > 0 && (
-            <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline">
+            <div className="card divide-y divide-hairline">
               {notifications.map((n) => (
                 <button
                   key={n.id}

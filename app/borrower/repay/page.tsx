@@ -240,7 +240,7 @@ export default function BorrowerRepayPage() {
           {loadError && <p className="mb-4 text-sm text-rust">Couldn&apos;t load your loans: {loadError}</p>}
 
           {!loadError && myLoans.length === 0 ? (
-            <p className="mt-4 text-sm text-ink-soft text-center py-12 bg-paper-2 border border-hairline rounded-md">
+            <p className="mt-4 text-sm text-ink-soft text-center py-12 card">
               You don't have an active loan to repay right now.
             </p>
           ) : !loadError && (

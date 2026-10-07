@@ -177,7 +177,7 @@ export function BankYearDetailPanel({
         </p>
       )}
 
-      <div className="bg-paper-2 border border-hairline rounded-md p-5">
+      <div className="card p-5">
         <InfoBox label="Interest">
           <InfoRow label="Interest Earned" value={`+₱${fmt(interestEarned)}`} valueClass="text-sage" />
           {tax !== 0 && <InfoRow label="Tax Withheld" value={`-₱${fmt(Math.abs(tax))}`} valueClass="text-rust" />}
@@ -194,7 +194,7 @@ export function BankYearDetailPanel({
         </p>
 
         {sortedShares.length > 0 && (
-          <div className="bg-paper-2 border border-hairline rounded-md">
+          <div className="card">
             <div className="px-5">
               {sortedShares.map((s, i) => (
                 <div

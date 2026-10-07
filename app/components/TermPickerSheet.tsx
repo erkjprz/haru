@@ -23,7 +23,7 @@ export function TermPickerSheet({
 
   return (
     <Sheet title="Payment term" onClose={onClose}>
-      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+      <div className="card divide-y divide-hairline overflow-hidden">
         {PRESET_TERMS.map((months) => (
           <button
             key={months}
@@ -39,7 +39,7 @@ export function TermPickerSheet({
 
       <button
         onClick={onCustom}
-        className="w-full mt-3 px-4 py-3.5 text-left text-sm font-semibold text-gold bg-paper-2 border border-hairline rounded-md"
+        className="w-full mt-3 px-4 py-3.5 text-left text-sm font-semibold text-gold card"
       >
         Custom term…
       </button>

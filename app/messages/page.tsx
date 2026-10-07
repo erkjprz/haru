@@ -163,7 +163,7 @@ function MessagesInbox() {
           {loadError && <p className="text-sm text-rust mb-4">Couldn&apos;t load messages: {loadError}</p>}
 
           {!loadError && visible.length === 0 && (
-            <p className="text-sm text-ink-soft text-center py-12 bg-paper-2 border border-hairline rounded-md">
+            <p className="text-sm text-ink-soft text-center py-12 card">
               {isAdmin && filter === "closed"
                 ? "No closed conversations."
                 : isAdmin
@@ -173,7 +173,7 @@ function MessagesInbox() {
           )}
 
           {visible.length > 0 && (
-            <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline">
+            <div className="card divide-y divide-hairline">
               {visible.map((c) => {
                 const fromMe = c.last_message_sender_id === member.member_id
                 const prefix = fromMe ? "You: " : !isAdmin ? "Admins: " : ""
@@ -291,7 +291,7 @@ function ComposeSheet({
             <select
               value={recipientId}
               onChange={(e) => setRecipientId(e.target.value)}
-              className="w-full bg-paper-2 border border-hairline rounded-md px-3 py-2.5 text-sm text-ink"
+              className="w-full card px-3 py-2.5 text-sm text-ink"
             >
               <option value="">Choose a member…</option>
               {members.map((m) => (
@@ -310,7 +310,7 @@ function ComposeSheet({
             onChange={(e) => setSubject(e.target.value)}
             maxLength={SUBJECT_MAX}
             placeholder={isAdmin ? "e.g. About your March contribution" : "e.g. Question about my loan"}
-            className="w-full bg-paper-2 border border-hairline rounded-md px-3 py-2.5 text-sm text-ink placeholder:text-ink-soft outline-none"
+            className="w-full card px-3 py-2.5 text-sm text-ink placeholder:text-ink-soft outline-none"
           />
         </label>
         <label className="block">
@@ -320,7 +320,7 @@ function ComposeSheet({
             onChange={(e) => setBody(e.target.value)}
             maxLength={BODY_MAX}
             rows={5}
-            className="w-full bg-paper-2 border border-hairline rounded-md px-3 py-2.5 text-sm text-ink outline-none resize-none"
+            className="w-full card px-3 py-2.5 text-sm text-ink outline-none resize-none"
           />
         </label>
         {error && <p className="text-sm text-rust">{error}</p>}

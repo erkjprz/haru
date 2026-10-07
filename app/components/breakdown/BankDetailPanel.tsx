@@ -258,7 +258,7 @@ export function BankDetailPanel({
       <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">{bank}</h1>
       <p className="text-[13px] text-ink-soft mb-6">Current balance and interest history for this account.</p>
 
-      <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5">
+      <div className="card px-5 pt-4 pb-3.5">
         <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Current Balance</p>
         <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">₱{fmt(balance)}</p>
       </div>
@@ -266,7 +266,7 @@ export function BankDetailPanel({
       {qrAccounts.length > 0 && (
         <button
           onClick={() => setZoomedQr(qrAccounts[0])}
-          className="w-full flex items-center justify-between gap-3 bg-paper-2 border border-hairline rounded-md px-5 py-3.5 mt-4 hover:bg-paper transition-colors"
+          className="w-full flex items-center justify-between gap-3 card px-5 py-3.5 mt-4 hover:bg-paper transition-colors"
         >
           <div className="flex items-center gap-2.5">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-[18px] h-[18px] text-gold shrink-0">
@@ -289,7 +289,7 @@ export function BankDetailPanel({
         />
       )}
 
-      <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
+      <div className="card p-5 mt-4">
         <InfoBox label="Interest">
           <InfoRow label="Interest Earned" value={`+₱${fmt(interestEarned)}`} valueClass="text-sage" />
           {tax !== 0 && <InfoRow label="Tax Withheld" value={`-₱${fmt(Math.abs(tax))}`} valueClass="text-rust" />}
@@ -313,7 +313,7 @@ export function BankDetailPanel({
           </p>
           <div className="flex flex-col gap-3">
             {pendingGroups.map((group) => (
-              <div key={group.year} className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-4">
+              <div key={group.year} className="card px-5 pt-4 pb-4">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
                   {group.year}
                 </p>
@@ -343,7 +343,7 @@ export function BankDetailPanel({
         <p className="text-[13px] text-ink-soft mb-3">Tap a year to see how it was split across members.</p>
 
         {years.length > 0 && (
-          <div className="bg-paper-2 border border-hairline rounded-md">
+          <div className="card">
             <div className="px-5">
               {years.map((y, i) => (
                 <button
@@ -375,7 +375,7 @@ export function BankDetailPanel({
         )}
 
         {years.length === 0 && !loadError && (
-          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+          <p className="text-sm text-ink-soft text-center py-8 card">
             No interest has been distributed for this bank yet.
           </p>
         )}

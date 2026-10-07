@@ -39,7 +39,7 @@ export function TypePickerSheet({
 }) {
   function renderList(items: TypeOption[]) {
     return (
-      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+      <div className="card divide-y divide-hairline overflow-hidden">
         {items.map((o) => (
           <button
             key={o.key}

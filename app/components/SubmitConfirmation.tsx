@@ -27,7 +27,7 @@ export default function SubmitConfirmation({ amount, label, pending, continueLab
   }, [])
 
   return (
-    <div className="bg-paper-2 border border-hairline rounded-md p-6 text-center">
+    <div className="card p-6 text-center">
       <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">
         ₱{fmt(amount)}
       </p>

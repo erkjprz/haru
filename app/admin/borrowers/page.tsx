@@ -216,12 +216,12 @@ export default function AdminBorrowersPage() {
                   key={m.member_id}
                   type="button"
                   onClick={() => setOpenId(m.member_id)}
-                  className="w-full text-left bg-paper-2 border border-hairline rounded-md p-5"
+                  className="w-full text-left card p-5"
                 >
                   {row}
                 </button>
               ) : (
-                <div key={m.member_id} className="bg-paper-2 border border-hairline rounded-md p-5">
+                <div key={m.member_id} className="card p-5">
                   {row}
                 </div>
               )
@@ -265,7 +265,7 @@ export default function AdminBorrowersPage() {
 
         return (
           <Sheet title="Borrower request" onClose={() => setOpenId(null)} footer={primaryAction}>
-            <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+            <div className="card overflow-hidden">
               <FieldRow icon={<PersonIcon />}>
                 <span className="flex-1 min-w-0 text-sm">
                   <span className="font-semibold text-ink">{m.name}</span>
@@ -281,7 +281,7 @@ export default function AdminBorrowersPage() {
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
                   Link to an existing loan record (optional)
                 </p>
-                <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                <div className="card overflow-hidden">
                   <FieldRow icon={<PersonIcon />}>
                     <select
                       className={rowSelectClass}

@@ -326,7 +326,7 @@ export function ReceiptField({
 // Breakdown's panels) rather than a single long enclosing box.
 export function FieldGroup({ label, children }: { label?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-paper-2 border border-hairline rounded-md p-5">
+    <div className="card p-5">
       {label && <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-4">{label}</p>}
       {children}
     </div>
