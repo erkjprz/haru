@@ -33,7 +33,7 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
 
   if (loans.length === 0) {
     return (
-      <p className="text-sm text-ink-soft text-center py-12 bg-paper-2 border border-hairline rounded-md">
+      <p className="text-sm text-ink-soft text-center py-12 card">
         No loans on record yet.
       </p>
     )
@@ -53,7 +53,7 @@ export function LoanCards({ loans, editable }: { loans: Loan[]; editable: boolea
           ).length
 
           return (
-            <div key={loan.loan_id} className="bg-paper-2 border border-hairline rounded-md px-5 py-4">
+            <div key={loan.loan_id} className="card px-5 py-4">
               <div className="flex items-start justify-between gap-3">
                 <p className="font-display text-[17px] font-semibold text-ink truncate">
                   {loan.name || "Loan"}

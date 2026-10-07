@@ -91,7 +91,7 @@ export function PushNotificationsCard({ memberId }: { memberId: string }) {
   }
 
   return (
-    <div className="bg-paper-2 border border-hairline rounded-md p-5">
+    <div className="card p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-medium text-ink">Push Notifications</h2>

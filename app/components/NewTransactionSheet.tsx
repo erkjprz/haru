@@ -803,7 +803,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
               <>
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
-                  <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                  <div className="card divide-y divide-hairline overflow-hidden">
                     {typeField}
 
                     {onBehalfOfField}
@@ -924,7 +924,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                   <>
                     <div>
                       <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
-                      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                      <div className="card divide-y divide-hairline overflow-hidden">
                         {typeField}
 
                         {onBehalfOfField}
@@ -972,7 +972,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                       <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
                         Where should we send it?
                       </p>
-                      <div className="bg-paper-2 border border-hairline rounded-md p-4 space-y-3">
+                      <div className="card p-4 space-y-3">
                         <textarea
                           rows={2}
                           className="block w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft resize-none"

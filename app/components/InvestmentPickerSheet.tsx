@@ -38,7 +38,7 @@ export function InvestmentPickerSheet({
       {investments.length === 0 ? (
         <p className="text-center text-sm text-ink-soft py-6">No open investments to select.</p>
       ) : (
-        <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+        <div className="card divide-y divide-hairline overflow-hidden">
           {investments.map((inv) => (
             <button
               key={inv.investment_id}

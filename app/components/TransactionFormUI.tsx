@@ -147,7 +147,7 @@ export function TypeDropdown({
                 setOpen(false)
               }}
               className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 text-sm text-left border-b border-hairline last:border-b-0 transition-colors ${
-                o.key === value ? "bg-gold/10 text-ink font-semibold" : "bg-paper text-ink-soft"
+                o.key === value ? "bg-(--selected-bg) text-ink font-semibold" : "bg-paper text-ink-soft"
               }`}
             >
               <span className="flex items-center gap-2.5 min-w-0">
@@ -326,7 +326,7 @@ export function ReceiptField({
 // Breakdown's panels) rather than a single long enclosing box.
 export function FieldGroup({ label, children }: { label?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-paper-2 border border-hairline rounded-md p-5">
+    <div className="card p-5">
       {label && <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-4">{label}</p>}
       {children}
     </div>

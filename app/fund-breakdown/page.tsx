@@ -492,7 +492,7 @@ function YouPanel({ memberId }: { memberId: string }) {
       {loadError && <p className="mb-4 text-sm text-rust">Couldn't load some of this breakdown: {loadError}</p>}
 
       {performance != null && (
-        <div className="bg-paper-2 border border-hairline rounded-md p-5">
+        <div className="card p-5">
           <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">Available Balance</p>
           <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink mb-4">
             ₱{fmt(performance.withdrawable_now)}
@@ -570,7 +570,7 @@ function YouPanel({ memberId }: { memberId: string }) {
         </p>
 
         {years.length === 0 && !loadError && (
-          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+          <p className="text-sm text-ink-soft text-center py-8 card">
             No dated activity yet.
           </p>
         )}
@@ -590,7 +590,7 @@ function YouPanel({ memberId }: { memberId: string }) {
                 {years.map((y) => {
                   const yearGainLoss = y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
                   return (
-                    <div key={y.year} className="w-full shrink-0 bg-paper-2 border border-hairline rounded-md p-5">
+                    <div key={y.year} className="w-full shrink-0 card p-5">
                       <div className="mb-3">
                         <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
                       </div>
@@ -807,7 +807,7 @@ function GroupPanel() {
       {loadError && <p className="mb-4 text-sm text-rust">Couldn't load the fund breakdown: {loadError}</p>}
 
       {members.length > 0 && (
-        <div className="bg-paper-2 border border-hairline rounded-md px-5 py-4 mb-6">
+        <div className="card px-5 py-4 mb-6">
           <div className="flex justify-between items-baseline mb-1">
             <span className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">Fund Total Cash</span>
             <span className="text-[13px] text-ink-soft font-mono">{members.length} members</span>
@@ -847,7 +847,7 @@ function GroupPanel() {
       )}
 
       {fund != null && (
-        <div className="bg-paper-2 border border-hairline rounded-md p-5 mb-6">
+        <div className="card p-5 mb-6">
           <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-3">Fund Breakdown</p>
 
           <InfoBox label="Capital">
@@ -930,7 +930,7 @@ function GroupPanel() {
             <button
               key={member.member_id}
               onClick={(e) => handleCardClick(member.member_id, member.name, e)}
-              className="w-full shrink-0 text-left bg-paper-2 border border-hairline rounded-md p-5 hover:bg-paper transition-colors"
+              className="w-full shrink-0 text-left card p-5 hover:bg-paper transition-colors"
             >
               <div className="flex justify-between items-baseline flex-wrap gap-1.5 mb-4">
                 <span className="font-display text-xl font-semibold text-ink">{member.name}</span>
@@ -1165,7 +1165,7 @@ function MemberBreakdownSheet({
             {loadError && <p className="mb-4 text-sm text-rust">Couldn&apos;t load some of this breakdown: {loadError}</p>}
 
             {performance != null && (
-              <div className="bg-paper-2 border border-hairline rounded-md p-5">
+              <div className="card p-5">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">Available Balance</p>
                 <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink mb-4">
                   ₱{fmt(performance.withdrawable_now)}
@@ -1241,7 +1241,7 @@ function MemberBreakdownSheet({
               </p>
 
               {years.length === 0 && !loadError && (
-                <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+                <p className="text-sm text-ink-soft text-center py-8 card">
                   No dated activity yet.
                 </p>
               )}
@@ -1260,7 +1260,7 @@ function MemberBreakdownSheet({
                 {years.map((y) => {
                   const yearGainLoss = y.bankInterest + y.loanGain + y.bankWriteoff + y.investmentGainLoss
                   return (
-                    <div key={y.year} className="w-full shrink-0 bg-paper-2 border border-hairline rounded-md p-5">
+                    <div key={y.year} className="w-full shrink-0 card p-5">
                       <div className="mb-3">
                         <span className="font-display text-xl font-semibold text-ink">{y.year}</span>
                       </div>
@@ -1530,7 +1530,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
       <p className="text-[13px] text-ink-soft mb-6">Every loan the fund has released, and what came back.</p>
 
       {!loadError && loans.length > 0 && (
-        <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 mb-6">
+        <div className="card px-5 pt-4 pb-3.5 mb-6">
           <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Total Outstanding</p>
           <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">
             ₱{fmt(totalOutstanding)}
@@ -1675,7 +1675,7 @@ function LoanCard({
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 py-4 hover:bg-paper transition-colors"
+      className="w-full text-left card px-5 py-4 hover:bg-paper transition-colors"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -2068,7 +2068,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {!loadError && banks.length > 0 && (
-        <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 mb-6">
+        <div className="card px-5 pt-4 pb-3.5 mb-6">
           <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Total Bank Balance</p>
           <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">₱{fmt(totalBalance)}</p>
           <p className="text-[11px] text-ink-soft mt-1">
@@ -2666,7 +2666,7 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {!loadError && investments.length > 0 && (
-        <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 mb-6">
+        <div className="card px-5 pt-4 pb-3.5 mb-6">
           <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Net Position</p>
           <p
             className={`font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold ${

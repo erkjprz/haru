@@ -62,7 +62,7 @@ export default function ScanToPayCard() {
     <>
       <button
         onClick={() => setSheetOpen(true)}
-        className="w-full flex items-center justify-between gap-3 bg-paper-2 border border-hairline rounded-md px-5 py-3.5 mb-6 hover:bg-paper transition-colors"
+        className="w-full flex items-center justify-between gap-3 card px-5 py-3.5 mb-6 hover:bg-paper transition-colors"
       >
         <div className="flex items-center gap-2.5">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-[18px] h-[18px] text-gold shrink-0">

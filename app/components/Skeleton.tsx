@@ -9,7 +9,7 @@ export function SkeletonCardList({ rows = 3 }: { rows?: number }) {
   return (
     <div className="flex flex-col gap-3 animate-pulse">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="bg-paper-2 border border-hairline rounded-md px-5 py-4">
+        <div key={i} className="card px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-2">
               <Bar className="h-4 w-2/5" />
@@ -34,12 +34,12 @@ export function SkeletonCardList({ rows = 3 }: { rows?: number }) {
 export function SkeletonPanel() {
   return (
     <div className="animate-pulse space-y-4">
-      <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5 space-y-3">
+      <div className="card px-5 pt-4 pb-3.5 space-y-3">
         <Bar className="h-3 w-1/3" />
         <Bar className="h-8 w-1/2" />
         <Bar className="h-2 w-full" />
       </div>
-      <div className="bg-paper-2 border border-hairline rounded-md p-5 space-y-3">
+      <div className="card p-5 space-y-3">
         <Bar className="h-3 w-1/4" />
         <Bar className="h-4 w-full" />
         <Bar className="h-4 w-5/6" />

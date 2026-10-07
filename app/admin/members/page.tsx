@@ -296,7 +296,7 @@ export default function AdminMembersPage() {
                 </button>
               }
             >
-              <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+              <div className="card divide-y divide-hairline overflow-hidden">
                 <FieldRow icon={<PersonIcon />}>
                   <input
                     className={rowInputClass}
@@ -351,7 +351,7 @@ export default function AdminMembersPage() {
 
           <div className="mt-4 space-y-3">
             {filteredMembers.map((member) => (
-              <div key={member.member_id} className="bg-paper-2 border border-hairline rounded-md p-5">
+              <div key={member.member_id} className="card p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="font-display text-lg truncate">
@@ -488,7 +488,7 @@ export default function AdminMembersPage() {
             </div>
           }
         >
-          <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+          <div className="card divide-y divide-hairline overflow-hidden">
             <FieldRow icon={<PersonIcon />}>
               <input
                 className={rowInputClass}

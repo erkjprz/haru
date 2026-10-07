@@ -824,7 +824,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
           below, matching NewTransactionSheet's typeField -- just
           non-interactive (no ▾, no onClick) since type can't be changed
           here, with the status badge and lock standing in for it. */}
-      <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden mt-4">
+      <div className="card overflow-hidden mt-4">
         <FieldRow icon={<FlowBadge {...(FLOW[classification] ?? { arrow: "•", tone: "in" })} small />}>
           <span className="flex-1 min-w-0 text-sm">
             <span className="text-ink-soft">Type: </span>
@@ -877,7 +877,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
           <>
             <div>
               <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
-              <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+              <div className="card divide-y divide-hairline overflow-hidden">
                 {isLoanPayment && (
                   // Always renders the tappable row regardless of whether
                   // there's anything to pick -- LoanPickerSheet already
@@ -999,7 +999,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
             {formStep === 1 && (
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Loan Terms</p>
-                <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+                <div className="card divide-y divide-hairline overflow-hidden">
                   {/* Toggle + value share one row instead of stacking (toggle, then a
                       second full-width input below it) -- matches NewTransactionSheet's
                       Loan Terms card, the two only ever needing to look the same. */}

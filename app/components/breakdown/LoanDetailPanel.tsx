@@ -639,7 +639,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       </p>
 
       {/* Principal / repayment overview */}
-      <div className="bg-paper-2 border border-hairline rounded-md px-5 pt-4 pb-3.5">
+      <div className="card px-5 pt-4 pb-3.5">
         <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
           {loan.status === "closed" ? "Total Repaid" : "Outstanding Balance"}
         </p>
@@ -665,7 +665,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
       </div>
 
       {/* Capital / Performance boxes, matching Dashboard's InfoBox pattern */}
-      <div className="bg-paper-2 border border-hairline rounded-md p-5 mt-4">
+      <div className="card p-5 mt-4">
         <InfoBox label="Loan">
           <InfoRow label="Principal" value={`₱${fmt(loan.principal)}`} />
           <InfoRow label="Total repayable" value={`₱${fmt(loan.total_repayable)}`} />
@@ -1042,7 +1042,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         {loadError && <p className="text-sm text-rust">{loadError}</p>}
 
         {loan.status === "active" && holds.length > 0 && (
-          <div className="bg-paper-2 border border-hairline rounded-md">
+          <div className="card">
             <div className="px-5">
               {holds.map((h, i) => (
                 <div
@@ -1082,13 +1082,13 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         )}
 
         {loan.status === "active" && holds.length === 0 && !loadError && (
-          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+          <p className="text-sm text-ink-soft text-center py-8 card">
             No hold recorded for this loan.
           </p>
         )}
 
         {loan.status === "closed" && shares.length > 0 && (
-          <div className="bg-paper-2 border border-hairline rounded-md">
+          <div className="card">
             <div className="px-5">
               {shares.map((s, i) => (
                 <div
@@ -1132,7 +1132,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         )}
 
         {loan.status === "closed" && shares.length === 0 && !loadError && (
-          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+          <p className="text-sm text-ink-soft text-center py-8 card">
             No gain was distributed for this loan.
           </p>
         )}
@@ -1151,7 +1151,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
         </div>
 
         {recentTransactions.length > 0 ? (
-          <div className="bg-paper-2 border border-hairline rounded-md px-5">
+          <div className="card px-5">
             {recentTransactions.map((t, i) => (
               <div
                 key={t.transaction_id}
@@ -1189,7 +1189,7 @@ export function LoanDetailPanel({ loanId, onBack }: { loanId: string; onBack: ()
             ))}
           </div>
         ) : (
-          <p className="text-sm text-ink-soft text-center py-8 bg-paper-2 border border-hairline rounded-md">
+          <p className="text-sm text-ink-soft text-center py-8 card">
             No transactions recorded for this loan yet.
           </p>
         )}

@@ -45,7 +45,7 @@ function FaqSectionCard({ title, items, forceOpen }: FaqSection & { forceOpen?: 
   return (
     <div className="mt-6">
       <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">{title}</p>
-      <div className="bg-paper-2 border border-hairline rounded-md px-4">
+      <div className="card px-4">
         {items.map((item) => (
           <Faq key={item.q} q={item.q} a={item.a} forceOpen={forceOpen} />
         ))}
@@ -834,7 +834,7 @@ export default function HelpPage() {
           </p>
 
           {tabs.length > 1 && (
-            <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
+            <div className="mt-6 flex card p-[3px]">
               {tabs.map((t) => (
                 <button
                   key={t.id}
@@ -867,7 +867,7 @@ export default function HelpPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${active.label.toLowerCase()} help`}
-              className="w-full bg-paper-2 border border-hairline rounded-md pl-10 pr-9 py-2.5 text-sm text-ink placeholder:text-ink-soft outline-none focus:border-gold transition-colors"
+              className="w-full card pl-10 pr-9 py-2.5 text-sm text-ink placeholder:text-ink-soft outline-none focus:border-gold transition-colors"
             />
             {query && (
               <button

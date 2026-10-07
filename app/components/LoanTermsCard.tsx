@@ -83,7 +83,7 @@ export function LoanTermsCard({
     <>
     <div>
       <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Loan Terms</p>
-      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+      <div className="card divide-y divide-hairline overflow-hidden">
         {/* Toggle + value share one row instead of stacking (toggle, then a
             second full-width input below it) -- the toggle only ever needs
             two glyphs' worth of width once it's not also carrying "Rate (%)"/

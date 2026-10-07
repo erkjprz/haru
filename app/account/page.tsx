@@ -148,7 +148,7 @@ export default function AccountPage() {
 
           {/* Change Name */}
 
-          <div className="bg-paper-2 border border-hairline rounded-md p-5">
+          <div className="card p-5">
 
             <h2 className="font-display text-lg font-medium text-ink mb-1">
               Name
@@ -189,7 +189,7 @@ export default function AccountPage() {
 
           {/* Change Email */}
 
-          <div className="mt-6 bg-paper-2 border border-hairline rounded-md p-5">
+          <div className="mt-6 card p-5">
 
             <h2 className="font-display text-lg font-medium text-ink mb-1">
               Email
@@ -227,7 +227,7 @@ export default function AccountPage() {
 
           {/* Change Password */}
 
-          <div className="mt-6 bg-paper-2 border border-hairline rounded-md p-5">
+          <div className="mt-6 card p-5">
 
             <h2 className="font-display text-lg font-medium text-ink mb-1">
               Password

@@ -396,7 +396,7 @@ function ShareBar({
   onShare: () => void
 }) {
   return (
-    <div className="flex items-center gap-2 bg-paper-2 border border-hairline rounded-md pl-3.5 pr-1.5 py-1.5">
+    <div className="flex items-center gap-2 card pl-3.5 pr-1.5 py-1.5">
       <span className="flex-1 font-mono text-[13px] overflow-x-auto whitespace-nowrap">
         {host}
         {SHARE_PATH}
@@ -507,7 +507,7 @@ export default function InstallPage() {
           added, it opens full-screen like any other app, with its own icon.
         </p>
 
-        <div className="mt-6 flex bg-paper-2 border border-hairline rounded-md p-[3px]">
+        <div className="mt-6 flex card p-[3px]">
           {(["ios", "android"] as Platform[]).map((p) => (
             <button
               key={p}

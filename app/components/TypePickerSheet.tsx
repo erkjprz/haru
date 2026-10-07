@@ -39,13 +39,13 @@ export function TypePickerSheet({
 }) {
   function renderList(items: TypeOption[]) {
     return (
-      <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+      <div className="card divide-y divide-hairline overflow-hidden">
         {items.map((o) => (
           <button
             key={o.key}
             onClick={() => onSelect(o.key)}
             className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${
-              o.key === value ? "bg-gold/10" : ""
+              o.key === value ? "bg-(--selected-bg)" : ""
             }`}
           >
             <TypeBadge arrow={o.arrow} tone={o.tone} selected={o.key === value} />

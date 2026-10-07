@@ -273,7 +273,7 @@ export default function ConversationPage() {
                 maxLength={BODY_MAX}
                 rows={2}
                 placeholder={isAdmin ? "Reply as the admin team…" : "Write a message…"}
-                className="flex-1 min-w-0 bg-paper-2 border border-hairline rounded-md px-3 py-2 text-sm text-ink placeholder:text-ink-soft outline-none resize-none"
+                className="flex-1 min-w-0 card px-3 py-2 text-sm text-ink placeholder:text-ink-soft outline-none resize-none"
               />
               <button
                 onClick={send}

@@ -835,7 +835,7 @@ export default function AdminPage() {
 
                 <div className="mt-3 space-y-2">
                   {bulkTransactions.map((t) => (
-                    <div key={t.transaction_id} className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                    <div key={t.transaction_id} className="card overflow-hidden">
                       <div className="flex items-center gap-3 px-4 py-3">
                         {bulkTransactions.length > 1 && (
                           <input
@@ -971,7 +971,7 @@ export default function AdminPage() {
                         key={t.transaction_id}
                         type="button"
                         onClick={() => setReviewingTxnId(t.transaction_id)}
-                        className="w-full bg-paper-2 border border-hairline rounded-md overflow-hidden flex items-center gap-3 px-4 py-3 text-left"
+                        className="w-full card overflow-hidden flex items-center gap-3 px-4 py-3 text-left"
                       >
                         <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "out" })} small />
                         <div className="min-w-0 flex-1">
@@ -1022,7 +1022,7 @@ export default function AdminPage() {
                       key={m.member_id}
                       type="button"
                       onClick={() => setReviewingSignupId(m.member_id)}
-                      className="w-full bg-paper-2 border border-hairline rounded-md flex items-center gap-3 px-4 py-3 text-left"
+                      className="w-full card flex items-center gap-3 px-4 py-3 text-left"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-display font-medium truncate text-sm">{m.name}</p>
@@ -1055,7 +1055,7 @@ export default function AdminPage() {
                         key={m.member_id}
                         type="button"
                         onClick={() => setReviewingBorrowerId(m.member_id)}
-                        className="w-full bg-paper-2 border border-hairline rounded-md flex items-center gap-3 px-4 py-3 text-left"
+                        className="w-full card flex items-center gap-3 px-4 py-3 text-left"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="font-display font-medium truncate text-sm">{m.name}</p>
@@ -1171,7 +1171,7 @@ export default function AdminPage() {
 
         return (
           <Sheet title="Review transaction" onClose={() => setReviewingTxnId(null)} footer={footer}>
-            <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+            <div className="card overflow-hidden">
               <FieldRow icon={<FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "out" })} small />}>
                 <span className="flex-1 min-w-0 text-sm">
                   <span className="font-semibold text-ink">{t.members?.name || "Fund"}</span>
@@ -1247,7 +1247,7 @@ export default function AdminPage() {
             {needsLoanBank && (t.loans?.payout_details || t.loans?.payout_qr_path) && (
               <div className="mb-4">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Send to</p>
-                <div className="bg-paper-2 border border-hairline rounded-md px-4 py-3.5 space-y-3">
+                <div className="card px-4 py-3.5 space-y-3">
                   {t.loans?.payout_details && (
                     <p className="text-sm text-ink whitespace-pre-line break-words">{t.loans.payout_details}</p>
                   )}
@@ -1266,7 +1266,7 @@ export default function AdminPage() {
 
             <div>
               <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
-              <div className="bg-paper-2 border border-hairline rounded-md divide-y divide-hairline overflow-hidden">
+              <div className="card divide-y divide-hairline overflow-hidden">
                 {needsWithdrawalBank && (
                   <FieldRow icon={<BankIcon />}>
                     <select
@@ -1396,7 +1396,7 @@ export default function AdminPage() {
             </div>
           }
         >
-          <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+          <div className="card overflow-hidden">
             <FieldRow icon={<PersonIcon />}>
               <span className="flex-1 min-w-0 text-sm">
                 <span className="font-semibold text-ink">{reviewingSignup.name}</span>
@@ -1416,7 +1416,7 @@ export default function AdminPage() {
                 If this signup is actually one of the fund&apos;s existing members, link it to their
                 record so their contributions, loans and investments carry over.
               </p>
-              <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+              <div className="card overflow-hidden">
                 <FieldRow icon={<PersonIcon />}>
                   <select
                     className={rowSelectClass}
@@ -1463,7 +1463,7 @@ export default function AdminPage() {
               </button>
             }
           >
-            <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+            <div className="card overflow-hidden">
               <FieldRow icon={<PersonIcon />}>
                 <span className="flex-1 min-w-0 text-sm">
                   <span className="font-semibold text-ink">{m.name}</span>
@@ -1481,7 +1481,7 @@ export default function AdminPage() {
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
                   Link to an existing loan record (optional)
                 </p>
-                <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden">
+                <div className="card overflow-hidden">
                   <FieldRow icon={<PersonIcon />}>
                     <select
                       className={rowSelectClass}
@@ -1514,7 +1514,7 @@ export default function AdminPage() {
             setRejectReason("")
           }}
         >
-          <div className="bg-paper-2 border border-hairline rounded-md overflow-hidden mb-4">
+          <div className="card overflow-hidden mb-4">
             <FieldRow icon={<FlowBadge {...(FLOW[rejectingBulkTxn.classification] ?? { arrow: "•", tone: "in" })} small />}>
               <span className="flex-1 min-w-0 text-sm">
                 <span className="font-semibold text-ink">{rejectingBulkTxn.members?.name || "Fund"}</span>

@@ -24,7 +24,7 @@ function MenuSection({ title, children }: { title: string; children: React.React
   return (
     <div className="mt-6 first:mt-0">
       <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">{title}</p>
-      <div className="bg-paper-2 border border-hairline rounded-md">{children}</div>
+      <div className="card">{children}</div>
     </div>
   )
 }
@@ -99,7 +99,7 @@ export default function MenuPage() {
           </MenuSection>
 
           <div className="mt-6">
-            <div className="bg-paper-2 border border-hairline rounded-md px-5 py-3.5">
+            <div className="card px-5 py-3.5">
               <p className="text-sm text-ink mb-3">Appearance</p>
               <div className="flex items-center gap-1 bg-paper border border-hairline rounded-md p-1">
                 {APPEARANCE_OPTIONS.map((option) => (
