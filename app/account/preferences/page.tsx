@@ -54,26 +54,41 @@ function AmountField({
             placeholder="Not set"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="border border-hairline bg-paper pl-7 pr-3 py-2 rounded-md w-full text-base [font-variant-numeric:tabular-nums] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="border border-hairline bg-paper pl-7 pr-3 py-2 rounded-md w-full text-base leading-6 [font-variant-numeric:tabular-nums] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
         </div>
 
         <div>
-          <label className="block mb-1.5 text-xs uppercase tracking-wide text-ink-soft font-mono">
+          <label className="block mb-1.5 text-[13px] text-ink-soft">
             Bank the transfer goes to
           </label>
-          <select
-            className="border border-hairline bg-paper text-ink text-base rounded-md px-3 py-2 w-full"
-            value={bankId}
-            onChange={(e) => onBankChange(e.target.value)}
-          >
-            <option value="">Not set</option>
-            {banks.map((bank) => (
-              <option key={bank.id} value={bank.id}>
-                {bank.account_name || bank.bank_name}
-              </option>
-            ))}
-          </select>
+          {/* appearance-none so iOS doesn't apply its own native select
+              height/padding -- keeps it the same size as the amount input
+              (and the Account page inputs) above it. */}
+          <div className="relative">
+            <select
+              className="appearance-none border border-hairline bg-paper text-ink text-base leading-6 rounded-md pl-3 pr-9 py-2 w-full"
+              value={bankId}
+              onChange={(e) => onBankChange(e.target.value)}
+            >
+              <option value="">Not set</option>
+              {banks.map((bank) => (
+                <option key={bank.id} value={bank.id}>
+                  {bank.account_name || bank.bank_name}
+                </option>
+              ))}
+            </select>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-soft"
+            >
+              <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
         </div>
 
         {message && <p className="text-sm text-ink-soft">{message}</p>}
