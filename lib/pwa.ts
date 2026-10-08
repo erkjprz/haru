@@ -17,6 +17,29 @@ export function isIOS(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
 }
 
+export function isAndroid(): boolean {
+  if (typeof navigator === "undefined") return false
+  return /android/i.test(navigator.userAgent)
+}
+
+// Webviews inside other apps (a link tapped in Messenger, Instagram, the
+// Google app, ...) can't install a PWA at all -- the only way forward is
+// opening the page in the real browser. Best effort: these apps identify
+// themselves in the user agent, and Android webviews carry "; wv)".
+export function isInAppBrowser(): boolean {
+  if (typeof navigator === "undefined") return false
+  return /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Messenger|MicroMessenger|Line\/|Snapchat|LinkedInApp|TikTok|musical_ly|Twitter|GSA\/|; wv\)/i.test(
+    navigator.userAgent
+  )
+}
+
+// iOS Chrome/Firefox/Edge can add to the Home Screen too (iOS 16.4+), but
+// their Share button isn't in Safari's bottom toolbar.
+export function isIOSSafari(): boolean {
+  if (typeof navigator === "undefined") return false
+  return isIOS() && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(navigator.userAgent)
+}
+
 export function isStandalone(): boolean {
   if (typeof window === "undefined") return false
   return (
@@ -86,6 +109,29 @@ export function isSnoozed(step: OnboardingStep): boolean {
     return Date.now() - at < SNOOZE_DAYS[step] * DAY_MS
   } catch {
     return false
+  }
+}
+
+// The full-screen install gate on /login and /signup -- "Continue in
+// browser" keeps it away for a week rather than for good, since the
+// onboarding sheet and /install still cover anyone who changes their mind.
+const GATE_KEY = "install-gate-dismissed"
+const GATE_SNOOZE_DAYS = 7
+
+export function isGateDismissed(): boolean {
+  try {
+    const at = Number(localStorage.getItem(GATE_KEY)) || 0
+    return Date.now() - at < GATE_SNOOZE_DAYS * DAY_MS
+  } catch {
+    return false
+  }
+}
+
+export function dismissGate() {
+  try {
+    localStorage.setItem(GATE_KEY, String(Date.now()))
+  } catch {
+    // Blocked storage -- the gate just comes back next load.
   }
 }
 

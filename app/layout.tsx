@@ -8,6 +8,7 @@ import { AuthProvider } from "@/app/auth-context";
 import { ServiceWorkerRegister } from "@/app/components/ServiceWorkerRegister";
 import { EditTransactionSheetHost } from "@/app/components/EditTransactionSheetHost";
 import { PwaOnboardingSheet } from "@/app/components/PwaOnboardingSheet";
+import { InstallGate } from "@/app/components/InstallGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -95,6 +96,9 @@ export default function RootLayout({
           {/* Install + notifications onboarding -- decides for itself
               whether there's anything to offer on this device. */}
           <PwaOnboardingSheet />
+          {/* Full-screen install prompt on the signed-out mobile entry
+              points (/login, /signup) -- skippable, see InstallGate. */}
+          <InstallGate />
         </AuthProvider>
         <Analytics />
         {/* iOS only recomputes a `position: fixed` element's layout in
