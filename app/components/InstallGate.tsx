@@ -11,7 +11,7 @@ import {
   isGateDismissed,
   isInAppBrowser,
   isIOS,
-  isIOSSafari,
+  iosBrowser,
   isStandalone,
   subscribeToInstallState,
   wasInstalledThisSession
@@ -144,7 +144,9 @@ export function InstallGate() {
 
   if (!variant) return null
 
-  const safari = isIOSSafari()
+  const browser = iosBrowser()
+  // The guide only earns its place where it can point at the real button.
+  const canGuide = variant === "android" || browser !== "other"
 
   function continueInBrowser() {
     dismissGate()
@@ -235,9 +237,13 @@ export function InstallGate() {
         </p>
         <ol className="card mt-7 w-full px-[18px] py-1.5">
           <Step n={1}>
-            {safari ? (
+            {browser === "safari" ? (
               <>
-                Tap <IconShare /> <strong>Share</strong> in Safari&apos;s toolbar
+                Tap <IconShare /> <strong>Share</strong>{" "}in Safari&apos;s toolbar
+              </>
+            ) : browser === "chrome" ? (
+              <>
+                Tap <IconShare /> <strong>Share</strong>{" "}in Chrome&apos;s address bar
               </>
             ) : (
               <>
@@ -253,15 +259,17 @@ export function InstallGate() {
           </Step>
         </ol>
         <p className="mt-3.5 px-1 text-[13px] leading-normal text-ink-soft text-center">
-          The Home Screen app keeps its own login, separate from {safari ? "Safari" : "your browser"}, so you&apos;ll only sign in once.
+          The Home Screen app keeps its own login, separate from {browser === "safari" ? "Safari" : "your browser"}, so you&apos;ll only sign in once.
         </p>
       </>
     )
     actions = (
       <>
-        <button type="button" onClick={() => setGuiding(true)} className={primaryButton}>
-          Show me how
-        </button>
+        {canGuide && (
+          <button type="button" onClick={() => setGuiding(true)} className={primaryButton}>
+            Show me how
+          </button>
+        )}
         <button type="button" onClick={continueInBrowser} className="mt-2.5 text-[15px] font-medium text-ink-soft px-5 py-3 min-h-[44px]">
           Continue in browser
         </button>
@@ -346,51 +354,57 @@ export function InstallGate() {
       </div>
 
       {guiding && (
+        // On iPhone the steps are already on screen, so the guide only adds
+        // what they can't: where the button actually is. Android's main
+        // screen lists benefits instead, so its guide carries the steps.
         <button
           type="button"
           onClick={() => setGuiding(false)}
           aria-label="Close guide"
-          className={`fixed inset-0 z-10 bg-black/90 flex flex-col items-center px-6 text-left ${
-            variant === "android"
-              ? "justify-start pt-[calc(env(safe-area-inset-top)+16px)]"
-              : "justify-end pb-[calc(env(safe-area-inset-bottom)+24px)]"
+          className={`fixed inset-0 z-10 bg-paper flex flex-col px-6 text-left ${
+            variant === "ios" && browser === "safari"
+              ? "justify-end items-center pb-[calc(env(safe-area-inset-bottom)+24px)]"
+              : "justify-start items-end pt-[calc(env(safe-area-inset-top)+12px)]"
           }`}
         >
-          {variant === "android" && (
-            <span className="self-end mr-1 mb-3 flex flex-col items-center gap-1 text-gold">
-              <IconArrow up />
-              <span className="text-xs font-bold uppercase tracking-[0.06em]">Menu is up here</span>
-            </span>
-          )}
-          <span className="card block w-full max-w-md px-5 py-[18px] text-ink">
-            <span className="block font-display font-extrabold text-lg">
-              {variant === "android" ? "Install from Chrome's menu" : "Add to Home Screen"}
-            </span>
-            <span className="block mt-1.5 text-[15px] leading-relaxed">
-              {variant === "android" ? (
-                <>
+          {variant === "android" ? (
+            <>
+              <span className="mr-1 flex flex-col items-center gap-1 text-gold">
+                <IconArrow up />
+                <span className="text-xs font-bold uppercase tracking-[0.06em]">Menu is up here</span>
+              </span>
+              <span className="card mt-3 block w-full max-w-md px-5 py-[18px] text-ink">
+                <span className="block font-display font-extrabold text-lg">Install from Chrome&apos;s menu</span>
+                <span className="block mt-1.5 text-[15px] leading-relaxed">
                   Tap the <IconKebab /> <strong>menu</strong> in the top-right corner, then <strong>Install app</strong> (or{" "}
                   <strong>Add to Home screen</strong>).
-                </>
-              ) : safari ? (
-                <>
-                  Tap <IconShare /> <strong>Share</strong> in Safari&apos;s toolbar, just below this screen. If you don&apos;t see it, tap{" "}
-                  <IconDots /> first. Then scroll down and tap <strong>Add to Home Screen</strong>.
-                </>
-              ) : (
-                <>
-                  Tap your browser&apos;s <IconShare /> <strong>Share</strong> button, then scroll down and tap{" "}
-                  <strong>Add to Home Screen</strong>.
-                </>
-              )}
-            </span>
-            <span className="block mt-2.5 text-[13px] text-ink-soft">Tap anywhere to close</span>
-          </span>
-          {variant === "ios" && safari && (
-            <span className="mt-[18px] flex flex-col items-center gap-1 text-gold">
-              <span className="text-xs font-bold uppercase tracking-[0.06em]">Safari&apos;s toolbar is down here</span>
-              <IconArrow />
-            </span>
+                </span>
+              </span>
+              <span className="self-center mt-4 text-[13px] text-ink-soft">Tap anywhere to close</span>
+            </>
+          ) : browser === "safari" ? (
+            <>
+              <span className="text-[13px] text-ink-soft">Tap anywhere to close</span>
+              <span className="mt-8 flex flex-col items-center gap-1.5 text-gold text-center">
+                <span className="text-lg font-bold text-ink">
+                  Tap <IconShare className="w-5 h-5" /> Share down here
+                </span>
+                <span className="text-sm text-ink-soft">
+                  Don&apos;t see it? It&apos;s under <IconDots />
+                </span>
+                <IconArrow />
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="mr-2 flex flex-col items-end gap-1.5 text-gold text-right">
+                <IconArrow up />
+                <span className="text-lg font-bold text-ink">
+                  Tap <IconShare className="w-5 h-5" /> Share up here
+                </span>
+              </span>
+              <span className="self-center mt-8 text-[13px] text-ink-soft">Tap anywhere to close</span>
+            </>
           )}
         </button>
       )}

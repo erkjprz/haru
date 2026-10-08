@@ -34,10 +34,16 @@ export function isInAppBrowser(): boolean {
 }
 
 // iOS Chrome/Firefox/Edge can add to the Home Screen too (iOS 16.4+), but
-// their Share button isn't in Safari's bottom toolbar.
-export function isIOSSafari(): boolean {
-  if (typeof navigator === "undefined") return false
-  return isIOS() && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(navigator.userAgent)
+// each puts its Share button somewhere different: Safari in its bottom
+// toolbar, Chrome at the right end of its address bar.
+export type IOSBrowser = "safari" | "chrome" | "other"
+
+export function iosBrowser(): IOSBrowser {
+  if (typeof navigator === "undefined") return "other"
+  const ua = navigator.userAgent
+  if (/CriOS/i.test(ua)) return "chrome"
+  if (/FxiOS|EdgiOS|OPiOS/i.test(ua)) return "other"
+  return "safari"
 }
 
 export function isStandalone(): boolean {
