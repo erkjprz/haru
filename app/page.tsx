@@ -15,6 +15,16 @@ import { warmGroupBreakdownCache } from "@/lib/fundBreakdownGroup"
 // from there either way, warm or not.
 const WARM_UP_TIMEOUT_MS = 4000
 
+// ServiceWorkerRegister's deploy-refresh sends the member here with the page
+// they were on as ?next=, so the update shows this splash instead of a blank
+// reload and still lands them back where they were. Only same-origin paths
+// are honored -- never "//host" or a full URL.
+function nextPath(): string | null {
+  const next = new URLSearchParams(window.location.search).get("next")
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return null
+  return next
+}
+
 export default function Home() {
   const router = useRouter()
   const { loading, user, member } = useAuth()
@@ -45,7 +55,7 @@ export default function Home() {
     if (member.role === "borrower") {
       const warm = warmLoansCache(member.member_id).catch(() => {})
       const timeout = new Promise((resolve) => setTimeout(resolve, WARM_UP_TIMEOUT_MS))
-      Promise.race([warm, timeout]).then(() => router.replace("/borrower"))
+      Promise.race([warm, timeout]).then(() => router.replace(nextPath() ?? "/borrower"))
       return
     }
 
@@ -59,7 +69,7 @@ export default function Home() {
       warmGroupBreakdownCache()
     ]).catch(() => {})
     const timeout = new Promise((resolve) => setTimeout(resolve, WARM_UP_TIMEOUT_MS))
-    Promise.race([warm, timeout]).then(() => router.replace("/dashboard"))
+    Promise.race([warm, timeout]).then(() => router.replace(nextPath() ?? "/dashboard"))
   }, [loading, user, member, router])
 
   return <SplashScreen />

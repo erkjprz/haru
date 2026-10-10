@@ -18,7 +18,9 @@ export function ServiceWorkerRegister() {
     // bytes do, so the browser's built-in SW update check (keyed on sw.js changing) wouldn't
     // catch most deploys anyway. Comparing this bundle's own baked-in build id against whatever
     // the server is actually running right now, whenever the tab comes back to the foreground,
-    // catches it directly and reloads once to pick it up.
+    // catches it directly and reloads once to pick it up. The reload goes through / rather than
+    // reloading in place, so the update shows the startup splash (and warms the data caches)
+    // instead of a blank flash -- `next` brings the member back to the page they were on.
     let reloaded = false
     async function checkForUpdate() {
       if (document.visibilityState !== "visible" || reloaded) return
@@ -27,7 +29,8 @@ export function ServiceWorkerRegister() {
         const { buildId } = await res.json()
         if (buildId && buildId !== process.env.NEXT_PUBLIC_BUILD_ID) {
           reloaded = true
-          window.location.reload()
+          const next = window.location.pathname + window.location.search
+          window.location.replace(next === "/" ? "/" : "/?next=" + encodeURIComponent(next))
         }
       } catch {
         // Offline or the request failed -- nothing to do differently than staying on the
