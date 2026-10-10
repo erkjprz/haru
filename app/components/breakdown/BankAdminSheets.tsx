@@ -322,6 +322,10 @@ export function DistributeInterestSheet({
           net of tax, from {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"}
         </p>
       </div>
+      <p className="text-[12px] text-ink-soft mt-3 px-1">
+        Make sure {group.bank}&apos;s December interest and tax are logged first — anything logged for {group.year} after
+        this would need a separate distribution.
+      </p>
 
       <h3 className="text-[11px] uppercase tracking-[0.1em] text-ink-soft font-mono mt-5 mb-2">
         Each member&apos;s share
@@ -356,7 +360,7 @@ export function DistributeInterestSheet({
             ))}
           </div>
           <p className="px-5 py-2.5 border-t border-hairline text-[11px] text-ink-soft">
-            Split by each member&apos;s current value in the fund as of today.
+            Split by each member&apos;s value in the fund as of {recordedOn}.
           </p>
         </div>
       )}

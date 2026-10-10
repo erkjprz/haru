@@ -575,9 +575,10 @@ const adminSections: FaqSection[] = [
         q: "How do I distribute bank interest or edit a bank?",
         a: (
           <p>
-            Go to <strong>Breakdown</strong> → <strong>Banks</strong>. Banks with interest waiting to be split
-            are listed at the top — open one and tap <strong>Review &amp; distribute</strong> to see each
-            member&apos;s share before confirming. To rename a bank or change its scan-to-pay QR, open the bank
+            Go to <strong>Breakdown</strong> → <strong>Banks</strong>. From January, last year&apos;s interest
+            waiting to be split is listed at the top — once December&apos;s interest and tax are logged for both
+            banks, open one and tap <strong>Review &amp; distribute</strong> to see each member&apos;s share
+            before confirming. It&apos;s recorded as of Dec 31 of that year. To rename a bank or change its scan-to-pay QR, open the bank
             and tap <strong>⋯</strong> next to its name. <strong>+ Add Bank</strong> is on the Banks list.
           </p>
         )

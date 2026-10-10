@@ -13,14 +13,15 @@ function dateOnly(d: Date): string {
 }
 
 /**
- * A year's bank interest is only flagged as due on the Banks list from
- * Dec 25 of that year onward (when year-end crediting lands), and stays
- * flagged until it's distributed. Display-only -- Distribute itself stays
- * available on the bank's page at any time.
+ * A year's bank interest is only flagged as due on the Banks list from Jan 1
+ * of the next year, and stays flagged until it's distributed -- the year's
+ * last entries (BDO's, dated Dec 31) aren't in before then, and distributing
+ * early would leave them as a second, separate distribution for that year.
+ * Display-only -- Distribute itself stays available on the bank's page at
+ * any time.
  */
 export function isBankInterestDistributionDue(year: number, now: Date = new Date()): boolean {
-  const y = now.getFullYear()
-  return y > year || (y === year && now.getMonth() === 11 && now.getDate() >= 25)
+  return now.getFullYear() > year
 }
 
 /**
@@ -31,8 +32,8 @@ export function isBankInterestDistributionDue(year: number, now: Date = new Date
  * lands in that year on the Banks page and in members' yearly breakdowns,
  * like every earlier year (all dated year-end), and the split uses
  * balances as of that year-end, not ones that already include the new
- * year's contributions and withdrawals. Run within the year itself (from
- * Dec 25), it's dated that day.
+ * year's contributions and withdrawals. Run within the year itself, it's
+ * dated that day.
  */
 export function bankInterestDistributionDate(year: number, now: Date = new Date()): string {
   const today = dateOnly(now)
