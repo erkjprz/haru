@@ -676,8 +676,8 @@ const adminSections: FaqSection[] = [
             <strong>Support</strong>{" "}
             instead. A pending Loan Release can also be edited or cancelled
             (cancelling deletes the loan request entirely) right up until you activate it — once a loan is
-            active, changes move to that loan&apos;s own <strong>Manage loan</strong>{" "}
-            panel instead.
+            active, changes move to that loan&apos;s own page instead (tap <strong>⋯</strong> next to its
+            name → <strong>Edit terms</strong>).
           </p>
         )
       }
@@ -690,10 +690,12 @@ const adminSections: FaqSection[] = [
         q: "How do I close a loan, edit its terms, or reopen one?",
         a: (
           <p>
-            Open the loan itself (Loans → tap it) — as an admin you&apos;ll see a{" "}
-            <strong>Manage loan</strong>{" "}
-            panel there with Edit, Close &amp; Distribute, Close Early (for an active loan you want to
-            settle before it&apos;s fully repaid, gain or loss either way), and (for closed loans) Reopen.
+            Open the loan itself (Loans → tap it). When it&apos;s waiting on you — a release, or a full
+            repayment ready to close — a <strong>Next Step</strong> card shows the one thing to do, and closing
+            shows each member&apos;s share before you confirm. Everything else is behind <strong>⋯</strong> next
+            to the loan&apos;s name: Edit terms, Close early (settle before it&apos;s fully repaid, gain or loss
+            either way), and, for closed loans, Reopen. Loans needing attention, including overdue ones, are
+            listed at the top of the Loans tab.
           </p>
         )
       },
