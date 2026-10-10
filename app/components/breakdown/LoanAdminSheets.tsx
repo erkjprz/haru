@@ -15,6 +15,8 @@ import { closeLoanAndDistributeGain, previewLoanClose, type LoanCloseSharePrevie
 import { approveLoanRelease } from "@/lib/approveLoan"
 import { dateOnly } from "@/lib/currentValue"
 import type { InterestType } from "@/lib/loanMath"
+import { fetchBankBalances, groupImpacts, txnImpact } from "@/lib/bankImpact"
+import { BankImpactPreview } from "@/app/components/BankImpact"
 
 export type AdminLoan = {
   loan_id: string
@@ -219,6 +221,15 @@ export function ReleaseLoanSheet({
   const [receipt, setReceipt] = useState<File | null>(null)
   const [approving, setApproving] = useState(false)
   const [error, setError] = useState("")
+  const [balances, setBalances] = useState<Record<string, number> | null>(null)
+
+  useEffect(() => {
+    fetchBankBalances()
+      .then(setBalances)
+      .catch(() => setBalances(null))
+  }, [])
+
+  const chosenBank = banks.find((b) => b.id === bankChoice)
 
   async function approve() {
     if (!bankChoice || !receipt) return
@@ -268,6 +279,15 @@ export function ReleaseLoanSheet({
       footer={
         <div>
           {error && <p className="text-sm text-rust mb-2">{error}</p>}
+          {chosenBank && (
+            <BankImpactPreview
+              {...groupImpacts([
+                txnImpact({ transaction_id: adminLoan.loan_id, amount: -adminLoan.principal, affects_cash: 1 }, chosenBank)
+              ])}
+              balances={balances}
+              className="mb-3"
+            />
+          )}
           <button className={primaryButtonClass} onClick={approve} disabled={!bankChoice || !receipt || approving}>
             {approving ? "Releasing..." : `Approve & Release ₱${fmt(adminLoan.principal)}`}
           </button>

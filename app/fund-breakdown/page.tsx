@@ -160,7 +160,17 @@ function FundBreakdownHub() {
           )}
 
           {activeTab === "loans" && <LoansPanel myMemberId={member.member_id} isAdmin={member.role === "admin"} />}
-          {activeTab === "banks" && <BanksPanel isAdmin={member.role === "admin"} />}
+          {activeTab === "banks" && (
+            <BanksPanel
+              isAdmin={member.role === "admin"}
+              // ?bank= opens straight into that bank -- the "View →" link on
+              // the Admin queue's approval confirmation.
+              initialBank={searchParams.get("bank")}
+              onBankClosed={() => {
+                if (searchParams.get("bank")) router.replace("/fund-breakdown?tab=banks", { scroll: false })
+              }}
+            />
+          )}
           {activeTab === "investments" && <InvestmentsPanel isAdmin={member.role === "admin"} />}
         </div>
       </main>
@@ -1829,12 +1839,20 @@ type BanksSnapshot = {
 // Fund-wide list of bank accounts and balances, not scoped to a member.
 const BANKS_CACHE_KEY = "fund-breakdown:banks"
 
-function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
+function BanksPanel({
+  isAdmin,
+  initialBank,
+  onBankClosed
+}: {
+  isAdmin: boolean
+  initialBank?: string | null
+  onBankClosed?: () => void
+}) {
   const cachedBanks = readCache<BanksSnapshot>(BANKS_CACHE_KEY)
   const [loading, setLoading] = useState(!cachedBanks)
   const [banks, setBanks] = useState<Bank[]>(cachedBanks?.banks ?? [])
   const [loadError, setLoadError] = useState("")
-  const [selectedBank, setSelectedBank] = useState<string | null>(null)
+  const [selectedBank, setSelectedBank] = useState<string | null>(initialBank ?? null)
   // Restores the scroll position lost to BankDetailPanel's own
   // scroll-to-top-on-open when the user backs out of it. The year
   // drill-down within a bank is BankDetailPanel's own concern now (it
@@ -1964,7 +1982,10 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
     return (
       <BankDetailPanel
         bank={selectedBank}
-        onBack={() => setSelectedBank(null)}
+        onBack={() => {
+          setSelectedBank(null)
+          onBankClosed?.()
+        }}
         onChanged={load}
         onRenamed={setSelectedBank}
       />
