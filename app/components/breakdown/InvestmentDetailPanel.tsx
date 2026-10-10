@@ -10,9 +10,13 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow } from "@/app/components/breakdown/InfoBox"
-import { distributeInvestmentGain, getUndistributedInvestmentGain } from "@/lib/distributeInvestment"
-import { closeInvestmentAndDistributeGain } from "@/lib/closeInvestment"
-import { dateOnly } from "@/lib/currentValue"
+import { Sheet } from "@/app/components/Sheet"
+import { AdminActionRow, AdminMenuButton } from "@/app/components/breakdown/AdminMenu"
+import {
+  DistributeInvestmentSheet,
+  InvestmentDetailsSheet,
+  ReopenInvestmentSheet
+} from "@/app/components/breakdown/InvestmentAdminSheets"
 import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
 import { readCache, writeCache } from "@/lib/cache"
 
@@ -50,7 +54,18 @@ type InvestmentDetailSnapshot = {
   recentTransactions: RecentTransaction[]
 }
 
-export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: string; onBack: () => void }) {
+type AdminSheet = "actions" | "edit" | "distribute" | "close" | "reopen" | null
+
+export function InvestmentDetailPanel({
+  investmentId,
+  onBack,
+  onChanged
+}: {
+  investmentId: string
+  onBack: () => void
+  // Lets the investment list refresh behind this panel after an admin action.
+  onChanged?: () => void
+}) {
   const router = useRouter()
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
@@ -66,16 +81,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
 
-  const [showDistributeForm, setShowDistributeForm] = useState(false)
-  const [distributeDate, setDistributeDate] = useState(dateOnly(new Date()))
-  const [distributeAmount, setDistributeAmount] = useState("")
-  const [distributeNotes, setDistributeNotes] = useState("")
-  const [closeOnDistribute, setCloseOnDistribute] = useState(false)
-  const [distributing, setDistributing] = useState(false)
-  const [distributeMessage, setDistributeMessage] = useState("")
-  const [suggestedAmount, setSuggestedAmount] = useState<number | null>(null)
-  const [reopening, setReopening] = useState(false)
-  const [reopenError, setReopenError] = useState("")
+  const [adminSheet, setAdminSheet] = useState<AdminSheet>(null)
 
   const loadInvestment = useCallback(async () => {
     const { data, error } = await supabase
@@ -180,135 +186,18 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     }
   }, [investmentId, member, loadInvestment, loadShares, loadRecentTransactions])
 
-  // startClosed pre-checks the "close after distributing" box for the
-  // dedicated Close Investment entry point -- same form either way, since
-  // closing is just a distribution that also flips the investment's status
-  // (see runDistribute). The checkbox stays editable either way, so opening
-  // via either button just sets where you start.
-  async function openDistribute(startClosed: boolean) {
-    setShowDistributeForm(true)
-    setDistributeDate(dateOnly(new Date()))
-    setDistributeAmount("")
-    setDistributeNotes("")
-    setCloseOnDistribute(startClosed)
-    setDistributeMessage("")
-    await refreshSuggestedAmount(dateOnly(new Date()))
-  }
-
-  async function refreshSuggestedAmount(asOfDate: string) {
-    try {
-      const suggestion = await getUndistributedInvestmentGain(investmentId, asOfDate)
-      setSuggestedAmount(suggestion)
-    } catch (err) {
-      setSuggestedAmount(null)
-      setDistributeMessage(err instanceof Error ? err.message : "Couldn't compute a suggested amount.")
-    }
-  }
-
-  function closeDistribute() {
-    setShowDistributeForm(false)
-    setDistributeMessage("")
-  }
-
-  async function runDistribute() {
-    const amountNum = distributeAmount.trim() ? Number(distributeAmount) : 0
-    if (Number.isNaN(amountNum)) {
-      setDistributeMessage("Enter a valid amount (positive for a gain, negative for a loss).")
-      return
-    }
-    // A regular distribution with nothing to distribute makes no sense to
-    // submit, but closing with a zero remainder is a legitimate "nothing
-    // left to settle, just mark it done" case -- same as a loan that
-    // closes with no gain or loss.
-    if (!closeOnDistribute && amountNum === 0) {
-      setDistributeMessage("Enter a nonzero amount (positive for a gain, negative for a loss).")
-      return
-    }
-    if (!distributeDate) {
-      setDistributeMessage("Pick a date.")
-      return
-    }
-
-    const label = amountNum < 0 ? "loss" : "gain"
-    const confirmMsg = closeOnDistribute
-      ? amountNum !== 0
-        ? `Close this investment and record a final ₱${fmt(Math.abs(amountNum))} ${label}, split across eligible members based on their current value as of ${distributeDate}? You can reopen it later from this same page if needed.`
-        : `Close this investment now with nothing left to distribute? You can reopen it later from this same page if needed.`
-      : `Distribute a ₱${Math.abs(amountNum).toFixed(2)} ${label} across eligible members, based on their current value as of ${distributeDate}? This can't be undone from the app.`
-    if (!confirm(confirmMsg)) return
-
-    setDistributing(true)
-    setDistributeMessage("")
-
-    try {
-      if (closeOnDistribute) {
-        await closeInvestmentAndDistributeGain({
-          investmentId,
-          closingDate: distributeDate,
-          amount: amountNum,
-          notes: distributeNotes || undefined,
-          investmentName: investment?.investment
-        })
-      } else {
-        await distributeInvestmentGain({
-          investmentId,
-          allocationDate: distributeDate,
-          amount: amountNum,
-          notes: distributeNotes || undefined
-        })
-      }
-      closeDistribute()
-      const [nextShares, nextInvestment] = await Promise.all([loadShares(), loadInvestment()])
-      writeCache<InvestmentDetailSnapshot>(cacheKey, {
-        investment: nextInvestment,
-        shares: nextShares,
-        recentTransactions
-      })
-    } catch (err) {
-      setDistributeMessage(err instanceof Error ? err.message : "Something went wrong.")
-    } finally {
-      setDistributing(false)
-    }
-  }
-
-  async function reopenInvestment() {
-    setReopening(true)
-    setReopenError("")
-
-    // Deleting the closing distribution's allocations/transactions and
-    // flipping the investment back to open used to be three separate
-    // client calls with no rollback between them -- a failure partway
-    // through could leave the investment stuck "closed" with its gain
-    // rows already gone, or vice versa. One atomic RPC now does all three;
-    // it only touches rows flagged is_closing_distribution, so an
-    // investment's earlier ad hoc distributions (made before it closed)
-    // are untouched -- unlike a loan, which only ever distributes once, at
-    // close.
-    const { data: orphanedReceipts, error } = await supabase.rpc("reopen_investment", {
-      p_investment_id: investmentId
-    })
-
-    if (error) {
-      setReopenError(error.message)
-      setReopening(false)
-      return
-    }
-
-    // Gain Allocation rows are system-generated and never carry a receipt
-    // today, but clean up defensively in case that ever changes -- the DB
-    // state already committed by this point, so a failure here shouldn't
-    // block the reopen, just leave an orphaned file to clean up later.
-    if (orphanedReceipts && orphanedReceipts.length > 0) {
-      await supabase.storage.from("Receipts").remove(orphanedReceipts)
-    }
-
-    setReopening(false)
-    const [nextShares, nextInvestment] = await Promise.all([loadShares(), loadInvestment()])
+  async function reloadAfterAdminAction() {
+    const [nextShares, nextInvestment, nextRecentTransactions] = await Promise.all([
+      loadShares(),
+      loadInvestment(),
+      loadRecentTransactions()
+    ])
     writeCache<InvestmentDetailSnapshot>(cacheKey, {
       investment: nextInvestment,
       shares: nextShares,
-      recentTransactions
+      recentTransactions: nextRecentTransactions
     })
+    onChanged?.()
   }
 
   const fmt = (n: number) =>
@@ -323,7 +212,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
       <div>
         <p className="text-sm text-ink-soft">This investment couldn't be found.</p>
         <button onClick={onBack} className="mt-4 text-sm font-medium text-gold">
-          ← Back to Investment
+          ← Back to Investments
         </button>
       </div>
     )
@@ -359,30 +248,58 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
     isGain ? b.signed - a.signed : a.signed - b.signed
   )
 
+  // Only realized money is "ready" -- an open investment that's had money
+  // put in but not yet returned shows a negative unallocated figure that's
+  // just capital still out, not a loss to split. A closed one with anything
+  // left over (either way) does need settling.
+  const isOpen = investment.status === "open"
+  const readyToDistribute = isOpen ? unallocated > 0.01 : Math.abs(unallocated) > 0.01
+
+  const menuItems: { label: string; hint: string; onClick: () => void; danger?: boolean }[] = [
+    { label: "Edit details", hint: "Name and whether it affects cash", onClick: () => setAdminSheet("edit") }
+  ]
+  if (isOpen) {
+    menuItems.push(
+      { label: "Distribute gain/loss", hint: "Split a realized amount across members", onClick: () => setAdminSheet("distribute") },
+      { label: "Close investment", hint: "Settle what's left and mark it closed", onClick: () => setAdminSheet("close") }
+    )
+  } else {
+    menuItems.push({ label: "Reopen investment", hint: "Undo the final distribution", onClick: () => setAdminSheet("reopen") })
+  }
+
   return (
     <div>
       <button onClick={onBack} className="text-[13px] text-ink-soft mb-4 hover:text-ink transition-colors">
-        ← Investment
+        ← Investments
       </button>
 
       <div className="flex items-center gap-2 mb-1">
-        <span className={`w-1.5 h-1.5 rounded-full ${isGain ? "bg-sage" : isFlat ? "bg-ink-soft" : "bg-rust"}`} />
-        <span
-          className={`text-[11px] font-mono uppercase tracking-wide ${
-            isGain ? "text-sage" : isFlat ? "text-ink-soft" : "text-rust"
-          }`}
-        >
-          {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
-        </span>
-        {investment.status === "closed" && (
-          <span className="text-[11px] font-mono font-bold uppercase tracking-wide text-gold border border-gold rounded-full px-2 py-0.5">
-            Closed
-          </span>
+        {/* One status, like a loan's: Active while it's still running,
+            and Gain/Loss only once closed, when the figure is final. */}
+        {isOpen ? (
+          <>
+            <span className="w-1.5 h-1.5 rounded-full bg-gold" />
+            <span className="text-[11px] font-mono uppercase tracking-wide text-gold">Active</span>
+          </>
+        ) : (
+          <>
+            <span className={`w-1.5 h-1.5 rounded-full ${isGain ? "bg-sage" : isFlat ? "bg-ink-soft" : "bg-rust"}`} />
+            <span
+              className={`text-[11px] font-mono uppercase tracking-wide ${
+                isGain ? "text-sage" : isFlat ? "text-ink-soft" : "text-rust"
+              }`}
+            >
+              Closed · {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
+            </span>
+          </>
         )}
       </div>
-      <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">
-        {investment.investment}
-      </h1>
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink min-w-0 break-words">
+          {investment.investment}
+        </h1>
+        {isAdmin && <AdminMenuButton onClick={() => setAdminSheet("actions")} label="Investment admin actions" />}
+      </div>
       <p className="text-[13px] text-ink-soft mb-6">
         {investment.affects_cash ? "Funded through the tracked bank accounts" : "Funded outside the tracked cash trail"}
       </p>
@@ -390,7 +307,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
       {/* Gain/loss overview */}
       <div className="card px-5 pt-4 pb-3.5">
         <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
-          Net Gain / Loss
+          {isOpen ? "Net Gain / Loss So Far" : "Net Gain / Loss"}
         </p>
         <p
           className={`font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold ${
@@ -406,12 +323,6 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         <InfoBox label="Cash Flow">
           <InfoRow label="Invested" value={`₱${fmt(investment.invested)}`} />
           <InfoRow label="Returned" value={`₱${fmt(investment.returned)}`} />
-          <InfoRow
-            label="Net"
-            value={`${investment.gain_loss < 0 ? "-" : "+"}₱${fmt(Math.abs(investment.gain_loss))}`}
-            valueClass={isGain ? "text-sage" : isFlat ? "text-ink" : "text-rust"}
-            bold
-          />
           {investment.status === "closed" && investment.closed_date && (
             <InfoRow
               label="Closed"
@@ -425,80 +336,84 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
         </InfoBox>
       </div>
 
+      {/* Admin-only: realized gain/loss that hasn't been split yet, right
+          above the shares it would add to -- in place of the old inline
+          Distribute/Close buttons and form inside this section. */}
+      {isAdmin && readyToDistribute && (
+        <section className="mt-8">
+          <h2 className="font-display text-lg font-medium text-ink mb-1">Ready to Distribute</h2>
+          <p className="text-[13px] text-ink-soft mb-3">
+            {isOpen
+              ? "Realized gain that hasn't been split across members yet."
+              : "Left over after closing and not yet split across members."}
+          </p>
+          <div className="card px-5 py-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-ink font-medium">Not yet split</p>
+              <p
+                className={`font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold ${
+                  unallocated < 0 ? "text-rust" : "text-sage"
+                }`}
+              >
+                {unallocated < 0 ? "-" : "+"}₱{fmt(Math.abs(unallocated))}
+              </p>
+            </div>
+            {isOpen && (
+              <button
+                onClick={() => setAdminSheet("distribute")}
+                className="shrink-0 bg-ink text-paper px-3.5 py-2 rounded-sm text-[13px] font-medium"
+              >
+                Review &amp; distribute
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {adminSheet === "actions" && (
+        <Sheet title={investment.investment} onClose={() => setAdminSheet(null)}>
+          <div className="card">
+            <div className="px-5">
+              {menuItems.map((item, i) => (
+                <AdminActionRow key={item.label} {...item} last={i === menuItems.length - 1} />
+              ))}
+            </div>
+          </div>
+        </Sheet>
+      )}
+
+      {adminSheet === "edit" && (
+        <InvestmentDetailsSheet
+          investment={investment}
+          onClose={() => setAdminSheet(null)}
+          onSaved={reloadAfterAdminAction}
+        />
+      )}
+
+      {(adminSheet === "distribute" || adminSheet === "close") && (
+        <DistributeInvestmentSheet
+          investmentId={investmentId}
+          investmentName={investment.investment}
+          mode={adminSheet}
+          onClose={() => setAdminSheet(null)}
+          onDone={reloadAfterAdminAction}
+        />
+      )}
+
+      {adminSheet === "reopen" && (
+        <ReopenInvestmentSheet
+          investmentId={investmentId}
+          onClose={() => setAdminSheet(null)}
+          onReopened={reloadAfterAdminAction}
+        />
+      )}
+
       {/* Gain/loss share per member */}
       <section className="mt-8">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="font-display text-lg font-medium text-ink mb-1">Distributed Share per Member</h2>
-            <p className="text-[13px] text-ink-soft mb-3">
-              How this investment's {isGain ? "gain" : "loss"} is split across members.
-            </p>
-          </div>
-
-          {isAdmin && investment.status === "open" && (
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <button
-                className="shrink-0 bg-gold-soft text-ink px-4 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-                onClick={() => openDistribute(false)}
-              >
-                <span className="text-lg leading-none">+</span>
-                Distribute Gain/Loss
-              </button>
-              <button
-                className="shrink-0 border border-hairline text-ink-soft px-4 py-2 rounded-sm text-sm font-medium"
-                onClick={() => openDistribute(true)}
-              >
-                Close Investment
-              </button>
-            </div>
-          )}
-
-          {isAdmin && investment.status === "closed" && (
-            <div className="flex flex-col items-end gap-1.5 mb-3">
-              <button
-                className="shrink-0 text-xs text-ink-soft border border-hairline rounded-sm px-3 py-2 disabled:opacity-50"
-                onClick={() => {
-                  const confirmMsg =
-                    "Reopen this investment? This sets it back to open and removes the final gain/loss distribution recorded when it was closed -- any earlier distributions stay as they are."
-                  if (confirm(confirmMsg)) {
-                    reopenInvestment()
-                  }
-                }}
-                disabled={reopening}
-              >
-                {reopening ? "Reopening..." : "Reopen Investment"}
-              </button>
-              {reopenError && <p className="text-xs text-rust">{reopenError}</p>}
-            </div>
-          )}
-        </div>
-
-        {isAdmin && unallocated !== 0 && (
-          <p className="text-[12px] text-gold mb-3">
-            ₱{fmt(Math.abs(unallocated))} {unallocated > 0 ? "gain" : "loss"} still unallocated.
-          </p>
-        )}
-
-        {showDistributeForm && (
-          <DistributeForm
-            date={distributeDate}
-            setDate={async (d) => {
-              setDistributeDate(d)
-              await refreshSuggestedAmount(d)
-            }}
-            amount={distributeAmount}
-            setAmount={setDistributeAmount}
-            notes={distributeNotes}
-            setNotes={setDistributeNotes}
-            closeOnDistribute={closeOnDistribute}
-            suggestedAmount={suggestedAmount}
-            distributing={distributing}
-            message={distributeMessage}
-            onSave={runDistribute}
-            onCancel={closeDistribute}
-            className="mb-4"
-          />
-        )}
+        <h2 className="font-display text-lg font-medium text-ink mb-1">Distributed Share per Member</h2>
+        <p className="text-[13px] text-ink-soft mb-3">
+          How this investment&apos;s {isGain ? "gain" : "loss"} is split across members.
+        </p>
 
         {loadError && <p className="text-sm text-rust mb-3">{loadError}</p>}
 
@@ -546,7 +461,7 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
           </div>
         )}
 
-        {memberShares.length === 0 && !loadError && !showDistributeForm && (
+        {memberShares.length === 0 && !loadError && (
           <p className="text-sm text-ink-soft text-center py-8 card">
             No allocation on record for this investment.
           </p>
@@ -602,120 +517,6 @@ export function InvestmentDetailPanel({ investmentId, onBack }: { investmentId: 
           </p>
         )}
       </section>
-    </div>
-  )
-}
-
-function DistributeForm({
-  date,
-  setDate,
-  amount,
-  setAmount,
-  notes,
-  setNotes,
-  closeOnDistribute,
-  suggestedAmount,
-  distributing,
-  message,
-  onSave,
-  onCancel,
-  className = ""
-}: {
-  date: string
-  setDate: (v: string) => void
-  amount: string
-  setAmount: (v: string) => void
-  notes: string
-  setNotes: (v: string) => void
-  closeOnDistribute: boolean
-  suggestedAmount: number | null
-  distributing: boolean
-  message: string
-  onSave: () => void
-  onCancel: () => void
-  className?: string
-}) {
-  const fmt = (n: number) =>
-    Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-  return (
-    <div className={`card relative overflow-hidden ${className}`}>
-      <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
-      <div className="pl-6 pr-5 py-6 space-y-4">
-        <p className="font-display text-lg font-medium">
-          {closeOnDistribute ? "Close Investment" : "Distribute Gain/Loss"}
-        </p>
-        <p className="text-[13px] text-ink-soft">
-          {closeOnDistribute
-            ? "Distributes whatever's left to settle, proportional to each member's current value as of the date below, and marks this investment closed. A zero amount is fine if there's nothing left to distribute."
-            : "Splits a realized amount across eligible members, proportional to each member's current value as of the date below. Positive for a gain, negative for a loss."}
-        </p>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Date</label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Amount</label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full font-mono [font-variant-numeric:tabular-nums]"
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-          {suggestedAmount !== null && suggestedAmount !== 0 && (
-            <button
-              type="button"
-              className="mt-1.5 text-[11px] text-gold"
-              onClick={() => setAmount(String(suggestedAmount))}
-            >
-              Use undistributed amount as of this date: {suggestedAmount < 0 ? "-" : "+"}₱{fmt(Math.abs(suggestedAmount))}
-            </button>
-          )}
-        </div>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-            Notes (optional)
-          </label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-            placeholder="Additional notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-          <p className="mt-1 text-[11px] text-ink-soft">Name, month &amp; date are saved automatically.</p>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            className="bg-ink text-paper px-4 py-3 rounded-sm text-sm font-medium flex-1 disabled:opacity-50"
-            onClick={onSave}
-            disabled={distributing}
-          >
-            {distributing
-              ? closeOnDistribute
-                ? "Closing & distributing..."
-                : "Distributing..."
-              : closeOnDistribute
-              ? "Close & Distribute"
-              : "Distribute"}
-          </button>
-          <button className="border border-hairline rounded-sm px-4 py-3 text-sm" onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
-
-        {message && <p className="text-sm text-rust">{message}</p>}
-      </div>
     </div>
   )
 }

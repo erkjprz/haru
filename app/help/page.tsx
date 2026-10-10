@@ -714,21 +714,24 @@ const adminSections: FaqSection[] = [
         q: "How do I record an investment's gain or loss?",
         a: (
           <p>
-            Open the investment, tap <strong>Distribute Gain/Loss</strong>, pick a date, and enter the
-            amount (positive for a gain, negative for a loss) — or use the suggested undistributed amount as
-            of that date. It splits automatically across eligible members by their value in the fund at that
-            point, the same way a loan close does. You can do this more than once as an investment realizes
-            gains or losses over time, and adjust individual shares afterward with <strong>Manage</strong> if
-            you ever need to.
+            Open the investment. When it has realized gain that hasn&apos;t been split yet, a{" "}
+            <strong>Ready to Distribute</strong> card shows it — tap <strong>Review &amp; distribute</strong>. You
+            can also use <strong>⋯</strong> next to its name → <strong>Distribute gain/loss</strong> any time. The
+            amount starts at what&apos;s undistributed as of the chosen date; switch Gain/Loss, change the date or
+            amount, and you&apos;ll see each member&apos;s share before confirming. It splits by each member&apos;s
+            value in the fund on that date, the same way a loan close does, and you can do this more than once
+            as an investment realizes gains or losses over time. <strong>Close investment</strong> in the same
+            menu settles whatever&apos;s left and marks it closed.
           </p>
         )
       },
       {
-        q: "How do I edit investment shares or bank accounts?",
+        q: "How do I add or edit an investment or bank account?",
         a: (
           <p>
-            On the Investments or Banks page, tap <strong>Manage</strong>{" "}
-            — admins get an edit mode there that members don&apos;t see.
+            Tap <strong>+ Add Investment</strong> or <strong>+ Add Bank</strong> at the top of the Investments or
+            Banks tab. To edit one, open it and tap <strong>⋯</strong> next to its name — admins see that menu,
+            members don&apos;t.
           </p>
         )
       }
