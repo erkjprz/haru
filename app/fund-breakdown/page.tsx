@@ -2169,9 +2169,9 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   }, [selectedInvestmentId])
 
   const [showAddSheet, setShowAddSheet] = useState(false)
-  // Signed gain/loss already split across members, per investment -- only
-  // fetched for admins, to flag investments with realized money still to
-  // distribute.
+  // Signed gain/loss already split across members, per investment -- used
+  // to show each card's "not yet distributed" line, and the admin-only
+  // Needs distribution card.
   const [allocatedById, setAllocatedById] = useState<Record<string, number>>({})
 
   async function load() {
@@ -2183,9 +2183,7 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
 
     const [{ data, error }, allocResult] = await Promise.all([
       supabase.from("v_investment_summary").select("*").order("investment"),
-      isAdmin
-        ? supabase.from("investment_allocations").select("investment_id, amount, allocation_type")
-        : Promise.resolve({ data: null, error: null })
+      supabase.from("investment_allocations").select("investment_id, amount, allocation_type")
     ])
 
     if (allocResult.data) {
@@ -2210,7 +2208,6 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fmt = (n: number) =>
@@ -2244,10 +2241,17 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   // Same "ready" rule as the investment's own page: an open investment
   // only counts once its realized gain exceeds what's been split (money
   // still out isn't a loss yet); a closed one counts if anything's left.
+  const undistributedById: Record<string, number> = {}
+  for (const i of investments) {
+    const unallocated = Number((i.gain_loss - (allocatedById[i.investment_id] ?? 0)).toFixed(2))
+    if (i.status === "open" ? unallocated > 0.01 : Math.abs(unallocated) > 0.01) {
+      undistributedById[i.investment_id] = unallocated
+    }
+  }
   const needsDistribution = isAdmin
     ? investments
-        .map((i) => ({ inv: i, unallocated: Number((i.gain_loss - (allocatedById[i.investment_id] ?? 0)).toFixed(2)) }))
-        .filter(({ inv, unallocated }) => (inv.status === "open" ? unallocated > 0.01 : Math.abs(unallocated) > 0.01))
+        .filter((i) => undistributedById[i.investment_id] !== undefined)
+        .map((i) => ({ inv: i, unallocated: undistributedById[i.investment_id] }))
     : []
 
   function openInvestment(id: string) {
@@ -2256,7 +2260,15 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   function renderInvestmentGroup(inv: Investment) {
-    return <InvestmentCard key={inv.investment_id} inv={inv} fmt={fmt} onClick={() => openInvestment(inv.investment_id)} />
+    return (
+      <InvestmentCard
+        key={inv.investment_id}
+        inv={inv}
+        fmt={fmt}
+        undistributed={undistributedById[inv.investment_id] ?? 0}
+        onClick={() => openInvestment(inv.investment_id)}
+      />
+    )
   }
 
   return (
@@ -2363,10 +2375,14 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
 function InvestmentCard({
   inv,
   fmt,
+  undistributed,
   onClick
 }: {
   inv: Investment
   fmt: (n: number) => string
+  // Realized gain/loss not yet split across members (0 when nothing's
+  // due) -- shown to everyone, like a bank card's "not yet distributed".
+  undistributed: number
   onClick: () => void
 }) {
   const isGain = inv.gain_loss > 0
@@ -2414,6 +2430,12 @@ function InvestmentCard({
           </p>
         </div>
       </div>
+
+      {Math.abs(undistributed) > 0.01 && (
+        <p className="text-[11px] text-gold mt-2">
+          {undistributed < 0 ? "-" : ""}₱{fmt(Math.abs(undistributed))} not yet distributed
+        </p>
+      )}
     </div>
   )
 }

@@ -336,12 +336,14 @@ export function InvestmentDetailPanel({
         </InfoBox>
       </div>
 
-      {/* Admin-only: realized gain/loss that hasn't been split yet, right
-          above the shares it would add to -- in place of the old inline
-          Distribute/Close buttons and form inside this section. */}
-      {isAdmin && readyToDistribute && (
+      {/* Realized gain/loss that hasn't been split yet, right above the
+          shares it would add to. Everyone sees the amount (same as a bank's
+          "not yet distributed"); only admins get the button to split it. */}
+      {readyToDistribute && (
         <section className="mt-8">
-          <h2 className="font-display text-lg font-medium text-ink mb-1">Ready to Distribute</h2>
+          <h2 className="font-display text-lg font-medium text-ink mb-1">
+            {isAdmin ? "Ready to Distribute" : "Not Yet Distributed"}
+          </h2>
           <p className="text-[13px] text-ink-soft mb-3">
             {isOpen
               ? "Realized gain that hasn't been split across members yet."
@@ -358,7 +360,7 @@ export function InvestmentDetailPanel({
                 {unallocated < 0 ? "-" : "+"}₱{fmt(Math.abs(unallocated))}
               </p>
             </div>
-            {isOpen && (
+            {isAdmin && isOpen && (
               <button
                 onClick={() => setAdminSheet("distribute")}
                 className="shrink-0 bg-ink text-paper px-3.5 py-2 rounded-sm text-[13px] font-medium"
