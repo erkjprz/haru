@@ -616,8 +616,7 @@ const adminSections: FaqSection[] = [
         q: "How do I add a member manually, edit one, or deactivate one?",
         a: (
           <p>
-            Admin → <strong>Members</strong>{" "}
-            quick link (or the &quot;Manage all members →&quot; link at the bottom of the Members tab)
+            Admin → <strong>Manage</strong> (at the bottom of the page) → <strong>Members</strong>{" "}
             takes you to the full roster, where you can add a member directly, edit their
             name/email/role, and deactivate or reactivate an account. The same edit form has an{" "}
             <strong>Eligible for gain sharing</strong> checkbox — uncheck it to exclude someone from future

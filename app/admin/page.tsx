@@ -1073,18 +1073,6 @@ export default function AdminPage() {
               </section>
             )}
 
-            {/* ---- Transactions (empty-state fallback) ---- */}
-            {/* Only when the Transactions chip is specifically selected --
-                on "All" with nothing pending anywhere, the 🌱 empty state
-                above already says so; repeating "nothing pending" once per
-                category underneath it was redundant. */}
-            {activeFilter === "txn" && bulkTransactions.length === 0 && reviewTransactions.length === 0 && (
-              <section>
-                <span className="text-sm font-semibold">Transactions</span>
-                <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
-              </section>
-            )}
-
             {/* ---- Needs a decision ---- */}
             {showTxns && reviewTransactions.length > 0 && (
               <section>
@@ -1204,31 +1192,39 @@ export default function AdminPage() {
               </section>
             )}
 
-            {/* ---- Signups (empty-state fallback) ---- */}
-            {/* Same reasoning as the Transactions fallback above -- only
-                when the Signups chip is specifically selected. */}
-            {activeFilter === "signup" && pendingMembers.length === 0 && pendingBorrowers.length === 0 && (
-              <section>
-                <span className="text-sm font-semibold">Signups</span>
-                <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
-                <div className="mt-3 flex items-center gap-2">
+            {/* ---- Manage ---- */}
+            {/* Always here, whatever's in the queue -- these used to sit in
+                the Signups filter's empty state, the only way to reach the
+                Members and Borrowers pages from Admin. */}
+            <section>
+              <span className="text-sm font-semibold">Manage</span>
+              <div className="mt-3 card">
+                <div className="px-5">
                   <button
                     type="button"
                     onClick={() => router.push("/admin/members")}
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
+                    className="w-full py-3.5 flex items-center justify-between gap-3 text-left border-b border-dashed border-hairline"
                   >
-                    Manage members
+                    <span className="min-w-0">
+                      <span className="block text-sm text-ink font-medium">Members</span>
+                      <span className="block text-[11px] text-ink-soft">Add, edit or deactivate members</span>
+                    </span>
+                    <span className="text-ink-soft shrink-0">›</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => router.push("/admin/borrowers")}
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
+                    className="w-full py-3.5 flex items-center justify-between gap-3 text-left"
                   >
-                    Manage borrowers
+                    <span className="min-w-0">
+                      <span className="block text-sm text-ink font-medium">Borrowers</span>
+                      <span className="block text-[11px] text-ink-soft">Approve borrowers and link their loans</span>
+                    </span>
+                    <span className="text-ink-soft shrink-0">›</span>
                   </button>
                 </div>
-              </section>
-            )}
+              </div>
+            </section>
           </div>
         </div>
 
