@@ -15,8 +15,14 @@ import {
   FieldRow,
   BankIcon,
   PersonIcon,
-  rowSelectClass
+  InterestIcon,
+  ClockIcon,
+  rowSelectClass,
+  rowInputClass
 } from "@/app/components/TransactionFormUI"
+import { InterestRatePickerSheet } from "@/app/components/InterestRatePickerSheet"
+import { TermPickerSheet } from "@/app/components/TermPickerSheet"
+import { ReceiptThumb } from "@/app/components/admin/ReceiptThumb"
 import { approveLoanRelease } from "@/lib/approveLoan"
 import { approveBorrowerMember } from "@/lib/approveBorrower"
 import { dateOnly } from "@/lib/currentValue"
@@ -100,6 +106,15 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`
 }
 
+// "Oct 9 · 2h ago" -- the transaction's own date plus how long it's been
+// waiting, so several similar pending items can be told apart at a glance.
+function queuedLabel(t: { txn_date?: string | null; created_at: string }): string {
+  const date = t.txn_date
+    ? new Date(`${t.txn_date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : null
+  return [date, timeAgo(t.created_at)].filter(Boolean).join(" · ")
+}
+
 export default function AdminPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
@@ -118,12 +133,18 @@ export default function AdminPage() {
   // (see showSearchFix below), so it isn't one of these.
   const [filter, setFilter] = useState<Filter>("all")
   const [showSearchFix, setShowSearchFix] = useState(false)
+  const [showManage, setShowManage] = useState(false)
 
   // Each row across every group below is a compact summary that opens its
   // full form in a sheet instead of expanding in place -- one row's form
   // used to push every row after it down the page and fight the sheet
   // above (Search & Fix) for space when both happened to be open at once.
   const [reviewingTxnId, setReviewingTxnId] = useState<string | null>(null)
+  // Loan Release terms in the review sheet use the same pickers as a loan
+  // request; "custom" swaps a row to a typed input, same as LoanTermsCard.
+  const [termPicker, setTermPicker] = useState<"rate" | "term" | null>(null)
+  const [customRate, setCustomRate] = useState(false)
+  const [customTerm, setCustomTerm] = useState(false)
   const [reviewingSignupId, setReviewingSignupId] = useState<string | null>(null)
   const [reviewingBorrowerId, setReviewingBorrowerId] = useState<string | null>(null)
 
@@ -165,6 +186,14 @@ export default function AdminPage() {
   // doesn't have to check the Banks page by hand afterwards.
   const [bankBalances, setBankBalances] = useState<Record<string, number> | null>(null)
   const [lastApproval, setLastApproval] = useState<ApprovalResult | null>(null)
+  // The confirmation clears itself after a while so it doesn't pile up over
+  // a session -- unless the admin touches it, which keeps it until dismissed.
+  const [approvalPinned, setApprovalPinned] = useState(false)
+  useEffect(() => {
+    if (!lastApproval || approvalPinned) return
+    const timer = setTimeout(() => setLastApproval(null), 10000)
+    return () => clearTimeout(timer)
+  }, [lastApproval, approvalPinned])
 
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState("")
@@ -362,6 +391,7 @@ export default function AdminPage() {
     } catch {
       fresh = null
     }
+    setApprovalPinned(false)
     setLastApproval({
       count: ids.length,
       unaffected,
@@ -738,7 +768,9 @@ export default function AdminPage() {
 
   const bulkTransactions = pendingTransactions.filter((t) => BULK_CLASSIFICATIONS.has(t.classification))
   const reviewTransactions = pendingTransactions.filter((t) => !BULK_CLASSIFICATIONS.has(t.classification))
-  const reviewingTxn = reviewTransactions.find((t) => t.transaction_id === reviewingTxnId) ?? null
+  // Any pending row opens the review sheet -- Confirmed money rows too, so
+  // every item can be checked (date, notes, receipt, bank effect) the same way.
+  const reviewingTxn = pendingTransactions.find((t) => t.transaction_id === reviewingTxnId) ?? null
   // Confirmed money rows have no sheet of their own to nest a reject prompt
   // inside (they're plain rows in the page, not opened via a sheet the way
   // everything else here is) -- rejectingId doubles as which row's own
@@ -755,14 +787,20 @@ export default function AdminPage() {
   const signupsCount = pendingMembers.length + pendingBorrowers.length
   const totalCount = pendingTransactions.length + signupsCount
 
+  // Only categories that have something waiting -- and no chip row at all
+  // when there'd be nothing to switch between (one category, or none).
   const chips: { id: Filter; label: string; count: number }[] = [
-    { id: "all", label: "All", count: totalCount },
-    { id: "txn", label: "Transactions", count: pendingTransactions.length },
-    { id: "signup", label: "Signups", count: signupsCount }
-  ]
+    { id: "all" as Filter, label: "All", count: totalCount },
+    { id: "txn" as Filter, label: "Transactions", count: pendingTransactions.length },
+    { id: "signup" as Filter, label: "Signups", count: signupsCount }
+  ].filter((c) => c.id === "all" || c.count > 0)
+  const showChips = chips.length > 2
+  // A chip that just emptied (e.g. its last item approved) drops back to All
+  // rather than leaving the queue filtered to nothing.
+  const activeFilter: Filter = chips.some((c) => c.id === filter) && showChips ? filter : "all"
 
-  const showTxns = filter === "all" || filter === "txn"
-  const showSignups = filter === "all" || filter === "signup"
+  const showTxns = activeFilter === "all" || activeFilter === "txn"
+  const showSignups = activeFilter === "all" || activeFilter === "signup"
 
   if (checkingAccess) {
     return (
@@ -782,23 +820,27 @@ export default function AdminPage() {
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden relative">
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
-                Administration
-              </div>
-              <h1 className="font-display text-3xl font-semibold">
-                {totalCount > 0 ? (
-                  <>
-                    <span className="text-gold">{totalCount}</span> waiting on you
-                  </>
-                ) : (
-                  "All caught up"
-                )}
-              </h1>
-            </div>
+          {/* Page actions share the eyebrow's line, so the title below gets
+              the full width instead of wrapping beside three buttons. */}
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono">Administration</div>
 
             <div className="shrink-0 flex items-center gap-2">
+            {/* Members and Borrowers pages -- always reachable from here,
+                whatever's in the queue below. */}
+            <button
+              onClick={() => setShowManage(true)}
+              className="shrink-0 inline-flex items-center justify-center w-9 h-9 text-ink-soft border border-hairline rounded-full hover:bg-paper-2 hover:text-ink transition-colors"
+              title="Manage members and borrowers"
+              aria-label="Manage members and borrowers"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                <circle cx="9" cy="8" r="3.2" />
+                <path d="M3.5 19c.6-3.1 2.8-5 5.5-5s4.9 1.9 5.5 5" />
+                <path d="M15.5 5.2a3 3 0 0 1 0 5.6M17.5 14.3c1.7.6 2.8 2.2 3 4.7" />
+              </svg>
+            </button>
+
             <MessagesButton />
 
             {/* Page-level action, not scoped to any group -- always exports
@@ -821,6 +863,15 @@ export default function AdminPage() {
             </button>
             </div>
           </div>
+          <h1 className="font-display text-3xl font-semibold">
+            {totalCount > 0 ? (
+              <>
+                <span className="text-gold">{totalCount}</span> waiting on you
+              </>
+            ) : (
+              "All caught up"
+            )}
+          </h1>
           {exportError && (
             <p className="mt-1.5 text-xs text-rust text-right">Couldn&apos;t export: {exportError}</p>
           )}
@@ -832,7 +883,7 @@ export default function AdminPage() {
           {actionError && <p className="mt-4 text-sm text-rust">{actionError}</p>}
 
           {lastApproval && (
-            <div className="mt-4">
+            <div className="mt-4" onPointerDown={() => setApprovalPinned(true)}>
               <ApprovalResultCard
                 result={lastApproval}
                 onViewBank={(bank) => router.push(`/fund-breakdown?tab=banks&bank=${encodeURIComponent(bank)}`)}
@@ -844,27 +895,29 @@ export default function AdminPage() {
           {/* Filter chips -- narrow which groups show below, replacing the
               old two-tier tab system. Single-select, matching the pill
               vocabulary used elsewhere (TypePickerSheet, filter rows). */}
+          {showChips && (
           <div className="mt-5 flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {chips.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setFilter(c.id)}
                 className={`shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                  filter === c.id ? "bg-gold-soft text-ink" : "border border-hairline text-ink-soft"
+                  activeFilter === c.id ? "bg-gold-soft text-ink" : "border border-hairline text-ink-soft"
                 }`}
               >
                 {c.label}
-                <span className={`font-mono text-xs ${filter === c.id ? "text-ink" : "text-ink-soft"}`}>{c.count}</span>
+                <span className={`font-mono text-xs ${activeFilter === c.id ? "text-ink" : "text-ink-soft"}`}>{c.count}</span>
               </button>
             ))}
           </div>
+          )}
 
           <div className="mt-6 space-y-8">
             {/* Only on "All" -- switching to the Transactions or Signups
                 chip with nothing pending already gets its own "Nothing
                 pending right now" from that chip's own fallback section
                 below, so showing this too duplicated the same message. */}
-            {filter === "all" && totalCount === 0 && (
+            {activeFilter === "all" && totalCount === 0 && (
               <div className="text-center py-16">
                 <p className="text-2xl mb-2">🌱</p>
                 <p className="text-sm text-ink-soft">
@@ -917,17 +970,27 @@ export default function AdminPage() {
                             onChange={() => toggleBulkSelected(t.transaction_id)}
                           />
                         )}
-                        <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "in" })} small />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-display font-medium truncate text-sm">{t.members?.name || "Fund"}</p>
-                          <p className="text-xs text-ink-soft truncate">
-                            {typeLabels[t.classification] || t.classification}
-                            {t.bank_accounts && ` · ${t.bank_accounts.account_name || t.bank_accounts.bank_name}`}
-                            {impactFor(t).kind === "none" && (
-                              <span className="text-gold"> · won&apos;t change a bank balance</span>
-                            )}
-                          </p>
-                        </div>
+                        {/* Tapping the row opens the same review sheet as
+                            "Needs a decision" -- date, notes, receipt and
+                            bank effect -- with Approve right there. */}
+                        <button
+                          type="button"
+                          onClick={() => setReviewingTxnId(t.transaction_id)}
+                          className="min-w-0 flex-1 flex items-center gap-3 text-left"
+                        >
+                          <FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "in" })} small />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-display font-medium truncate text-sm">{t.members?.name || "Fund"}</span>
+                              <ImpactTag impact={impactFor(t)} />
+                            </span>
+                            <span className="block text-xs text-ink-soft truncate">
+                              {typeLabels[t.classification] || t.classification}
+                              {t.bank_accounts && ` · ${t.bank_accounts.account_name || t.bank_accounts.bank_name}`}
+                            </span>
+                            <span className="block text-[11px] text-ink-soft font-mono truncate">{queuedLabel(t)}</span>
+                          </span>
+                        </button>
                         <div className="shrink-0 text-right">
                           <p className="text-sm font-mono">₱{fmt(t.amount)}</p>
                           <div className="flex items-center justify-end gap-2 mt-0.5">
@@ -986,7 +1049,12 @@ export default function AdminPage() {
                 </div>
 
                 {bulkTransactions.length > 1 && selectedBulkIds.size > 0 && (
-                  <div className="sticky bottom-4 z-10 mt-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg">
+                  <div
+                    className="sticky z-10 mt-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg"
+                    // Above the bottom dock -- at bottom-4 it stuck *under* the
+                    // dock once the queue was long enough to scroll.
+                    style={{ bottom: "calc(var(--dock-h) + 0.75rem)" }}
+                  >
                     <BankImpactPreview
                       {...groupImpacts(
                         bulkTransactions.filter((t) => selectedBulkIds.has(t.transaction_id)).map(impactFor)
@@ -1019,18 +1087,6 @@ export default function AdminPage() {
               </section>
             )}
 
-            {/* ---- Transactions (empty-state fallback) ---- */}
-            {/* Only when the Transactions chip is specifically selected --
-                on "All" with nothing pending anywhere, the 🌱 empty state
-                above already says so; repeating "nothing pending" once per
-                category underneath it was redundant. */}
-            {filter === "txn" && bulkTransactions.length === 0 && reviewTransactions.length === 0 && (
-              <section>
-                <span className="text-sm font-semibold">Transactions</span>
-                <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
-              </section>
-            )}
-
             {/* ---- Needs a decision ---- */}
             {showTxns && reviewTransactions.length > 0 && (
               <section>
@@ -1041,9 +1097,7 @@ export default function AdminPage() {
                   </span>
                 </div>
                 <p className="mt-1.5 text-xs text-ink-soft">
-                  Money going out always needs a bank picked before it can move — Loan Release also activates
-                  the loan. A member-submitted Investment Return lands here too, since it credits the shared
-                  pool and is worth checking one at a time rather than batch-approving.
+                  Money going out needs a bank and proof of transfer. Investment Returns are checked one at a time.
                 </p>
 
                 <div className="mt-3 space-y-2">
@@ -1068,6 +1122,7 @@ export default function AdminPage() {
                             {t.classification === "Investment Return" && t.investments?.name && ` · ${t.investments.name}`}
                             {t.submitted_by_member && ` · by ${t.submitted_by_member.name}`}
                           </p>
+                          <p className="text-[11px] text-ink-soft font-mono truncate">{queuedLabel(t)}</p>
                         </div>
                         <div className="shrink-0 text-right">
                           <p className="text-sm font-mono">₱{fmt(Math.abs(t.amount))}</p>
@@ -1151,31 +1206,6 @@ export default function AdminPage() {
               </section>
             )}
 
-            {/* ---- Signups (empty-state fallback) ---- */}
-            {/* Same reasoning as the Transactions fallback above -- only
-                when the Signups chip is specifically selected. */}
-            {filter === "signup" && pendingMembers.length === 0 && pendingBorrowers.length === 0 && (
-              <section>
-                <span className="text-sm font-semibold">Signups</span>
-                <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => router.push("/admin/members")}
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
-                  >
-                    Manage members
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push("/admin/borrowers")}
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
-                  >
-                    Manage borrowers
-                  </button>
-                </div>
-              </section>
-            )}
           </div>
         </div>
 
@@ -1183,6 +1213,9 @@ export default function AdminPage() {
             this page (see Navbar's showFab), so this is a separate button
             for Admin's own primary action: finding and fixing any
             transaction on record, replacing the old Support tab. */}
+        {/* Hidden while rows are selected -- the bulk Approve bar takes the
+            same bottom-right spot, and both on screen at once overlapped. */}
+        {selectedBulkIds.size === 0 && (
         <button
           onClick={() => setShowSearchFix(true)}
           aria-label="Search & Fix"
@@ -1194,6 +1227,7 @@ export default function AdminPage() {
             <path d="M20 20l-4.8-4.8" />
           </svg>
         </button>
+        )}
       </main>
 
       {reviewingTxn && (() => {
@@ -1208,8 +1242,49 @@ export default function AdminPage() {
         // admin's own proof of transfer -- an Investment Return's receipt is
         // the member's to attach, and approving it uploads nothing anyway.
         const needsAdminProof = needsWithdrawalBank || needsLoanBank
+        // Contributions/Loan Payments open here too now, read-only: same
+        // approve write as their own queue card (approveBulkIds), and no
+        // amount editing that their queue card never offered.
+        const isConfirmedMoney = BULK_CLASSIFICATIONS.has(t.classification)
+        const id = t.transaction_id
+        const changed = (v: string | undefined, original: unknown) => v !== undefined && v !== String(original ?? "")
+        // Save only shows once something actually differs from what's on
+        // record, and Approve waits until it's saved or discarded -- it
+        // always approves the saved amount, so approving mid-edit would
+        // silently ignore the edit.
+        const isDirty =
+          !isConfirmedMoney &&
+          (changed(editAmounts[id], Math.abs(t.amount)) ||
+            (needsLoanBank &&
+              (t.loans?.interest_type === "amount"
+                ? changed(editInterestAmount[id], t.loans?.interest_amount)
+                : changed(editInterestRate[id], t.loans?.interest_rate))) ||
+            (needsLoanBank && changed(editTermMonths[id], t.loans?.term_months)))
+        const discardEdits = () => {
+          const drop = (prev: Record<string, string>) => {
+            const next = { ...prev }
+            delete next[id]
+            return next
+          }
+          setEditAmounts(drop)
+          setEditInterestRate(drop)
+          setEditInterestAmount(drop)
+          setEditTermMonths(drop)
+          setCustomRate(false)
+          setCustomTerm(false)
+        }
+        const subtitle = [
+          queuedLabel(t),
+          needsLoanBank ? "Requested" : null,
+          t.classification === "Investment Return" ? t.investments?.name : null,
+          t.submitted_by_member ? `Submitted by ${t.submitted_by_member.name}` : null
+        ]
+          .filter(Boolean)
+          .join(" · ")
 
         const canApprove =
+          !isDirty &&
+          !(isConfirmedMoney && bulkApproving) &&
           (!needsAdminProof || !!approvalReceipts[t.transaction_id]) &&
           uploadingReceiptId !== t.transaction_id &&
           (!needsWithdrawalBank || !!withdrawalBankSelections[t.transaction_id]) &&
@@ -1243,6 +1318,9 @@ export default function AdminPage() {
                   />
                 )
               })()}
+              {isDirty && (
+                <p className="text-[12px] text-gold mb-3">Save or discard your changes before approving.</p>
+              )}
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -1257,11 +1335,13 @@ export default function AdminPage() {
                 <button
                   type="button"
                   className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
-                  onClick={() => approveTransaction(t.transaction_id)}
+                  onClick={() => (isConfirmedMoney ? approveBulkIds([id]) : approveTransaction(id))}
                   disabled={!canApprove}
                 >
                   {uploadingReceiptId === t.transaction_id
                     ? "Uploading…"
+                    : isConfirmedMoney && bulkApproving
+                    ? "Approving…"
                     : needsLoanBank
                     ? "Approve & activate"
                     : "Approve"}
@@ -1271,7 +1351,16 @@ export default function AdminPage() {
           )
 
         return (
-          <Sheet title="Review transaction" onClose={() => setReviewingTxnId(null)} footer={footer}>
+          <Sheet
+            title="Review transaction"
+            onClose={() => {
+              setReviewingTxnId(null)
+              setTermPicker(null)
+              setCustomRate(false)
+              setCustomTerm(false)
+            }}
+            footer={footer}
+          >
             <div className="card overflow-hidden">
               <FieldRow icon={<FlowBadge {...(FLOW[t.classification] ?? { arrow: "•", tone: "out" })} small />}>
                 <span className="flex-1 min-w-0 text-sm">
@@ -1280,68 +1369,137 @@ export default function AdminPage() {
                 </span>
               </FieldRow>
             </div>
-            <p className="px-1 pt-2 text-xs text-ink-soft">
-              {needsLoanBank && "Requested"}
-              {t.classification === "Investment Return" && t.investments?.name && t.investments.name}
-              {t.submitted_by_member && `Submitted by ${t.submitted_by_member.name}`}
-            </p>
+            <p className="px-1 pt-2 text-xs text-ink-soft">{subtitle}</p>
 
-            <AmountHero
-              value={editAmounts[t.transaction_id] ?? String(Math.abs(t.amount))}
-              onChange={(v) => setEditAmounts((prev) => ({ ...prev, [t.transaction_id]: v }))}
-              label="Amount"
-            />
-
-            {needsLoanBank && (
-              <div className="grid grid-cols-2 gap-3 -mt-2 mb-4">
-                <div>
-                  <p className="mb-1.5 text-[11px] uppercase tracking-wide text-ink-soft font-mono">
-                    {t.loans?.interest_type === "amount" ? "Interest (₱)" : "Interest rate (%)"}
-                  </p>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3.5 py-3 w-full"
-                    value={
-                      t.loans?.interest_type === "amount"
-                        ? editInterestAmount[t.transaction_id] ?? String(t.loans?.interest_amount ?? "")
-                        : editInterestRate[t.transaction_id] ?? String(t.loans?.interest_rate ?? "")
-                    }
-                    onChange={(e) => {
-                      const value = e.target.value
-                      if (t.loans?.interest_type === "amount") {
-                        setEditInterestAmount((prev) => ({ ...prev, [t.transaction_id]: value }))
-                      } else {
-                        setEditInterestRate((prev) => ({ ...prev, [t.transaction_id]: value }))
-                      }
-                    }}
-                  />
-                </div>
-                <div>
-                  <p className="mb-1.5 text-[11px] uppercase tracking-wide text-ink-soft font-mono">
-                    Term (months)
-                  </p>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    className="border border-hairline bg-paper-2 text-ink text-sm rounded-md px-3.5 py-3 w-full"
-                    value={editTermMonths[t.transaction_id] ?? String(t.loans?.term_months ?? "")}
-                    onChange={(e) =>
-                      setEditTermMonths((prev) => ({ ...prev, [t.transaction_id]: e.target.value }))
-                    }
-                  />
-                </div>
+            {isConfirmedMoney ? (
+              <div className="text-center py-6">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">Amount</p>
+                <p className="font-mono [font-variant-numeric:tabular-nums] text-4xl font-bold text-ink">
+                  ₱{fmt(Math.abs(t.amount))}
+                </p>
               </div>
+            ) : (
+              <AmountHero
+                value={editAmounts[t.transaction_id] ?? String(Math.abs(t.amount))}
+                onChange={(v) => setEditAmounts((prev) => ({ ...prev, [t.transaction_id]: v }))}
+                label="Amount"
+              />
             )}
 
-            <button
-              type="button"
-              className="mb-4 border border-hairline text-ink-soft px-4 py-2 rounded-full text-sm font-semibold disabled:opacity-50"
-              onClick={() => saveTransactionEdit(t)}
-              disabled={savingEditId === t.transaction_id}
-            >
-              {savingEditId === t.transaction_id ? "Saving…" : "Save changes"}
-            </button>
+            {needsLoanBank && (() => {
+              const isAmountInterest = t.loans?.interest_type === "amount"
+              const rateValue = editInterestRate[id] ?? String(t.loans?.interest_rate ?? "")
+              const amountValue = editInterestAmount[id] ?? String(t.loans?.interest_amount ?? "")
+              const termValue = editTermMonths[id] ?? String(t.loans?.term_months ?? "")
+              return (
+                <div className="-mt-2 mb-4">
+                  <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Loan terms</p>
+                  <div className="card divide-y divide-hairline overflow-hidden">
+                    <FieldRow icon={<InterestIcon />}>
+                      {isAmountInterest || customRate ? (
+                        <input
+                          className={`${rowInputClass} font-mono`}
+                          type="number"
+                          inputMode="decimal"
+                          placeholder={isAmountInterest ? "Interest amount (₱)" : "Interest rate (%)"}
+                          value={isAmountInterest ? amountValue : rateValue}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (isAmountInterest) setEditInterestAmount((prev) => ({ ...prev, [id]: value }))
+                            else setEditInterestRate((prev) => ({ ...prev, [id]: value }))
+                          }}
+                          autoFocus={customRate}
+                        />
+                      ) : (
+                        <button type="button" onClick={() => setTermPicker("rate")} className="flex-1 min-w-0 text-left text-sm text-ink">
+                          {rateValue ? `${rateValue}% interest` : "Interest rate"}
+                        </button>
+                      )}
+                      {isAmountInterest ? (
+                        <span className="text-ink-soft text-xs shrink-0">₱ flat</span>
+                      ) : (
+                        <button type="button" onClick={() => setTermPicker("rate")} aria-label="Choose an interest rate" className="text-ink-soft text-xs shrink-0 px-1">
+                          ▾
+                        </button>
+                      )}
+                    </FieldRow>
+                    <FieldRow icon={<ClockIcon />}>
+                      {customTerm ? (
+                        <input
+                          className={`${rowInputClass} font-mono`}
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="Term in months"
+                          value={termValue}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setEditTermMonths((prev) => ({ ...prev, [id]: value }))
+                          }}
+                          autoFocus
+                        />
+                      ) : (
+                        <button type="button" onClick={() => setTermPicker("term")} className="flex-1 min-w-0 text-left text-sm text-ink">
+                          {termValue ? `${termValue} ${termValue === "1" ? "month" : "months"}` : "Term"}
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setTermPicker("term")} aria-label="Choose a term" className="text-ink-soft text-xs shrink-0 px-1">
+                        ▾
+                      </button>
+                    </FieldRow>
+                  </div>
+                  {termPicker === "rate" && (
+                    <InterestRatePickerSheet
+                      value={rateValue}
+                      onSelect={(rate) => {
+                        setEditInterestRate((prev) => ({ ...prev, [id]: String(rate) }))
+                        setTermPicker(null)
+                      }}
+                      onCustom={() => {
+                        setCustomRate(true)
+                        setTermPicker(null)
+                      }}
+                      onClose={() => setTermPicker(null)}
+                    />
+                  )}
+                  {termPicker === "term" && (
+                    <TermPickerSheet
+                      value={termValue}
+                      onSelect={(months) => {
+                        setEditTermMonths((prev) => ({ ...prev, [id]: String(months) }))
+                        setTermPicker(null)
+                      }}
+                      onCustom={() => {
+                        setCustomTerm(true)
+                        setTermPicker(null)
+                      }}
+                      onClose={() => setTermPicker(null)}
+                    />
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* Only once something actually differs from what's on record. */}
+            {isDirty && (
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  type="button"
+                  className="bg-ink text-paper px-4 py-2 rounded-full text-sm font-semibold disabled:opacity-50"
+                  onClick={() => saveTransactionEdit(t)}
+                  disabled={savingEditId === t.transaction_id}
+                >
+                  {savingEditId === t.transaction_id ? "Saving…" : "Save changes"}
+                </button>
+                <button
+                  type="button"
+                  className="border border-hairline text-ink-soft px-4 py-2 rounded-full text-sm font-semibold"
+                  onClick={discardEdits}
+                  disabled={savingEditId === t.transaction_id}
+                >
+                  Discard
+                </button>
+              </div>
+            )}
 
             {/* Where the member or borrower asked for the money to go -- set on
                 their loan request, or on the withdrawal itself. */}
@@ -1385,7 +1543,6 @@ export default function AdminPage() {
                         </option>
                       ))}
                     </select>
-                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                   </FieldRow>
                 )}
 
@@ -1405,7 +1562,6 @@ export default function AdminPage() {
                         </option>
                       ))}
                     </select>
-                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                   </FieldRow>
                 )}
 
@@ -1428,17 +1584,6 @@ export default function AdminPage() {
                 </label>
               </div>
 
-              {needsWithdrawalBank && (
-                <p className="px-1 pt-2 text-sm text-gold">
-                  Which fund bank this pays out from is always an admin call.
-                </p>
-              )}
-              {needsLoanBank && (
-                <p className="px-1 pt-2 text-sm text-gold">
-                  Approving here activates the loan and records the disbursing bank in one step, instead of
-                  separately on the loan&apos;s own page.
-                </p>
-              )}
             </div>
             )}
 
@@ -1458,13 +1603,11 @@ export default function AdminPage() {
                   </p>
                 )}
                 {t.receipt_url && (
-                  <button
-                    type="button"
-                    onClick={() => setOpenReceiptUrl(t.receipt_url)}
-                    className="inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
-                  >
-                    🧾 View Receipt
-                  </button>
+                  <ReceiptThumb
+                    path={t.receipt_url}
+                    label={isConfirmedMoney || t.classification === "Investment Return" ? "Member's receipt" : "Receipt"}
+                    onOpen={() => setOpenReceiptUrl(t.receipt_url)}
+                  />
                 )}
               </div>
             )}
@@ -1535,7 +1678,6 @@ export default function AdminPage() {
                       </option>
                     ))}
                   </select>
-                  <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                 </FieldRow>
               </div>
             </div>
@@ -1600,7 +1742,6 @@ export default function AdminPage() {
                         </option>
                       ))}
                     </select>
-                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                   </FieldRow>
                 </div>
               </div>
@@ -1640,6 +1781,36 @@ export default function AdminPage() {
       )}
 
       {showSearchFix && <SearchFixSheet onClose={() => setShowSearchFix(false)} />}
+      {showManage && (
+        <Sheet title="Manage" onClose={() => setShowManage(false)}>
+          <div className="card">
+            <div className="px-5">
+              <button
+                type="button"
+                onClick={() => router.push("/admin/members")}
+                className="w-full py-3.5 flex items-center justify-between gap-3 text-left border-b border-dashed border-hairline"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm text-ink font-medium">Members</span>
+                  <span className="block text-[11px] text-ink-soft">Add, edit or deactivate members</span>
+                </span>
+                <span className="text-ink-soft shrink-0">›</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/admin/borrowers")}
+                className="w-full py-3.5 flex items-center justify-between gap-3 text-left"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm text-ink font-medium">Borrowers</span>
+                  <span className="block text-[11px] text-ink-soft">Approve borrowers and link their loans</span>
+                </span>
+                <span className="text-ink-soft shrink-0">›</span>
+              </button>
+            </div>
+          </div>
+        </Sheet>
+      )}
       {openReceiptUrl && <ReceiptModal path={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
   )
@@ -1690,5 +1861,16 @@ function RejectReasonPrompt({
         </button>
       </div>
     </>
+  )
+}
+
+// Short tag on a queue row whose approval won't move any bank balance --
+// replaces a trailing phrase that got cut off on narrow screens.
+function ImpactTag({ impact }: { impact: TxnImpact }) {
+  if (impact.kind !== "none") return null
+  return (
+    <span className="shrink-0 text-[9px] uppercase tracking-wide font-mono text-gold border border-gold/40 rounded px-1.5 py-0.5">
+      {impact.reason === "no_bank" ? "No bank" : "No cash"}
+    </span>
   )
 }
