@@ -251,8 +251,8 @@ export function LoanTermsCard({
             it -- previously a separate box below the card, easy to miss
             without scrolling since nothing here visually tied it to Interest/
             Term/Repayment above it. bg-gold/10 is the app's own "highlighted
-            result" accent (StepTrack, the selected row in a dropdown, the FAB
-            glow) rather than the plain bg-paper the old box used, which in
+            result" accent (StepTrack, the selected row in a dropdown)
+            rather than the plain bg-paper the old box used, which in
             dark mode is darker than the card itself and read as dead. */}
         {previewTotalRepayable > 0 && isValidPositiveNumber(termMonths) && (
           <>

@@ -278,7 +278,7 @@ function ComposeSheet({
           type="button"
           onClick={send}
           disabled={!canSend}
-          className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 disabled:opacity-50"
+          className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg disabled:opacity-50"
         >
           {sending ? "Sending..." : "Send"}
         </button>

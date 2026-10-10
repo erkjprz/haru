@@ -888,7 +888,7 @@ export default function AdminPage() {
                             type="button"
                             onClick={() => approveBulkIds([t.transaction_id])}
                             disabled={bulkApproving}
-                            className="w-full bg-ink text-paper px-4 py-3 rounded-full text-sm font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                            className="w-full bg-ink text-paper px-4 py-3 rounded-full text-sm font-bold shadow-lg disabled:opacity-50 disabled:shadow-none"
                           >
                             {bulkApproving ? "Approving…" : `Approve ₱${fmt(t.amount)}`}
                           </button>
@@ -1155,7 +1155,7 @@ export default function AdminPage() {
                 </button>
                 <button
                   type="button"
-                  className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                  className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
                   onClick={() => approveTransaction(t.transaction_id)}
                   disabled={!canApprove}
                 >
@@ -1387,7 +1387,7 @@ export default function AdminPage() {
               )}
               <button
                 type="button"
-                className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
                 onClick={() => approveMember(reviewingSignup.member_id)}
                 disabled={memberBusyId === reviewingSignup.member_id}
               >
@@ -1451,7 +1451,7 @@ export default function AdminPage() {
             footer={
               <button
                 type="button"
-                className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+                className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
                 onClick={() => approveBorrower(m.member_id)}
                 disabled={borrowerBusyId === m.member_id}
               >
