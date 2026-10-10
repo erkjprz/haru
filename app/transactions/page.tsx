@@ -11,13 +11,11 @@ import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 import { DateField, FieldRow, PersonIcon, BankIcon, StatusIcon, rowSelectClass } from "@/app/components/TransactionFormUI"
 import { Sheet } from "@/app/components/Sheet"
 import {
-  TotalsLine,
   TransactionDetailSheet,
   TransactionRow,
   cardDate,
   effectiveDate,
   ledgerBankKeys,
-  moneyTotals,
   monthLabel
 } from "@/app/components/transactions/TransactionParts"
 import { readCache, writeCache } from "@/lib/cache"
@@ -506,19 +504,6 @@ function TransactionsPageInner() {
     return () => io.disconnect()
   }, [hasMore, limit, filterKey])
 
-  // Totals for everything matching, and per month -- over the whole
-  // matching list, not just the rows rendered so far.
-  const totals = useMemo(() => moneyTotals(filteredTransactions), [filteredTransactions])
-  const monthTotals = useMemo(() => {
-    const byMonth = new Map<string, typeof listRows>()
-    for (const t of listRows) {
-      const label = monthLabel(t)
-      if (!byMonth.has(label)) byMonth.set(label, [])
-      byMonth.get(label)!.push(t)
-    }
-    return new Map([...byMonth].map(([label, rows]) => [label, moneyTotals(rows)]))
-  }, [listRows])
-
   const openTxn = openTxnId ? transactions.find((t) => t.transaction_id === openTxnId) ?? null : null
   const anyFilterActive = activeChips.length > 0 || !!debouncedSearchQuery
 
@@ -616,12 +601,9 @@ function TransactionsPageInner() {
           )}
 
           {!showLoading && (
-            <div className="mt-4 flex items-baseline justify-between gap-3 text-xs">
-              <span className="text-ink-soft font-mono [font-variant-numeric:tabular-nums] truncate min-w-0">
-                {filteredTransactions.length} of {totalCount}
-                {debouncedSearchQuery && ` matching "${debouncedSearchQuery}"`}
-              </span>
-              <TotalsLine totals={totals} className="text-xs shrink-0" />
+            <div className="mt-4 text-xs text-ink-soft font-mono [font-variant-numeric:tabular-nums]">
+              {filteredTransactions.length} of {totalCount}
+              {debouncedSearchQuery && ` matching "${debouncedSearchQuery}"`}
             </div>
           )}
 
@@ -647,10 +629,9 @@ function TransactionsPageInner() {
                 return (
                   <div key={t.transaction_id}>
                     {showMonthHeader && (
-                      <div className={`flex items-baseline justify-between gap-3 mb-2 ${idx === 0 ? "mt-0" : "mt-6"}`}>
-                        <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">{label}</p>
-                        {monthTotals.get(label) && <TotalsLine totals={monthTotals.get(label)!} className="text-[11px]" />}
-                      </div>
+                      <p className={`text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 ${idx === 0 ? "mt-0" : "mt-6"}`}>
+                        {label}
+                      </p>
                     )}
                     <div className={showMonthHeader ? "" : "mt-2"}>
                       <TransactionRow t={t} onOpen={() => setOpenTxnId(t.transaction_id)} />
