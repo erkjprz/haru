@@ -34,6 +34,17 @@ const MEMBERS_CACHE_KEY = "admin:members-list"
 
 type Filter = "all" | "members" | "borrowers" | "pending" | "inactive"
 
+// ?filter=borrowers (old /admin/borrowers links) opens on that chip. Only
+// read in the browser; the page renders a skeleton until auth has loaded,
+// so this never differs from the server's first render.
+function initialFilter(): Filter {
+  if (typeof window === "undefined") return "all"
+  const requested = new URLSearchParams(window.location.search).get("filter")
+  return requested === "members" || requested === "borrowers" || requested === "pending" || requested === "inactive"
+    ? requested
+    : "all"
+}
+
 export default function AdminMembersPage() {
   const router = useRouter()
   const { loading: authLoading, member: authMember } = useAuth()
@@ -43,7 +54,7 @@ export default function AdminMembersPage() {
   const [loaded, setLoaded] = useState(Boolean(cachedMembers))
 
   const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState<Filter>("all")
+  const [filter, setFilter] = useState<Filter>(initialFilter)
   const [toast, setToast] = useState("")
   const [error, setError] = useState("")
 
@@ -87,6 +98,12 @@ export default function AdminMembersPage() {
   }, [authLoading, authMember, router])
 
   usePersonParam(loaded, openPerson)
+
+  // Drop ?filter= once it's been read (see initialFilter) so a refresh
+  // starts from All.
+  useEffect(() => {
+    if (window.location.search.includes("filter=")) window.history.replaceState(null, "", window.location.pathname)
+  }, [])
 
   function openPerson(id: string) {
     setOpenId(id)
@@ -180,8 +197,8 @@ export default function AdminMembersPage() {
         p.role === "borrower"
           ? {
               label: "Approve borrower",
-              hint: "Approve them on the Borrowers page",
-              onClick: () => router.push(`/admin/borrowers?person=${p.member_id}`)
+              hint: "Approve them in the Admin queue",
+              onClick: () => router.push(`/admin?signup=${p.member_id}`)
             }
           : {
               label: "Review signup",
@@ -190,7 +207,11 @@ export default function AdminMembersPage() {
             }
       )
     }
-    actions.push({ label: "Edit details", hint: "Name, email, role, status, gain sharing", onClick: () => setEditing(true) })
+    actions.push({
+      label: "Edit details",
+      hint: p.role === "borrower" ? "Name, email, role, status" : "Name, email, role, status, gain sharing",
+      onClick: () => setEditing(true)
+    })
     if (p.status === "approved") {
       actions.push({ label: "Message", hint: `Open a chat with ${p.name}`, onClick: () => router.push(`/messages?to=${p.member_id}`) })
     }

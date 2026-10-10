@@ -1,7 +1,6 @@
 import { supabase } from "@/lib/supabase"
 
-// The admin writes behind the Members and Borrowers pages, shared so both
-// pages (and their one person sheet) make exactly the same calls. Each
+// The admin writes behind the Members page and its person sheet. Each
 // throws with the database's message on failure.
 
 export type Person = {

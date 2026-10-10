@@ -615,8 +615,8 @@ const adminSections: FaqSection[] = [
         q: "How do I add a member manually, edit one, or deactivate one?",
         a: (
           <p>
-            Admin → the <strong>Manage</strong> button (people icon, next to Chat and Export) → <strong>Members</strong>{" "}
-            takes you to the full roster. Tap <strong>+ Add</strong> to add someone, or tap a person to
+            Admin → the people icon (next to Chat and Export) takes you to <strong>Members</strong>, the
+            full roster of members and borrowers. Tap <strong>+ Add</strong> to add someone, or tap a person to
             edit their name/email/role, message them, see their loans, or deactivate/reactivate them.
             The edit form has a <strong>Shares in gains</strong> checkbox — uncheck it to exclude someone
             from future bank interest, loan, and investment distributions without deactivating them
@@ -629,8 +629,8 @@ const adminSections: FaqSection[] = [
         q: "How do I see every borrower account, not just pending ones?",
         a: (
           <p>
-            Admin → <strong>Manage</strong> → <strong>Borrowers</strong> lists every borrower account,
-            pending or approved. Tap one to see their loans, message them, or view the app as them.
+            On <strong>Members</strong> (Admin → the people icon), tap the <strong>Borrowers</strong>{" "}
+            filter. Tap one to see their loans, message them, or view the app as them.
           </p>
         )
       }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Sheet } from "@/app/components/Sheet"
@@ -8,10 +8,9 @@ import { AdminActionRow } from "@/app/components/breakdown/AdminMenu"
 import { FieldRow, PersonIcon, MailIcon, StatusIcon, rowSelectClass, rowInputClass } from "@/app/components/TransactionFormUI"
 import { updatePerson, type Person } from "@/lib/memberAdmin"
 
-// The pieces shared by the admin Members and Borrowers pages: one row per
-// person, one sheet per person with every action on them, and the edit /
-// confirm sheets those actions open -- so a borrower looks and behaves the
-// same whichever of the two pages it's opened from.
+// The pieces behind the admin Members page: one row per person, one sheet
+// per person with every action on them, and the edit / confirm sheets those
+// actions open.
 
 const fmt = (n: number) =>
   Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -27,9 +26,9 @@ function personTag(p: Person): { label: string; tone: string } | null {
   return null
 }
 
-export function PersonTag({ person, hideRole = false }: { person: Person; hideRole?: boolean }) {
+export function PersonTag({ person }: { person: Person }) {
   const tag = personTag(person)
-  if (!tag || (hideRole && person.status === "approved")) return null
+  if (!tag) return null
   return (
     <span className={`shrink-0 text-[10px] uppercase font-mono border rounded-full px-2 py-0.5 ${tag.tone}`}>
       {tag.label}
@@ -37,18 +36,7 @@ export function PersonTag({ person, hideRole = false }: { person: Person; hideRo
   )
 }
 
-export function PersonRow({
-  person,
-  detail,
-  hideRole = false,
-  onClick
-}: {
-  person: Person
-  detail?: string
-  // On a page that's all one role (Borrowers), the role tag says nothing.
-  hideRole?: boolean
-  onClick: () => void
-}) {
+export function PersonRow({ person, detail, onClick }: { person: Person; detail?: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="w-full card flex items-center gap-3 px-4 py-3 text-left">
       <div className="min-w-0 flex-1">
@@ -57,7 +45,7 @@ export function PersonRow({
         </p>
         <p className="text-xs text-ink-soft truncate">{detail ?? person.email ?? "No email"}</p>
       </div>
-      <PersonTag person={person} hideRole={hideRole} />
+      <PersonTag person={person} />
       <span className="text-ink-soft shrink-0">›</span>
     </button>
   )
@@ -98,11 +86,26 @@ export function FilterChips<T extends string>({
   active: T
   onChange: (id: T) => void
 }) {
+  // Keeps the selected chip in view, e.g. when the page opens on a filter
+  // that sits past the edge of a phone screen.
+  const rowRef = useRef<HTMLDivElement>(null)
+  // The counts change every chip's width once they load, so re-check then.
+  const layoutKey = chips.map((c) => `${c.id}${c.count}`).join()
+  useEffect(() => {
+    const row = rowRef.current
+    const chip = row?.querySelector<HTMLElement>(`[data-chip="${active}"]`)
+    if (!row || !chip) return
+    if (chip.offsetLeft + chip.offsetWidth > row.scrollLeft + row.clientWidth || chip.offsetLeft < row.scrollLeft) {
+      row.scrollLeft = chip.offsetLeft - 16
+    }
+  }, [active, layoutKey])
+
   return (
-    <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div ref={rowRef} className="relative flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {chips.map((c) => (
         <button
           key={c.id}
+          data-chip={c.id}
           onClick={() => onChange(c.id)}
           className={`shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
             active === c.id ? "bg-gold-soft text-ink" : "border border-hairline text-ink-soft"
@@ -122,9 +125,8 @@ export function matchesSearch(p: Person, search: string) {
   return Boolean(p.name?.toLowerCase().includes(q) || p.email?.toLowerCase().includes(q))
 }
 
-// Opens a person's sheet straight from a ?person= link (e.g. a pending
-// borrower opened from the Members page lands on the Borrowers page with
-// their sheet up), then drops the param so a refresh doesn't reopen it.
+// Opens a person's sheet straight from a ?person= link, then drops the
+// param so a refresh doesn't reopen it.
 export function usePersonParam(ready: boolean, open: (id: string) => void) {
   useEffect(() => {
     if (!ready) return

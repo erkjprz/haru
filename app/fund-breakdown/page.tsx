@@ -164,7 +164,7 @@ function FundBreakdownHub() {
               myMemberId={member.member_id}
               isAdmin={member.role === "admin"}
               // ?loan= opens straight into that loan -- the loan rows on an
-              // admin's person sheet (Members / Borrowers pages).
+              // admin's person sheet (Members page).
               initialLoan={searchParams.get("loan")}
               onLoanClosed={() => {
                 if (searchParams.get("loan")) router.replace("/fund-breakdown?tab=loans", { scroll: false })

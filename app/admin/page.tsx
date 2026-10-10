@@ -131,7 +131,6 @@ export default function AdminPage() {
   // (see showSearchFix below), so it isn't one of these.
   const [filter, setFilter] = useState<Filter>("all")
   const [showSearchFix, setShowSearchFix] = useState(false)
-  const [showManage, setShowManage] = useState(false)
 
   // Each row across every group below is a compact summary that opens its
   // full form in a sheet instead of expanding in place -- one row's form
@@ -825,13 +824,13 @@ export default function AdminPage() {
             <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono">Administration</div>
 
             <div className="shrink-0 flex items-center gap-2">
-            {/* Members and Borrowers pages -- always reachable from here,
-                whatever's in the queue below. */}
+            {/* Members page (members and borrowers) -- always reachable from
+                here, whatever's in the queue below. */}
             <button
-              onClick={() => setShowManage(true)}
+              onClick={() => router.push("/admin/members")}
               className="shrink-0 inline-flex items-center justify-center w-9 h-9 text-ink-soft border border-hairline rounded-full hover:bg-paper-2 hover:text-ink transition-colors"
-              title="Manage members and borrowers"
-              aria-label="Manage members and borrowers"
+              title="Members and borrowers"
+              aria-label="Members and borrowers"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                 <circle cx="9" cy="8" r="3.2" />
@@ -1746,36 +1745,6 @@ export default function AdminPage() {
       )}
 
       {showSearchFix && <SearchFixSheet onClose={() => setShowSearchFix(false)} />}
-      {showManage && (
-        <Sheet title="Manage" onClose={() => setShowManage(false)}>
-          <div className="card">
-            <div className="px-5">
-              <button
-                type="button"
-                onClick={() => router.push("/admin/members")}
-                className="w-full py-3.5 flex items-center justify-between gap-3 text-left border-b border-dashed border-hairline"
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm text-ink font-medium">Members</span>
-                  <span className="block text-[11px] text-ink-soft">Add, edit or deactivate members</span>
-                </span>
-                <span className="text-ink-soft shrink-0">›</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push("/admin/borrowers")}
-                className="w-full py-3.5 flex items-center justify-between gap-3 text-left"
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm text-ink font-medium">Borrowers</span>
-                  <span className="block text-[11px] text-ink-soft">Borrower accounts and their loans</span>
-                </span>
-                <span className="text-ink-soft shrink-0">›</span>
-              </button>
-            </div>
-          </div>
-        </Sheet>
-      )}
       {openReceiptUrl && <ReceiptModal path={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
   )
