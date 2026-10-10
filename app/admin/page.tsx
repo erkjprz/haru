@@ -185,6 +185,14 @@ export default function AdminPage() {
   // doesn't have to check the Banks page by hand afterwards.
   const [bankBalances, setBankBalances] = useState<Record<string, number> | null>(null)
   const [lastApproval, setLastApproval] = useState<ApprovalResult | null>(null)
+  // The confirmation clears itself after a while so it doesn't pile up over
+  // a session -- unless the admin touches it, which keeps it until dismissed.
+  const [approvalPinned, setApprovalPinned] = useState(false)
+  useEffect(() => {
+    if (!lastApproval || approvalPinned) return
+    const timer = setTimeout(() => setLastApproval(null), 10000)
+    return () => clearTimeout(timer)
+  }, [lastApproval, approvalPinned])
 
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState("")
@@ -382,6 +390,7 @@ export default function AdminPage() {
     } catch {
       fresh = null
     }
+    setApprovalPinned(false)
     setLastApproval({
       count: ids.length,
       unaffected,
@@ -777,14 +786,20 @@ export default function AdminPage() {
   const signupsCount = pendingMembers.length + pendingBorrowers.length
   const totalCount = pendingTransactions.length + signupsCount
 
+  // Only categories that have something waiting -- and no chip row at all
+  // when there'd be nothing to switch between (one category, or none).
   const chips: { id: Filter; label: string; count: number }[] = [
-    { id: "all", label: "All", count: totalCount },
-    { id: "txn", label: "Transactions", count: pendingTransactions.length },
-    { id: "signup", label: "Signups", count: signupsCount }
-  ]
+    { id: "all" as Filter, label: "All", count: totalCount },
+    { id: "txn" as Filter, label: "Transactions", count: pendingTransactions.length },
+    { id: "signup" as Filter, label: "Signups", count: signupsCount }
+  ].filter((c) => c.id === "all" || c.count > 0)
+  const showChips = chips.length > 2
+  // A chip that just emptied (e.g. its last item approved) drops back to All
+  // rather than leaving the queue filtered to nothing.
+  const activeFilter: Filter = chips.some((c) => c.id === filter) && showChips ? filter : "all"
 
-  const showTxns = filter === "all" || filter === "txn"
-  const showSignups = filter === "all" || filter === "signup"
+  const showTxns = activeFilter === "all" || activeFilter === "txn"
+  const showSignups = activeFilter === "all" || activeFilter === "signup"
 
   if (checkingAccess) {
     return (
@@ -854,7 +869,7 @@ export default function AdminPage() {
           {actionError && <p className="mt-4 text-sm text-rust">{actionError}</p>}
 
           {lastApproval && (
-            <div className="mt-4">
+            <div className="mt-4" onPointerDown={() => setApprovalPinned(true)}>
               <ApprovalResultCard
                 result={lastApproval}
                 onViewBank={(bank) => router.push(`/fund-breakdown?tab=banks&bank=${encodeURIComponent(bank)}`)}
@@ -866,27 +881,29 @@ export default function AdminPage() {
           {/* Filter chips -- narrow which groups show below, replacing the
               old two-tier tab system. Single-select, matching the pill
               vocabulary used elsewhere (TypePickerSheet, filter rows). */}
+          {showChips && (
           <div className="mt-5 flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {chips.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setFilter(c.id)}
                 className={`shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                  filter === c.id ? "bg-gold-soft text-ink" : "border border-hairline text-ink-soft"
+                  activeFilter === c.id ? "bg-gold-soft text-ink" : "border border-hairline text-ink-soft"
                 }`}
               >
                 {c.label}
-                <span className={`font-mono text-xs ${filter === c.id ? "text-ink" : "text-ink-soft"}`}>{c.count}</span>
+                <span className={`font-mono text-xs ${activeFilter === c.id ? "text-ink" : "text-ink-soft"}`}>{c.count}</span>
               </button>
             ))}
           </div>
+          )}
 
           <div className="mt-6 space-y-8">
             {/* Only on "All" -- switching to the Transactions or Signups
                 chip with nothing pending already gets its own "Nothing
                 pending right now" from that chip's own fallback section
                 below, so showing this too duplicated the same message. */}
-            {filter === "all" && totalCount === 0 && (
+            {activeFilter === "all" && totalCount === 0 && (
               <div className="text-center py-16">
                 <p className="text-2xl mb-2">🌱</p>
                 <p className="text-sm text-ink-soft">
@@ -1018,7 +1035,12 @@ export default function AdminPage() {
                 </div>
 
                 {bulkTransactions.length > 1 && selectedBulkIds.size > 0 && (
-                  <div className="sticky bottom-4 z-10 mt-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg">
+                  <div
+                    className="sticky z-10 mt-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg"
+                    // Above the bottom dock -- at bottom-4 it stuck *under* the
+                    // dock once the queue was long enough to scroll.
+                    style={{ bottom: "calc(var(--dock-h) + 0.75rem)" }}
+                  >
                     <BankImpactPreview
                       {...groupImpacts(
                         bulkTransactions.filter((t) => selectedBulkIds.has(t.transaction_id)).map(impactFor)
@@ -1056,7 +1078,7 @@ export default function AdminPage() {
                 on "All" with nothing pending anywhere, the 🌱 empty state
                 above already says so; repeating "nothing pending" once per
                 category underneath it was redundant. */}
-            {filter === "txn" && bulkTransactions.length === 0 && reviewTransactions.length === 0 && (
+            {activeFilter === "txn" && bulkTransactions.length === 0 && reviewTransactions.length === 0 && (
               <section>
                 <span className="text-sm font-semibold">Transactions</span>
                 <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
@@ -1185,7 +1207,7 @@ export default function AdminPage() {
             {/* ---- Signups (empty-state fallback) ---- */}
             {/* Same reasoning as the Transactions fallback above -- only
                 when the Signups chip is specifically selected. */}
-            {filter === "signup" && pendingMembers.length === 0 && pendingBorrowers.length === 0 && (
+            {activeFilter === "signup" && pendingMembers.length === 0 && pendingBorrowers.length === 0 && (
               <section>
                 <span className="text-sm font-semibold">Signups</span>
                 <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
@@ -1214,6 +1236,9 @@ export default function AdminPage() {
             this page (see Navbar's showFab), so this is a separate button
             for Admin's own primary action: finding and fixing any
             transaction on record, replacing the old Support tab. */}
+        {/* Hidden while rows are selected -- the bulk Approve bar takes the
+            same bottom-right spot, and both on screen at once overlapped. */}
+        {selectedBulkIds.size === 0 && (
         <button
           onClick={() => setShowSearchFix(true)}
           aria-label="Search & Fix"
@@ -1225,6 +1250,7 @@ export default function AdminPage() {
             <path d="M20 20l-4.8-4.8" />
           </svg>
         </button>
+        )}
       </main>
 
       {reviewingTxn && (() => {
