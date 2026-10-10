@@ -12,6 +12,17 @@ function dateOnly(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
+/**
+ * A year's bank interest is only flagged as due on the Banks list from
+ * Dec 25 of that year onward (when year-end crediting lands), and stays
+ * flagged until it's distributed. Display-only -- Distribute itself stays
+ * available on the bank's page at any time.
+ */
+export function isBankInterestDistributionDue(year: number, now: Date = new Date()): boolean {
+  const y = now.getFullYear()
+  return y > year || (y === year && now.getMonth() === 11 && now.getDate() >= 25)
+}
+
 export interface PendingBankInterestGroup {
   year: number
   bank: string
@@ -175,4 +186,41 @@ export async function distributeBankInterestGroup(group: PendingBankInterestGrou
   })
 
   if (error) throw new Error(error.message)
+}
+
+export interface BankInterestSharePreview {
+  member_id: string
+  name: string
+  amount: number
+  currentValue: number
+  pctShare: number
+}
+
+/**
+ * Read-only preview of how distributeBankInterestGroup would split a group
+ * if it ran right now -- same pool (computeCurrentValueByMember as of
+ * today) and same splitProportionally rounding, so what the admin reviews
+ * matches what Distribute credits. Writes nothing; distributeBankInterestGroup
+ * still recomputes the split itself at commit time.
+ */
+export async function previewBankInterestGroup(
+  group: PendingBankInterestGroup
+): Promise<BankInterestSharePreview[]> {
+  const distributionDate = dateOnly(new Date())
+  const currentValueByMember = await computeCurrentValueByMember(distributionDate)
+  const shares = splitProportionally(currentValueByMember, group.totalAmount)
+
+  const { data: members, error } = await supabase.from("members").select("member_id, name")
+  if (error) throw new Error(error.message)
+  const nameById = new Map((members ?? []).map((m) => [m.member_id, m.name as string]))
+
+  return shares
+    .map((s) => ({
+      member_id: s.member_id,
+      name: nameById.get(s.member_id) ?? "Unknown",
+      amount: s.amount,
+      currentValue: s.currentValue,
+      pctShare: s.pctShare
+    }))
+    .sort((a, b) => b.amount - a.amount)
 }

@@ -8,10 +8,10 @@ import { SkeletonCardList, SkeletonPanel } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import type { InterestType } from "@/lib/loanMath"
 import { formatInterestLabel, durationLabel, paymentOverdueLabel } from "@/lib/loanFormat"
-import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
-import { getPendingBankInterestGroups } from "@/lib/bankInterest"
+import { getPendingBankInterestGroups, isBankInterestDistributionDue } from "@/lib/bankInterest"
 import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
+import { BankAccountSheet } from "@/app/components/breakdown/BankAdminSheets"
 import { InvestmentDetailPanel } from "@/app/components/breakdown/InvestmentDetailPanel"
 import { InfoBox, InfoRow, InfoSubRow } from "@/app/components/breakdown/InfoBox"
 import { readCache, writeCache } from "@/lib/cache"
@@ -1762,18 +1762,14 @@ type Bank = {
   tax: number
   distributed: number
   pending_interest: number
+  // The part of pending_interest from years already due (Dec 25 onward) --
+  // only this drives the admin "Needs distribution" banner.
+  due_interest?: number
 }
 
-type BankAccount = {
-  id: string
-  bank_name: string
-  account_name: string | null
-  qr_code_url: string | null
-}
 
 type BanksSnapshot = {
   banks: Bank[]
-  bankAccounts: BankAccount[]
 }
 
 // Fund-wide list of bank accounts and balances, not scoped to a member.
@@ -1783,7 +1779,6 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   const cachedBanks = readCache<BanksSnapshot>(BANKS_CACHE_KEY)
   const [loading, setLoading] = useState(!cachedBanks)
   const [banks, setBanks] = useState<Bank[]>(cachedBanks?.banks ?? [])
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(cachedBanks?.bankAccounts ?? [])
   const [loadError, setLoadError] = useState("")
   const [selectedBank, setSelectedBank] = useState<string | null>(null)
   // Restores the scroll position lost to BankDetailPanel's own
@@ -1795,24 +1790,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
     if (selectedBank === null) restoreScrollY(bankScrollPosRef.current)
   }, [selectedBank])
 
-  const [manageMode, setManageMode] = useState(false)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [bankName, setBankName] = useState("")
-  const [accountName, setAccountName] = useState("")
-  const [saving, setSaving] = useState(false)
-  const [formMessage, setFormMessage] = useState("")
-  const editFormRef = useRef<HTMLDivElement | null>(null)
-
-  // Tapping Edit on a bank further down the list reveals its form inline,
-  // below the fold -- with nothing to indicate the tap even registered.
-  // Scrolls the opened form into view the moment it mounts (once per
-  // editingId change, not on every keystroke -- editFormRef is a stable
-  // object ref, only reassigned when the underlying DOM node itself
-  // mounts/unmounts).
-  useEffect(() => {
-    if (editingId) editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
-  }, [editingId])
+  const [showAddSheet, setShowAddSheet] = useState(false)
 
   async function load() {
     // Only show the blocking loader on a true cold start -- if we already
@@ -1861,9 +1839,6 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       return
     }
 
-    const nextBankAccounts = (bankAccountsResult.data as BankAccount[]) ?? []
-    setBankAccounts(nextBankAccounts)
-
     const byBank: Record<string, Bank> = {}
     for (const acct of bankAccountsResult.data ?? []) {
       byBank[acct.bank_name] = { bank: acct.bank_name, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
@@ -1907,96 +1882,22 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
         byBank[group.bank] = { bank: group.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
       }
       byBank[group.bank].pending_interest += group.totalAmount
+      if (isBankInterestDistributionDue(group.year)) {
+        byBank[group.bank].due_interest = (byBank[group.bank].due_interest ?? 0) + group.totalAmount
+      }
     }
 
     const nextBanks = Object.values(byBank).sort((a, b) => b.balance - a.balance)
     setBanks(nextBanks)
     setLoading(false)
 
-    writeCache<BanksSnapshot>(BANKS_CACHE_KEY, { banks: nextBanks, bankAccounts: nextBankAccounts })
+    writeCache<BanksSnapshot>(BANKS_CACHE_KEY, { banks: nextBanks })
   }
 
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  function clearForm() {
-    setShowAddForm(false)
-    setEditingId(null)
-    setBankName("")
-    setAccountName("")
-    setFormMessage("")
-  }
-
-  function startAdd() {
-    clearForm()
-    setShowAddForm(true)
-  }
-
-  function startEdit(acct: BankAccount) {
-    clearForm()
-    setEditingId(acct.id)
-    setBankName(acct.bank_name ?? "")
-    setAccountName(acct.account_name ?? "")
-  }
-
-  async function saveBank() {
-    if (!bankName.trim()) {
-      setFormMessage("Enter a bank name.")
-      return
-    }
-
-    // v_cash_ledger/v_bank_balances group by this resolved (bank_name,
-    // account_name) pair, not by id -- two accounts that resolve to the
-    // same pair would silently merge their balances together with no
-    // error. Checked here for a friendly message; the DB's own unique
-    // index is the real backstop.
-    const trimmedBankName = bankName.trim()
-    const trimmedAccountName = accountName.trim() || null
-    const isDuplicate = bankAccounts.some(
-      (acct) =>
-        acct.id !== editingId &&
-        acct.bank_name === trimmedBankName &&
-        (acct.account_name?.trim() || null) === trimmedAccountName
-    )
-    if (isDuplicate) {
-      setFormMessage("An account with this bank name and account name already exists.")
-      return
-    }
-
-    setSaving(true)
-
-    if (editingId) {
-      const { error } = await supabase
-        .from("bank_accounts")
-        .update({
-          bank_name: trimmedBankName,
-          account_name: trimmedAccountName
-        })
-        .eq("id", editingId)
-
-      setSaving(false)
-      if (error) {
-        setFormMessage(error.message)
-        return
-      }
-    } else {
-      const { error } = await supabase.from("bank_accounts").insert({
-        bank_name: trimmedBankName,
-        account_name: trimmedAccountName
-      })
-
-      setSaving(false)
-      if (error) {
-        setFormMessage(error.message)
-        return
-      }
-    }
-
-    clearForm()
-    load()
-  }
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -2006,65 +1907,78 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   if (selectedBank) {
-    return <BankDetailPanel bank={selectedBank} onBack={() => setSelectedBank(null)} />
+    return (
+      <BankDetailPanel
+        bank={selectedBank}
+        onBack={() => setSelectedBank(null)}
+        onChanged={load}
+        onRenamed={setSelectedBank}
+      />
+    )
   }
 
   const totalBalance = banks.reduce((sum, b) => sum + b.balance, 0)
   // tax is stored as a negative amount, so adding it nets it out -- subtracting
   // it would add the withheld amount back instead.
   const totalNetInterest = banks.reduce((sum, b) => sum + (b.interest_earned + b.tax), 0)
+  const dueBanks = banks.filter((b) => (b.due_interest ?? 0) > 0.01)
+  const totalDue = dueBanks.reduce((sum, b) => sum + (b.due_interest ?? 0), 0)
+
+  function openBank(bank: string) {
+    bankScrollPosRef.current = window.scrollY
+    setSelectedBank(bank)
+  }
 
   return (
     <div>
-      <p className="text-[13px] text-ink-soft mb-4">Where the fund's cash sits, and the interest each account has earned.</p>
-
-      {isAdmin && (
-        <div className="flex items-center gap-2 flex-wrap mb-5">
-          {manageMode ? (
-            <button
-              className="bg-ink text-paper px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
-              onClick={() => {
-                setManageMode(false)
-                clearForm()
-              }}
-            >
-              Done
-            </button>
-          ) : (
-            <button
-              className="border border-hairline text-ink-soft px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
-              onClick={() => {
-                setManageMode(true)
-                clearForm()
-              }}
-            >
-              Manage
-            </button>
-          )}
+      {/* The list itself is read-only -- every per-bank admin action (edit,
+          QR, distribute) lives on that bank's own page, behind its ⋯ menu.
+          Only Add Bank, which has no bank to live on yet, stays here, on the
+          same row as the intro so it doesn't sit alone on a line of its own. */}
+      <div className="flex items-center justify-between gap-4 mb-5">
+        <p className="text-[13px] text-ink-soft">Where the fund's cash sits, and the interest each account has earned.</p>
+        {isAdmin && (
           <button
-            className="shrink-0 bg-gold-soft text-ink px-4 py-2.5 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-            onClick={startAdd}
+            className="shrink-0 bg-gold-soft text-ink px-3.5 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            onClick={() => setShowAddSheet(true)}
           >
             <span className="text-lg leading-none">+</span>
             Add Bank
           </button>
-        </div>
+        )}
+      </div>
+
+      {showAddSheet && (
+        <BankAccountSheet account={null} onClose={() => setShowAddSheet(false)} onSaved={() => load()} />
       )}
 
-      {showAddForm && (
-        <BankForm
-          title="Add Bank Account"
-          bankName={bankName}
-          setBankName={setBankName}
-          accountName={accountName}
-          setAccountName={setAccountName}
-          saving={saving}
-          message={formMessage}
-          onSave={saveBank}
-          onCancel={clearForm}
-          saveLabel="Add Bank"
-          className="mb-6"
-        />
+      {isAdmin && !loadError && dueBanks.length > 0 && (
+        <div className="card mb-4">
+          <div className="px-5 pt-4 pb-2">
+            <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">Needs distribution</p>
+            <p className="text-sm text-ink">
+              <span className="font-mono [font-variant-numeric:tabular-nums] font-semibold">₱{fmt(totalDue)}</span>{" "}
+              interest is ready to split across members.
+            </p>
+            <div className="mt-2">
+              {dueBanks.map((b) => (
+                <button
+                  key={b.bank}
+                  onClick={() => openBank(b.bank)}
+                  className="w-full py-2.5 flex items-center justify-between gap-3 text-left border-t border-dashed border-hairline"
+                >
+                  <span className="text-sm text-ink font-medium truncate">{b.bank}</span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-gold">
+                      ₱{fmt(b.due_interest ?? 0)}
+                    </span>
+                    <span className="text-ink-soft">→</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {!loadError && banks.length > 0 && (
@@ -2100,46 +2014,9 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       <div className="flex flex-col gap-3">
-        {banks.map((b) => {
-          const acct = bankAccounts.find((a) => a.bank_name === b.bank)
-          const isEditingThis = isAdmin && manageMode && !!acct && editingId === acct.id
-
-          return (
-            <div key={b.bank} ref={isEditingThis ? editFormRef : undefined}>
-              <BankCard
-                bank={b}
-                fmt={fmt}
-                onClick={() => {
-                  bankScrollPosRef.current = window.scrollY
-                  setSelectedBank(b.bank)
-                }}
-                showEdit={isAdmin && manageMode}
-                fused={isEditingThis}
-                onEdit={acct ? () => startEdit(acct) : undefined}
-              />
-              {isEditingThis && acct && (
-                <BankForm
-                  title="Edit Bank Account"
-                  bankName={bankName}
-                  setBankName={setBankName}
-                  accountName={accountName}
-                  setAccountName={setAccountName}
-                  saving={saving}
-                  message={formMessage}
-                  onSave={saveBank}
-                  onCancel={() => setEditingId(null)}
-                  saveLabel="Save Changes"
-                  fused
-                  bankAccountId={acct.id}
-                  qrCodeUrl={acct.qr_code_url}
-                  onQrUpdated={(path) =>
-                    setBankAccounts((prev) => prev.map((a) => (a.id === acct.id ? { ...a, qr_code_url: path } : a)))
-                  }
-                />
-              )}
-            </div>
-          )
-        })}
+        {banks.map((b) => (
+          <BankCard key={b.bank} bank={b} fmt={fmt} onClick={() => openBank(b.bank)} />
+        ))}
       </div>
     </div>
   )
@@ -2148,17 +2025,11 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
 function BankCard({
   bank,
   fmt,
-  onClick,
-  showEdit,
-  fused,
-  onEdit
+  onClick
 }: {
   bank: Bank
   fmt: (n: number) => string
   onClick: () => void
-  showEdit: boolean
-  fused: boolean
-  onEdit?: () => void
 }) {
   // tax is stored as a negative amount, so adding it nets it out --
   // subtracting it would add the withheld amount back instead.
@@ -2181,9 +2052,7 @@ function BankCard({
           onClick()
         }
       }}
-      className={`w-full text-left bg-paper-2 border border-hairline px-5 py-4 hover:bg-paper transition-colors cursor-pointer ${
-        fused ? "rounded-t-md rounded-b-none border-b-0" : "rounded-md"
-      }`}
+      className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 py-4 hover:bg-paper transition-colors cursor-pointer"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -2193,19 +2062,7 @@ function BankCard({
           </p>
           <p className="text-[11px] text-ink-soft">current balance</p>
         </div>
-        {showEdit ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit?.()
-            }}
-            className="shrink-0 text-[11px] text-ink-soft border border-hairline rounded-sm px-2.5 py-1.5"
-          >
-            Edit
-          </button>
-        ) : (
-          <span className="text-ink-soft shrink-0">→</span>
-        )}
+        <span className="text-ink-soft shrink-0">→</span>
       </div>
 
       <div className="flex items-baseline justify-between mt-3.5">
@@ -2222,187 +2079,8 @@ function BankCard({
       </div>
 
       {undistributed > 0.01 && (
-        <p className="text-[11px] text-gold mt-2">₱{fmt(undistributed)} not yet distributed to members</p>
+        <p className="text-[11px] text-gold mt-2">₱{fmt(undistributed)} not yet distributed</p>
       )}
-    </div>
-  )
-}
-
-function BankForm({
-  title,
-  bankName,
-  setBankName,
-  accountName,
-  setAccountName,
-  saving,
-  message,
-  onSave,
-  onCancel,
-  saveLabel,
-  fused = false,
-  className = "",
-  bankAccountId,
-  qrCodeUrl,
-  onQrUpdated
-}: {
-  title: string
-  bankName: string
-  setBankName: (v: string) => void
-  accountName: string
-  setAccountName: (v: string) => void
-  saving: boolean
-  message: string
-  onSave: () => void
-  onCancel: () => void
-  saveLabel: string
-  fused?: boolean
-  className?: string
-  // Only known once the account already exists -- the QR upload needs a
-  // real bank_accounts.id to attach to, so it's hidden on the "Add Bank
-  // Account" form and only appears once editing an existing one.
-  bankAccountId?: string
-  qrCodeUrl?: string | null
-  onQrUpdated?: (path: string) => void
-}) {
-  return (
-    <div className={`bg-paper-2 border border-hairline relative overflow-hidden ${fused ? "rounded-b-md" : "rounded-md"} ${className}`}>
-      {!fused && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />}
-      <div className={fused ? "px-5 py-5 space-y-4" : "pl-6 pr-5 py-6 space-y-4"}>
-        <p className="font-display text-lg font-medium">{title}</p>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Bank name</label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-            placeholder="e.g. BDO"
-            value={bankName}
-            onChange={(e) => setBankName(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Account name</label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-            placeholder="e.g. Est. 2017 Fund Savings"
-            value={accountName}
-            onChange={(e) => setAccountName(e.target.value)}
-          />
-        </div>
-
-        {bankAccountId && (
-          <BankQrField bankAccountId={bankAccountId} qrCodeUrl={qrCodeUrl ?? null} onUpdated={onQrUpdated} />
-        )}
-
-        <div className="flex gap-3">
-          <button
-            className="bg-ink text-paper px-4 py-3 rounded-sm text-sm font-medium flex-1 disabled:opacity-50"
-            onClick={onSave}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : saveLabel}
-          </button>
-          <button className="border border-hairline rounded-sm px-4 py-3 text-sm" onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
-
-        {message && <p className="text-sm text-rust">{message}</p>}
-      </div>
-    </div>
-  )
-}
-
-// Lets an admin upload/replace the "scan to pay" QR shown on Dashboard and
-// the Borrower hub for this bank account. Uploads straight away on file
-// select (no separate save step, independent of the bank name/account name
-// save button above it).
-function BankQrField({
-  bankAccountId,
-  qrCodeUrl,
-  onUpdated
-}: {
-  bankAccountId: string
-  qrCodeUrl: string | null
-  onUpdated?: (path: string) => void
-}) {
-  const [uploading, setUploading] = useState(false)
-  const [error, setError] = useState("")
-  const fileInput = useRef<HTMLInputElement | null>(null)
-
-  async function handleFile(file: File) {
-    setError("")
-    setUploading(true)
-
-    const path = `${bankAccountId}-${Date.now()}-${file.name}`
-
-    const { error: uploadError } = await supabase.storage.from("BankQR").upload(path, file, { contentType: file.type })
-
-    if (uploadError) {
-      setError(uploadError.message)
-      setUploading(false)
-      return
-    }
-
-    const { error: updateError } = await supabase
-      .from("bank_accounts")
-      .update({ qr_code_url: path })
-      .eq("id", bankAccountId)
-
-    if (updateError) {
-      // The new file already uploaded -- if pointing the bank row at it
-      // failed, clean it up rather than leaving an orphaned object behind.
-      await supabase.storage.from("BankQR").remove([path])
-      setError(updateError.message)
-      setUploading(false)
-      return
-    }
-
-    if (qrCodeUrl) await supabase.storage.from("BankQR").remove([qrCodeUrl])
-
-    onUpdated?.(path)
-    setUploading(false)
-  }
-
-  return (
-    <div>
-      <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">
-        Scan-to-pay QR code
-      </label>
-      <div className="flex items-center gap-3">
-        {qrCodeUrl ? (
-          <img
-            src={getBankQrPublicUrl(qrCodeUrl)}
-            alt="Bank QR code"
-            className="w-14 h-14 object-contain rounded-sm border border-hairline bg-paper shrink-0"
-          />
-        ) : (
-          <div className="w-14 h-14 rounded-sm border border-dashed border-hairline shrink-0 flex items-center justify-center text-ink-soft text-[10px]">
-            None
-          </div>
-        )}
-
-        <input
-          ref={fileInput}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            e.target.value = ""
-            if (file) handleFile(file)
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => fileInput.current?.click()}
-          disabled={uploading}
-          className="text-xs font-medium text-ink-soft border border-hairline rounded-sm px-3 py-2 hover:bg-paper hover:text-ink transition-colors disabled:opacity-60"
-        >
-          {uploading ? "Uploading..." : qrCodeUrl ? "Replace" : "Upload"}
-        </button>
-      </div>
-      {error && <p className="text-sm text-rust mt-1.5">{error}</p>}
     </div>
   )
 }

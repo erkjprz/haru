@@ -13,18 +13,22 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { InfoBox, InfoRow, InfoSubRow } from "@/app/components/breakdown/InfoBox"
-import {
-  getPendingBankInterestGroups,
-  distributeBankInterestGroup,
-  type PendingBankInterestGroup
-} from "@/lib/bankInterest"
+import { getPendingBankInterestGroups, type PendingBankInterestGroup } from "@/lib/bankInterest"
 import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
 import BankQrModal from "@/app/components/BankQrModal"
 import { BankYearDetailPanel } from "@/app/components/breakdown/BankYearDetailPanel"
+import { Sheet } from "@/app/components/Sheet"
+import {
+  BankAccountSheet,
+  BankQrSheet,
+  DistributeInterestSheet,
+  type BankAccountRow
+} from "@/app/components/breakdown/BankAdminSheets"
 import { readCache, writeCache } from "@/lib/cache"
 
 type YearRow = { year: string; amount: number; memberCount: number }
 type QrAccount = { id: string; account_name: string | null; qr_code_url: string }
+type AdminSheet = "actions" | "edit" | "qr" | null
 
 type BankDetailSnapshot = {
   balance: number
@@ -32,14 +36,21 @@ type BankDetailSnapshot = {
   tax: number
   years: YearRow[]
   qrAccounts: QrAccount[]
+  accounts?: BankAccountRow[]
 }
 
 export function BankDetailPanel({
   bank,
-  onBack
+  onBack,
+  onChanged,
+  onRenamed
 }: {
   bank: string
   onBack: () => void
+  // Lets the bank list refresh quietly behind this panel after an admin
+  // edits or distributes here, so backing out doesn't show stale figures.
+  onChanged?: () => void
+  onRenamed?: (bankName: string) => void
 }) {
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
@@ -61,10 +72,11 @@ export function BankDetailPanel({
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState("")
   const [pendingGroups, setPendingGroups] = useState<PendingBankInterestGroup[]>([])
-  const [distributingYear, setDistributingYear] = useState<number | null>(null)
-  const [distributeError, setDistributeError] = useState("")
   const [qrAccounts, setQrAccounts] = useState<QrAccount[]>(cached?.qrAccounts ?? [])
+  const [accounts, setAccounts] = useState<BankAccountRow[]>(cached?.accounts ?? [])
   const [zoomedQr, setZoomedQr] = useState<QrAccount | null>(null)
+  const [adminSheet, setAdminSheet] = useState<AdminSheet>(null)
+  const [reviewGroup, setReviewGroup] = useState<PendingBankInterestGroup | null>(null)
 
   async function loadPending() {
     try {
@@ -75,18 +87,9 @@ export function BankDetailPanel({
     }
   }
 
-  async function handleDistribute(group: PendingBankInterestGroup) {
-    setDistributingYear(group.year)
-    setDistributeError("")
-
-    try {
-      await distributeBankInterestGroup(group)
-      await Promise.all([loadPending(), load()])
-    } catch (err) {
-      setDistributeError(err instanceof Error ? err.message : "Something went wrong.")
-    } finally {
-      setDistributingYear(null)
-    }
+  async function handleDistributed() {
+    await Promise.all([loadPending(), load()])
+    onChanged?.()
   }
 
   async function load() {
@@ -119,11 +122,13 @@ export function BankDetailPanel({
       .select("allocation_date, amount, member_id")
       .eq("bank", bank)
 
+    // Every account under this bank name (not just the ones with a QR) --
+    // the admin Edit/QR sheets need the account row even before it has one.
     const qrPromise = supabase
       .from("bank_accounts")
-      .select("id, account_name, qr_code_url")
+      .select("id, bank_name, account_name, qr_code_url")
       .eq("bank_name", bank)
-      .not("qr_code_url", "is", null)
+      .order("account_name")
 
     const [balanceResult, interestResult, allocationsResult, qrResult] = await Promise.all([
       balancePromise,
@@ -132,8 +137,14 @@ export function BankDetailPanel({
       qrPromise
     ])
 
-    const nextQrAccounts = !qrResult.error ? ((qrResult.data as QrAccount[]) ?? []) : qrAccounts
-    if (!qrResult.error) setQrAccounts(nextQrAccounts)
+    const nextAccounts = !qrResult.error ? ((qrResult.data as BankAccountRow[]) ?? []) : accounts
+    const nextQrAccounts = !qrResult.error
+      ? nextAccounts.filter((a): a is QrAccount & BankAccountRow => !!a.qr_code_url)
+      : qrAccounts
+    if (!qrResult.error) {
+      setAccounts(nextAccounts)
+      setQrAccounts(nextQrAccounts)
+    }
 
     if (balanceResult.error || !balanceResult.data) {
       setNotFound(true)
@@ -188,7 +199,8 @@ export function BankDetailPanel({
       interestEarned: nextInterestEarned,
       tax: nextTax,
       years: nextYears,
-      qrAccounts: nextQrAccounts
+      qrAccounts: nextQrAccounts,
+      accounts: nextAccounts
     })
   }
 
@@ -248,6 +260,10 @@ export function BankDetailPanel({
   // clicked. That function already nets tax out and excludes years whose
   // interest was already fully distributed.
   const undistributed = pendingGroups.reduce((sum, g) => sum + g.totalAmount, 0)
+  // Bank detail is keyed by bank name; the admin sheets act on that name's
+  // first account, same account the old inline Edit form on the list used.
+  const primaryAccount = accounts[0] ?? null
+  const accountLabel = accounts.length === 1 ? accounts[0].account_name : null
 
   return (
     <div>
@@ -255,8 +271,25 @@ export function BankDetailPanel({
         ← Bank
       </button>
 
-      <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink mb-1">{bank}</h1>
-      <p className="text-[13px] text-ink-soft mb-6">Current balance and interest history for this account.</p>
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink min-w-0 break-words">{bank}</h1>
+        {isAdmin && primaryAccount && (
+          <button
+            onClick={() => setAdminSheet("actions")}
+            aria-label="Bank admin actions"
+            className="shrink-0 mt-1 w-9 h-9 rounded-full border border-hairline text-ink-soft hover:text-ink hover:bg-paper-2 transition-colors flex items-center justify-center"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-[18px] h-[18px]">
+              <circle cx="5" cy="12" r="1.8" />
+              <circle cx="12" cy="12" r="1.8" />
+              <circle cx="19" cy="12" r="1.8" />
+            </svg>
+          </button>
+        )}
+      </div>
+      <p className="text-[13px] text-ink-soft mb-6">
+        {accountLabel ?? "Current balance and interest history for this account."}
+      </p>
 
       <div className="card px-5 pt-4 pb-3.5">
         <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Current Balance</p>
@@ -289,6 +322,57 @@ export function BankDetailPanel({
         />
       )}
 
+      {adminSheet === "actions" && primaryAccount && (
+        <Sheet title={bank} onClose={() => setAdminSheet(null)}>
+          <div className="card">
+            <div className="px-5">
+              <AdminActionRow
+                label="Edit bank details"
+                hint="Bank name and account name"
+                onClick={() => setAdminSheet("edit")}
+              />
+              <AdminActionRow
+                label={primaryAccount.qr_code_url ? "Update scan-to-pay QR" : "Add scan-to-pay QR"}
+                hint={primaryAccount.qr_code_url ? "Replace the QR members pay into" : "No QR code yet"}
+                onClick={() => setAdminSheet("qr")}
+                last
+              />
+            </div>
+          </div>
+        </Sheet>
+      )}
+
+      {adminSheet === "edit" && primaryAccount && (
+        <BankAccountSheet
+          account={primaryAccount}
+          onClose={() => setAdminSheet(null)}
+          onSaved={(bankName) => {
+            onChanged?.()
+            if (bankName !== bank) onRenamed?.(bankName)
+            else load()
+          }}
+        />
+      )}
+
+      {adminSheet === "qr" && primaryAccount && (
+        <BankQrSheet
+          account={primaryAccount}
+          onClose={() => setAdminSheet(null)}
+          onUpdated={() => {
+            load()
+            onChanged?.()
+          }}
+        />
+      )}
+
+      {reviewGroup && (
+        <DistributeInterestSheet
+          group={reviewGroup}
+          onClose={() => setReviewGroup(null)}
+          onDistributed={handleDistributed}
+        />
+      )}
+
       <div className="card p-5 mt-4">
         <InfoBox label="Interest">
           <InfoRow label="Interest Earned" value={`+₱${fmt(interestEarned)}`} valueClass="text-sage" />
@@ -307,34 +391,38 @@ export function BankDetailPanel({
 
       {isAdmin && pendingGroups.length > 0 && (
         <section className="mt-8">
-          <h2 className="font-display text-lg font-medium text-ink mb-1">Pending Distribution</h2>
+          <h2 className="font-display text-lg font-medium text-ink mb-1">Ready to Distribute</h2>
           <p className="text-[13px] text-ink-soft mb-3">
-            Approved interest that hasn't been split across members yet.
+            ₱{fmt(undistributed)}{" "}approved interest that hasn&apos;t been split across members yet.
           </p>
-          <div className="flex flex-col gap-3">
-            {pendingGroups.map((group) => (
-              <div key={group.year} className="card px-5 pt-4 pb-4">
-                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">
-                  {group.year}
-                </p>
-                <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink">
-                  ₱{fmt(Math.abs(group.totalAmount))}
-                </p>
-                <p className="text-[12px] text-ink-soft mt-1.5">
-                  {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"} combined into
-                  one lump sum
-                </p>
-                <button
-                  className="w-full mt-4 bg-ink text-paper px-4 py-3 rounded-sm text-sm font-medium disabled:opacity-50"
-                  onClick={() => handleDistribute(group)}
-                  disabled={distributingYear === group.year}
+          <div className="card">
+            <div className="px-5">
+              {pendingGroups.map((group, i) => (
+                <div
+                  key={group.year}
+                  className={`py-3 flex items-center justify-between gap-3 ${
+                    i !== pendingGroups.length - 1 ? "border-b border-dashed border-hairline" : ""
+                  }`}
                 >
-                  {distributingYear === group.year ? "Distributing..." : "Distribute"}
-                </button>
-              </div>
-            ))}
+                  <div className="min-w-0">
+                    <p className="text-sm text-ink font-medium">{group.year}</p>
+                    <p className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
+                      ₱{fmt(group.totalAmount)}
+                    </p>
+                    <p className="text-[11px] text-ink-soft">
+                      {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setReviewGroup(group)}
+                    className="shrink-0 bg-ink text-paper px-3.5 py-2 rounded-sm text-[13px] font-medium"
+                  >
+                    Review &amp; distribute
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
-          {distributeError && <p className="mt-3 text-xs text-rust">{distributeError}</p>}
         </section>
       )}
 
@@ -381,5 +469,32 @@ export function BankDetailPanel({
         )}
       </section>
     </div>
+  )
+}
+
+function AdminActionRow({
+  label,
+  hint,
+  onClick,
+  last = false
+}: {
+  label: string
+  hint: string
+  onClick: () => void
+  last?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full py-3.5 flex items-center justify-between gap-3 text-left ${
+        last ? "" : "border-b border-dashed border-hairline"
+      }`}
+    >
+      <div className="min-w-0">
+        <p className="text-sm text-ink font-medium">{label}</p>
+        <p className="text-[11px] text-ink-soft">{hint}</p>
+      </div>
+      <span className="text-ink-soft shrink-0">›</span>
+    </button>
   )
 }

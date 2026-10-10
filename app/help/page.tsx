@@ -558,13 +558,13 @@ const adminSections: FaqSection[] = [
         )
       },
       {
-        q: "What's the Distrib. tab?",
+        q: "How do I distribute bank interest or edit a bank?",
         a: (
           <p>
-            Bank interest that&apos;s been approved but not yet split across members. Tap{" "}
-            <strong>Distribute</strong>{" "}
-            on a bank/year to divide it proportionally by each member&apos;s value in the fund at
-            that time.
+            Go to <strong>Breakdown</strong> → <strong>Banks</strong>. Banks with interest waiting to be split
+            are listed at the top — open one and tap <strong>Review &amp; distribute</strong> to see each
+            member&apos;s share before confirming. To rename a bank or change its scan-to-pay QR, open the bank
+            and tap <strong>⋯</strong> next to its name. <strong>+ Add Bank</strong> is on the Banks list.
           </p>
         )
       },
