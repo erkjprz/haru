@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase"
 import { Sheet } from "@/app/components/Sheet"
 import { getBankQrPublicUrl } from "@/lib/bankQrUrl"
 import {
+  bankInterestDistributionDate,
   distributeBankInterestGroup,
   previewBankInterestGroup,
   type BankInterestSharePreview,
@@ -283,6 +284,12 @@ export function DistributeInterestSheet({
   }
 
   const noRecipients = shares !== null && shares.length === 0 && group.totalAmount !== 0
+  // Dec 31 of the group's year once it's over (see bankInterestDistributionDate).
+  const recordedOn = new Date(`${bankInterestDistributionDate(group.year)}T00:00:00`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  })
 
   return (
     <Sheet
@@ -299,7 +306,7 @@ export function DistributeInterestSheet({
             {distributing ? "Distributing..." : `Distribute ₱${fmt(group.totalAmount)}`}
           </button>
           <p className="text-[11px] text-ink-soft text-center mt-2">
-            Credits each member&apos;s share now. This can&apos;t be undone.
+            Recorded as of {recordedOn}, split by balances on that date. This can&apos;t be undone.
           </p>
         </div>
       }
@@ -324,7 +331,7 @@ export function DistributeInterestSheet({
       {!previewError && shares === null && <p className="text-sm text-ink-soft py-6 text-center">Calculating shares…</p>}
       {noRecipients && (
         <p className="text-sm text-rust">
-          No member has a positive value in the fund today, so there&apos;s no one to split this across.
+          No member has a positive value in the fund as of {recordedOn}, so there&apos;s no one to split this across.
         </p>
       )}
 
