@@ -29,6 +29,8 @@ import { ordinalDay } from "@/lib/loanFormat"
 import { dateOnly } from "@/lib/currentValue"
 import { getCachedTransactionFormData, loadTransactionFormData } from "@/lib/transactionFormPrefetch"
 import { snapshotInvestmentHold } from "@/lib/snapshotHold"
+import { fetchBankBalances, groupImpacts, txnImpact, type TxnImpact } from "@/lib/bankImpact"
+import { BankImpactPreview } from "@/app/components/BankImpact"
 
 const MISSING_DUE_DAY_MESSAGE = "Pick the day of the month the payment is due."
 const MISSING_PAYOUT_MESSAGE = "Add bank or e-wallet details, or a QR code, so we know where to send the money."
@@ -286,6 +288,59 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   // on-behalf-of submission has everything a normal approved entry needs
   // and can safely skip the queue instead of landing pending.
   const willAutoApproveOnBehalf = isAdmin && !!onBehalfOfId && (isContribution || isLoanPayment)
+  // An admin's entry is approved the moment it's saved (fund-level types,
+  // their own Investment Return, or an on-behalf Contribution/Loan Payment)
+  // -- so, same as approving from the queue, show which bank balance it
+  // moves before Submit and where that balance landed after.
+  const recordsApproved = isAdmin && (isAdminFundEntry || isInvestmentReturn || willAutoApproveOnBehalf)
+  const entryImpact = (() => {
+    if (!recordsApproved || !isValidPositiveNumber(amount)) return null
+    const amountNum = Number(amount)
+    const accountFor = (id: string) => banks.find((b) => b.id === id)
+    if (isBankTransfer) {
+      // Two legs, exactly like v_cash_ledger's Internal Transfer rows.
+      const legs: TxnImpact[] = []
+      const from = accountFor(bankId)
+      const to = accountFor(toBankId)
+      if (from) legs.push({ kind: "bank", bank: from.account_name || from.bank_name, delta: -amountNum })
+      if (to) legs.push({ kind: "bank", bank: to.account_name || to.bank_name, delta: amountNum })
+      return legs.length ? { ...groupImpacts(legs), noneReason: undefined } : null
+    }
+    if (isInvestmentEntry && !investmentId) return null
+    const selectedInvestment = investmentsList.find((inv) => inv.investment_id === investmentId)
+    const impact = txnImpact(
+      {
+        transaction_id: "new",
+        amount: isExpense || isInvestment ? -amountNum : amountNum,
+        affects_cash: isInvestmentEntry ? (selectedInvestment?.affects_cash ? 1 : 0) : 1
+      },
+      accountFor(bankId)
+    )
+    return { ...groupImpacts([impact]), noneReason: impact.kind === "none" ? impact.reason : undefined }
+  })()
+
+  const [bankBalances, setBankBalances] = useState<Record<string, number> | null>(null)
+  useEffect(() => {
+    if (!isAdmin) return
+    fetchBankBalances()
+      .then(setBankBalances)
+      .catch(() => setBankBalances(null))
+  }, [isAdmin])
+
+  // Appended to the saved toast -- each moved bank's balance re-fetched
+  // after the write, so the admin doesn't need to go check the Banks page.
+  async function balanceSuffix(): Promise<string> {
+    if (!entryImpact || entryImpact.banks.length === 0) return ""
+    try {
+      const fresh = await fetchBankBalances()
+      const money = (n: number) =>
+        `${n < 0 ? "-" : ""}₱${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      return ` · ${entryImpact.banks.map((b) => `${b.bank} now ${money(fresh[b.bank] ?? 0)}`).join(" · ")}`
+    } catch {
+      return ""
+    }
+  }
+
   const showSaveAsDefault =
     (isContribution && (contributionDefault == null || contributionBankDefault == null)) ||
     (isLoanPayment && (loanPaymentDefault == null || loanPaymentBankDefault == null))
@@ -544,7 +599,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         setMessage(error.message)
         return
       }
-      onSaved(`Investment return ${status === "pending" ? "submitted" : "recorded"}`)
+      onSaved(`Investment return ${status === "pending" ? "submitted" : "recorded"}${await balanceSuffix()}`)
       return
     }
 
@@ -571,7 +626,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         setMessage(error.message)
         return
       }
-      onSaved("Bank transfer recorded")
+      onSaved(`Bank transfer recorded${await balanceSuffix()}`)
       return
     }
 
@@ -624,7 +679,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       }
 
       setSubmitting(false)
-      onSaved(`${classification} recorded${holdWarning}`)
+      onSaved(`${classification} recorded${holdWarning}${await balanceSuffix()}`)
       return
     }
 
@@ -682,7 +737,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     setSubmitting(false)
 
     const typeLabel = selectedType === "loan_payment" ? "Loan repayment" : selectedType === "withdrawal" ? "Withdrawal" : "Contribution"
-    onSaved(`${typeLabel} ${status === "pending" ? "submitted" : "recorded"}${defaultSaveWarning}`)
+    onSaved(`${typeLabel} ${status === "pending" ? "submitted" : "recorded"}${defaultSaveWarning}${await balanceSuffix()}`)
   }
 
   const fmt = (n: number) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -820,6 +875,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       footer={
         <>
           {message && <p className="text-sm text-rust mb-3">{message}</p>}
+          {entryImpact && (
+            <BankImpactPreview {...entryImpact} balances={bankBalances} title="Bank balance after saving" className="mb-3" />
+          )}
           <div className="flex items-center gap-3">
             {isStepped && formStep === 2 && (
               <button

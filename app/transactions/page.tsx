@@ -191,6 +191,17 @@ function SearchBox({ onDebouncedChange }: { onDebouncedChange: (value: string) =
   )
 }
 
+// The bank(s) a row moves, keyed exactly as v_cash_ledger keys them --
+// COALESCE(t.bank, account_name, bank_name) for the row's own bank, plus the
+// destination for an Internal Transfer -- so ?bank= lists the same entries
+// that bank's balance is built from.
+type BankRef = { bank_name?: string | null; account_name?: string | null } | null | undefined
+function ledgerBankKeys(t: { bank?: string | null; from_bank_account?: BankRef; to_bank_account?: BankRef }): string[] {
+  const from = t.bank || t.from_bank_account?.account_name || t.from_bank_account?.bank_name || null
+  const to = t.to_bank_account?.account_name || t.to_bank_account?.bank_name || null
+  return [from, to].filter((k): k is string => !!k)
+}
+
 export default function TransactionsPage() {
   return (
     <Suspense fallback={null}>
@@ -221,6 +232,9 @@ function TransactionsPageInner() {
   // other filter, doesn't try to keep syncing back to the URL after that.
   const [loanFilter, setLoanFilter] = useState(() => searchParams.get("loan") || "")
   const [investmentFilter, setInvestmentFilter] = useState(() => searchParams.get("investment") || "")
+  // ?bank= arrives from a bank's "View all" -- matched against the same
+  // bank key v_cash_ledger uses, so it lists exactly what moved that bank.
+  const [bankFilter, setBankFilter] = useState(() => searchParams.get("bank") || "")
 
   // Default the member filter to whoever's logged in, once, the first time
   // their member record becomes available. After that we leave the filter
@@ -237,7 +251,9 @@ function TransactionsPageInner() {
   // there's cached data to paint immediately instead of a loading skeleton.
   const defaultMemberAppliedRef = useRef(!!member)
   const [selectedMemberId, setSelectedMemberId] = useState(() =>
-    member && !searchParams.get("loan") && !searchParams.get("investment") ? member.member_id : ""
+    member && !searchParams.get("loan") && !searchParams.get("investment") && !searchParams.get("bank")
+      ? member.member_id
+      : ""
   )
   const [selectedType, setSelectedType] = useState("")
   const [dateFrom, setDateFrom] = useState("")
@@ -319,7 +335,7 @@ function TransactionsPageInner() {
   // the dependency array.
   useEffect(() => {
     if (member && !defaultMemberAppliedRef.current) {
-      if (!loanFilter && !investmentFilter) {
+      if (!loanFilter && !investmentFilter && !bankFilter) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedMemberId(member.member_id)
       }
@@ -335,6 +351,7 @@ function TransactionsPageInner() {
     setDateTo("")
     setLoanFilter("")
     setInvestmentFilter("")
+    setBankFilter("")
   }
 
   // Built from what's actually in the loaded data rather than the full
@@ -344,6 +361,10 @@ function TransactionsPageInner() {
   const typeOptions = Array.from(new Set(transactions.map((t) => t.classification))).sort(
     (a, b) => (typeLabels[a] || a).localeCompare(typeLabels[b] || b)
   )
+
+  // Same idea for banks -- every bank any loaded row touches, by its
+  // ledger key (see ledgerBankKeys).
+  const bankOptions = Array.from(new Set(transactions.flatMap(ledgerBankKeys))).sort((a, b) => a.localeCompare(b))
 
   // Building each row's searchable text means several toLocaleDateString
   // calls per row -- cheap in bulk, but the *first* time this ever runs
@@ -393,6 +414,7 @@ function TransactionsPageInner() {
       const typeMatch = selectedType ? t.classification === selectedType : true
       const loanMatch = loanFilter ? t.loan_id === loanFilter : true
       const investmentMatch = investmentFilter ? t.investment_id === investmentFilter : true
+      const bankMatch = bankFilter ? ledgerBankKeys(t).includes(bankFilter) : true
 
       const ts = effectiveDate(t).getTime()
       const fromMatch = dateFrom ? ts >= new Date(`${dateFrom}T00:00:00`).getTime() : true
@@ -405,7 +427,7 @@ function TransactionsPageInner() {
       // substring.
       const searchMatch = searchWords.length === 0 || searchWords.every((word) => t._searchHaystack.includes(word))
 
-      return memberMatch && typeMatch && loanMatch && investmentMatch && fromMatch && toMatch && searchMatch
+      return memberMatch && typeMatch && loanMatch && investmentMatch && bankMatch && fromMatch && toMatch && searchMatch
     })
   }, [
     searchableTransactions,
@@ -413,6 +435,7 @@ function TransactionsPageInner() {
     selectedType,
     loanFilter,
     investmentFilter,
+    bankFilter,
     dateFrom,
     dateTo,
     debouncedSearchQuery
@@ -461,6 +484,7 @@ function TransactionsPageInner() {
       label: `Investment: ${investmentFilterLabel}`,
       onClear: () => setInvestmentFilter("")
     },
+    bankFilter && { key: "bank", label: `Bank: ${bankFilter}`, onClear: () => setBankFilter("") },
     selectedMemberId && { key: "member", label: selectedMemberLabel, onClear: () => setSelectedMemberId("") },
     selectedType && {
       key: "type",
@@ -868,6 +892,22 @@ function TransactionsPageInner() {
                   {typeOptions.map((type) => (
                     <option key={type} value={type}>
                       {typeLabels[type] || type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Bank</p>
+                <select
+                  value={bankFilter}
+                  onChange={(e) => setBankFilter(e.target.value)}
+                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3.5 text-sm text-ink focus:outline-none focus:border-gold"
+                >
+                  <option value="">All Banks</option>
+                  {bankOptions.map((bank) => (
+                    <option key={bank} value={bank}>
+                      {bank}
                     </option>
                   ))}
                 </select>
