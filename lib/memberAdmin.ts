@@ -77,13 +77,3 @@ export async function reactivatePerson(id: string, isBorrower: boolean) {
     .eq("member_id", id)
   check(error)
 }
-
-// Links a pending signup to one of the fund's existing (never-claimed)
-// member records, so their contributions, loans and investments carry over.
-export async function linkSignupToMember(pendingId: string, targetId: string) {
-  const { error } = await supabase.rpc("admin_link_member", {
-    p_pending_member_id: pendingId,
-    p_target_member_id: targetId
-  })
-  check(error)
-}

@@ -141,8 +141,8 @@ export function usePersonParam(ready: boolean, open: (id: string) => void) {
 
 type PersonLoan = { loan_id: string; loan: string; status: string; outstanding: number; principal: number }
 
-// A person's loans -- on their own account, or on the old loan record
-// linked to them -- each opening that loan on the Loans page.
+// A person's loans -- on their own account, or on a pre-app loan record
+// already linked to them -- each opening that loan on the Loans page.
 function PersonLoans({ memberId }: { memberId: string }) {
   const router = useRouter()
   const [loans, setLoans] = useState<PersonLoan[] | null>(null)
@@ -216,19 +216,16 @@ function PersonLoans({ memberId }: { memberId: string }) {
 export type PersonAction = { label: string; hint: string; onClick: () => void; danger?: boolean }
 
 // Everything about one person in one place: who they are, what's waiting
-// on them (children -- e.g. approving a signup), their loans, then every
+// on them (children -- e.g. an error from the last action), their loans, then every
 // action an admin can take on them.
 export function PersonSheet({
   person,
-  note,
   actions,
   onClose,
   footer,
   children
 }: {
   person: Person
-  // A one-line fact under the email, e.g. the loan record they're linked to.
-  note?: string
   actions: PersonAction[]
   onClose: () => void
   footer?: ReactNode
@@ -250,7 +247,6 @@ export function PersonSheet({
             {person.role !== "borrower" && person.status === "approved" && person.gain_sharing_eligible === false &&
               " · not sharing in gains"}
           </p>
-          {note && <p className="text-xs text-sage font-mono mt-1">{note}</p>}
         </div>
         <PersonTag person={person} />
       </div>

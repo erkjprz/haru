@@ -25,18 +25,12 @@ import {
 import {
   addPerson,
   deactivatePerson,
-  linkSignupToMember,
   reactivatePerson,
   type Person
 } from "@/lib/memberAdmin"
 
-// Two independent loaders (loadMembers/loadUnclaimed) get two independent
-// cache keys -- same global admin data for any admin, no per-user scoping
-// needed.
+// Same global admin data for any admin -- no per-user scoping needed.
 const MEMBERS_CACHE_KEY = "admin:members-list"
-const UNCLAIMED_MEMBERS_CACHE_KEY = "admin:unclaimed-members"
-
-type UnclaimedMember = { member_id: string; name: string }
 
 type Filter = "all" | "members" | "borrowers" | "pending" | "inactive"
 
@@ -44,11 +38,9 @@ export default function AdminMembersPage() {
   const router = useRouter()
   const { loading: authLoading, member: authMember } = useAuth()
   const cachedMembers = readCache<Person[]>(MEMBERS_CACHE_KEY)
-  const cachedUnclaimedMembers = readCache<UnclaimedMember[]>(UNCLAIMED_MEMBERS_CACHE_KEY)
 
   const [members, setMembers] = useState<Person[]>(cachedMembers ?? [])
   const [loaded, setLoaded] = useState(Boolean(cachedMembers))
-  const [unclaimedMembers, setUnclaimedMembers] = useState<UnclaimedMember[]>(cachedUnclaimedMembers ?? [])
 
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("all")
@@ -65,7 +57,6 @@ export default function AdminMembersPage() {
   const [editing, setEditing] = useState(false)
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [linkChoice, setLinkChoice] = useState("")
 
   async function loadMembers() {
     const { data } = await supabase
@@ -77,13 +68,6 @@ export default function AdminMembersPage() {
     setMembers(next)
     setLoaded(true)
     writeCache(MEMBERS_CACHE_KEY, next)
-  }
-
-  async function loadUnclaimed() {
-    const { data } = await supabase.rpc("list_unclaimed_members")
-    const next = data ?? []
-    setUnclaimedMembers(next)
-    writeCache(UNCLAIMED_MEMBERS_CACHE_KEY, next)
   }
 
   useEffect(() => {
@@ -100,7 +84,6 @@ export default function AdminMembersPage() {
     }
 
     loadMembers()
-    loadUnclaimed()
   }, [authLoading, authMember, router])
 
   usePersonParam(loaded, openPerson)
@@ -109,7 +92,6 @@ export default function AdminMembersPage() {
     setOpenId(id)
     setEditing(false)
     setConfirmingDeactivate(false)
-    setLinkChoice("")
     setError("")
   }
 
@@ -198,7 +180,7 @@ export default function AdminMembersPage() {
         p.role === "borrower"
           ? {
               label: "Approve borrower",
-              hint: "Approve and link their old loan record, on the Borrowers page",
+              hint: "Approve them on the Borrowers page",
               onClick: () => router.push(`/admin/borrowers?person=${p.member_id}`)
             }
           : {
@@ -351,43 +333,6 @@ export default function AdminMembersPage() {
 
       {openPersonRow && !editing && !confirmingDeactivate && (
         <PersonSheet person={openPersonRow} actions={actionsFor(openPersonRow)} onClose={closePerson}>
-          {openPersonRow.status === "pending" && openPersonRow.role !== "borrower" && unclaimedMembers.length > 0 && (
-            <div className="mt-5">
-              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
-                Already a member?
-              </p>
-              <div className="card overflow-hidden">
-                <FieldRow icon={<PersonIcon />}>
-                  <select className={rowSelectClass} value={linkChoice} onChange={(e) => setLinkChoice(e.target.value)}>
-                    <option value="">Link to an existing member…</option>
-                    {unclaimedMembers.map((m) => (
-                      <option key={m.member_id} value={m.member_id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                  {linkChoice && (
-                    <button
-                      className="shrink-0 bg-ink text-paper px-3.5 py-1.5 rounded-full text-sm font-semibold disabled:opacity-50"
-                      disabled={busy}
-                      onClick={() => {
-                        const target = linkChoice
-                        run(async () => {
-                          await linkSignupToMember(openPersonRow.member_id, target)
-                          loadUnclaimed()
-                        }, "Linked")
-                      }}
-                    >
-                      {busy ? "Linking…" : "Link"}
-                    </button>
-                  )}
-                </FieldRow>
-              </div>
-              <p className="px-1 pt-2 text-xs text-ink-soft">
-                Their contributions, loans and investments carry over to this account.
-              </p>
-            </div>
-          )}
           {error && <p className="mt-4 px-1 text-sm text-rust">{error}</p>}
         </PersonSheet>
       )}
