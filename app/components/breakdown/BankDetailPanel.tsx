@@ -26,10 +26,21 @@ import {
   type BankAccountRow
 } from "@/app/components/breakdown/BankAdminSheets"
 import { readCache, writeCache } from "@/lib/cache"
+import { recentlyApprovedIds } from "@/lib/bankImpact"
+import { TRANSACTION_TYPE_LABELS as TXN_TYPE_LABELS } from "@/lib/transactionLabels"
 
 type YearRow = { year: string; amount: number; memberCount: number }
 type QrAccount = { id: string; account_name: string | null; qr_code_url: string }
 type AdminSheet = "actions" | "edit" | "qr" | null
+type ActivityRow = {
+  key: string
+  transaction_id: string
+  date: string | null
+  label: string
+  who: string | null
+  amount: number
+  balanceAfter: number
+}
 
 type BankDetailSnapshot = {
   balance: number
@@ -38,6 +49,7 @@ type BankDetailSnapshot = {
   years: YearRow[]
   qrAccounts: QrAccount[]
   accounts?: BankAccountRow[]
+  activity?: ActivityRow[]
 }
 
 export function BankDetailPanel({
@@ -78,6 +90,10 @@ export function BankDetailPanel({
   const [zoomedQr, setZoomedQr] = useState<QrAccount | null>(null)
   const [adminSheet, setAdminSheet] = useState<AdminSheet>(null)
   const [reviewGroup, setReviewGroup] = useState<PendingBankInterestGroup | null>(null)
+  const [activity, setActivity] = useState<ActivityRow[]>(cached?.activity ?? [])
+  // Read once per mount -- just-approved ids from this device's Admin queue,
+  // so they stand out here (transactions have no approved_at to go by).
+  const [justApproved] = useState(recentlyApprovedIds)
 
   async function loadPending() {
     try {
@@ -131,11 +147,24 @@ export function BankDetailPanel({
       .eq("bank_name", bank)
       .order("account_name")
 
-    const [balanceResult, interestResult, allocationsResult, qrResult] = await Promise.all([
+    // The latest entries that moved this bank's balance, newest first, in
+    // the same order v_cash_ledger itself uses -- so walking back from the
+    // current balance gives each entry's balance right after it.
+    const activityPromise = supabase
+      .from("v_cash_ledger")
+      .select("transaction_id, txn_date, description, cash_effect, leg_order")
+      .eq("bank", bank)
+      .order("txn_date", { ascending: false })
+      .order("transaction_id", { ascending: false })
+      .order("leg_order", { ascending: false })
+      .limit(10)
+
+    const [balanceResult, interestResult, allocationsResult, qrResult, activityResult] = await Promise.all([
       balancePromise,
       interestPromise,
       allocationsPromise,
-      qrPromise
+      qrPromise,
+      activityPromise
     ])
 
     const nextAccounts = !qrResult.error ? ((qrResult.data as BankAccountRow[]) ?? []) : accounts
@@ -155,6 +184,42 @@ export function BankDetailPanel({
 
     const nextBalance = Number(balanceResult.data.balance)
     setBalance(nextBalance)
+
+    let nextActivity = activity
+    if (!activityResult.error && activityResult.data) {
+      const ledger = activityResult.data as {
+        transaction_id: string
+        txn_date: string | null
+        description: string | null
+        cash_effect: number
+        leg_order: number
+      }[]
+      const ids = Array.from(new Set(ledger.map((r) => r.transaction_id)))
+      const { data: details } = ids.length
+        ? await supabase
+            .from("transactions")
+            .select("transaction_id, classification, members!transactions_member_id_fkey ( name )")
+            .in("transaction_id", ids)
+        : { data: [] }
+      type Detail = { transaction_id: string; classification: string; members: { name: string } | null }
+      const byId = new Map(((details ?? []) as unknown as Detail[]).map((d) => [d.transaction_id, d]))
+      let running = nextBalance
+      nextActivity = ledger.map((r) => {
+        const d = byId.get(r.transaction_id)
+        const row: ActivityRow = {
+          key: `${r.transaction_id}:${r.leg_order}`,
+          transaction_id: r.transaction_id,
+          date: r.txn_date,
+          label: d ? TXN_TYPE_LABELS[d.classification] ?? d.classification : r.description ?? "Transaction",
+          who: d?.members?.name ?? null,
+          amount: Number(r.cash_effect),
+          balanceAfter: Number(running.toFixed(2))
+        }
+        running -= Number(r.cash_effect)
+        return row
+      })
+      setActivity(nextActivity)
+    }
 
     let nextInterestEarned = interestEarned
     let nextTax = tax
@@ -201,7 +266,8 @@ export function BankDetailPanel({
       tax: nextTax,
       years: nextYears,
       qrAccounts: nextQrAccounts,
-      accounts: nextAccounts
+      accounts: nextAccounts,
+      activity: nextActivity
     })
   }
 
@@ -457,6 +523,64 @@ export function BankDetailPanel({
           <p className="text-sm text-ink-soft text-center py-8 card">
             No interest has been distributed for this bank yet.
           </p>
+        )}
+      </section>
+
+      {/* What's moved this balance lately -- answers "did that approval
+          land?" right where the balance is, instead of cross-checking the
+          ledger. Entries approved from this device in the last 30 minutes
+          are marked. */}
+      <section className="mt-8">
+        <h2 className="font-display text-lg font-medium text-ink mb-1">Recent Activity</h2>
+        <p className="text-[13px] text-ink-soft mb-3">The latest entries that changed this balance.</p>
+
+        {activity.length > 0 ? (
+          <div className="card px-5">
+            {activity.map((a, i) => {
+              const isNew = justApproved.has(a.transaction_id)
+              return (
+                <div
+                  key={a.key}
+                  className={`py-3 flex justify-between items-center gap-3 ${
+                    i !== activity.length - 1 ? "border-b border-dashed border-hairline" : ""
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="text-sm text-ink truncate">{a.label}</p>
+                      {isNew && (
+                        <span className="shrink-0 text-[9px] uppercase tracking-wide font-mono text-sage border border-sage/40 rounded px-1.5 py-0.5">
+                          Just approved
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-ink-soft font-mono truncate">
+                      {a.date
+                        ? new Date(`${a.date}T00:00:00`).toLocaleDateString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric"
+                          })
+                        : "No date"}
+                      {a.who ? ` · ${a.who}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end shrink-0">
+                    <p
+                      className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                        a.amount < 0 ? "text-rust" : "text-sage"
+                      }`}
+                    >
+                      {a.amount < 0 ? "-" : "+"}₱{fmt(Math.abs(a.amount))}
+                    </p>
+                    <p className="text-[11px] text-ink-soft font-mono whitespace-nowrap">bal ₱{fmt(a.balanceAfter)}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-soft text-center py-8 card">No activity recorded for this bank yet.</p>
         )}
       </section>
     </div>

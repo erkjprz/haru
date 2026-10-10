@@ -548,6 +548,18 @@ const adminSections: FaqSection[] = [
         )
       },
       {
+        q: "How do I know an approval landed in the right bank?",
+        a: (
+          <p>
+            Before you approve, each review (and the bulk Approve bar) shows which bank balance it moves and what
+            it&apos;ll be afterwards — or that it won&apos;t move any bank, if it has no bank set or doesn&apos;t
+            affect cash. Afterwards, a confirmation at the top of the queue shows each bank&apos;s new balance; tap{" "}
+            <strong>View →</strong> to open that bank, where <strong>Recent Activity</strong> lists the latest
+            entries with the ones you just approved marked.
+          </p>
+        )
+      },
+      {
         q: "What happens when I approve a loan release?",
         a: (
           <p>

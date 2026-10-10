@@ -22,6 +22,15 @@ import { approveBorrowerMember } from "@/lib/approveBorrower"
 import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
 import { readCache, writeCache } from "@/lib/cache"
+import {
+  fetchBankBalances,
+  groupImpacts,
+  rememberApproved,
+  txnImpact,
+  type ImpactTxn,
+  type TxnImpact
+} from "@/lib/bankImpact"
+import { ApprovalResultCard, BankImpactPreview, type ApprovalResult } from "@/app/components/BankImpact"
 import { MessagesButton } from "@/app/components/admin/MessagesButton"
 
 // Same in/out vocabulary as the transaction edit page's FLOW map -- money
@@ -151,6 +160,12 @@ export default function AdminPage() {
   const [actionError, setActionError] = useState("")
   const [openReceiptUrl, setOpenReceiptUrl] = useState<string | null>(null)
 
+  // Current bank balances, for the before → after line on each approval,
+  // and the confirmation shown once an approval goes through -- so an admin
+  // doesn't have to check the Banks page by hand afterwards.
+  const [bankBalances, setBankBalances] = useState<Record<string, number> | null>(null)
+  const [lastApproval, setLastApproval] = useState<ApprovalResult | null>(null)
+
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState("")
 
@@ -204,6 +219,12 @@ export default function AdminPage() {
       supabase.from("borrowers").select("borrower_id, name").is("member_id", null).order("name"),
       supabase.from("borrowers").select("name, member_id").not("member_id", "is", null)
     ])
+
+    // Separate from the Promise.all above so a failure here only loses the
+    // balance preview, never the queue itself.
+    fetchBankBalances()
+      .then(setBankBalances)
+      .catch(() => setBankBalances(null))
 
     setPendingMembers(pendingMembersRes.data ?? [])
     setUnclaimedMembers(unclaimedMembersRes.data ?? [])
@@ -315,11 +336,46 @@ export default function AdminPage() {
     return fileName
   }
 
+  // The bank a pending row will count toward once approved -- for a
+  // Withdrawal/Loan Release that's the bank the admin has picked, which
+  // isn't on the row yet.
+  function impactFor(t: ImpactTxn & { classification: string }): TxnImpact {
+    const choice =
+      t.classification === "Member Withdrawal"
+        ? withdrawalBankSelections[t.transaction_id]
+        : t.classification === "Loan Release"
+        ? loanReleaseBankSelections[t.transaction_id]
+        : undefined
+    const chosen = choice ? banks.find((b) => b.id === choice) : undefined
+    return txnImpact(t, chosen)
+  }
+
+  // Re-fetches balances after the write, so the confirmation shows where
+  // each bank actually landed rather than the pre-approval prediction.
+  async function showApprovalResult(ids: string[], impacts: TxnImpact[]) {
+    rememberApproved(ids)
+    const { banks: deltas, unaffected } = groupImpacts(impacts)
+    let fresh: Record<string, number> | null = null
+    try {
+      fresh = await fetchBankBalances()
+      setBankBalances(fresh)
+    } catch {
+      fresh = null
+    }
+    setLastApproval({
+      count: ids.length,
+      unaffected,
+      banks: deltas.map((d) => ({ ...d, after: fresh ? fresh[d.bank] ?? 0 : null }))
+    })
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
   async function approveTransaction(transactionId: string) {
     const txn = pendingTransactions.find((t) => t.transaction_id === transactionId)
     if (!txn) return
 
     setActionError("")
+    const impact = impactFor(txn)
 
     // Tracked across both receipt-uploading branches below so the catch
     // handler can clean up an orphaned upload if the write after it fails.
@@ -387,6 +443,7 @@ export default function AdminPage() {
       return next
     })
     loadData()
+    showApprovalResult([transactionId], [impact])
   }
 
   async function rejectTransaction(transactionId: string, reason: string) {
@@ -496,8 +553,13 @@ export default function AdminPage() {
       )
     }
 
+    // Only what actually got approved counts toward the confirmation.
+    const approvedIds = (data ?? []).map((r) => r.transaction_id as string)
+    const approvedTxns = pendingTransactions.filter((t) => approvedIds.includes(t.transaction_id))
+
     setSelectedBulkIds(new Set())
     loadData()
+    if (approvedIds.length > 0) showApprovalResult(approvedIds, approvedTxns.map(impactFor))
   }
 
   async function approveBulkSelected() {
@@ -769,6 +831,16 @@ export default function AdminPage() {
 
           {actionError && <p className="mt-4 text-sm text-rust">{actionError}</p>}
 
+          {lastApproval && (
+            <div className="mt-4">
+              <ApprovalResultCard
+                result={lastApproval}
+                onViewBank={(bank) => router.push(`/fund-breakdown?tab=banks&bank=${encodeURIComponent(bank)}`)}
+                onDismiss={() => setLastApproval(null)}
+              />
+            </div>
+          )}
+
           {/* Filter chips -- narrow which groups show below, replacing the
               old two-tier tab system. Single-select, matching the pill
               vocabulary used elsewhere (TypePickerSheet, filter rows). */}
@@ -851,6 +923,9 @@ export default function AdminPage() {
                           <p className="text-xs text-ink-soft truncate">
                             {typeLabels[t.classification] || t.classification}
                             {t.bank_accounts && ` · ${t.bank_accounts.account_name || t.bank_accounts.bank_name}`}
+                            {impactFor(t).kind === "none" && (
+                              <span className="text-gold"> · won&apos;t change a bank balance</span>
+                            )}
                           </p>
                         </div>
                         <div className="shrink-0 text-right">
@@ -884,6 +959,18 @@ export default function AdminPage() {
                           the tick-then-bulk-bar flow below. */}
                       {bulkTransactions.length === 1 && (
                         <div className="px-4 pb-3.5">
+                          {(() => {
+                            const impact = impactFor(t)
+                            const grouped = groupImpacts([impact])
+                            return (
+                              <BankImpactPreview
+                                {...grouped}
+                                noneReason={impact.kind === "none" ? impact.reason : undefined}
+                                balances={bankBalances}
+                                className="mb-3"
+                              />
+                            )
+                          })()}
                           <button
                             type="button"
                             onClick={() => approveBulkIds([t.transaction_id])}
@@ -899,7 +986,16 @@ export default function AdminPage() {
                 </div>
 
                 {bulkTransactions.length > 1 && selectedBulkIds.size > 0 && (
-                  <div className="sticky bottom-4 z-10 mt-3 flex items-center justify-between gap-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg">
+                  <div className="sticky bottom-4 z-10 mt-3 bg-ink text-paper rounded-md px-4 py-3 shadow-lg">
+                    <BankImpactPreview
+                      {...groupImpacts(
+                        bulkTransactions.filter((t) => selectedBulkIds.has(t.transaction_id)).map(impactFor)
+                      )}
+                      balances={bankBalances}
+                      compact
+                      className="mb-2.5 pb-2.5 border-b border-paper/20"
+                    />
+                    <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-mono">{selectedBulkIds.size} selected</span>
                     <div className="flex gap-2">
                       <button
@@ -915,6 +1011,7 @@ export default function AdminPage() {
                       >
                         {bulkApproving ? "Approving..." : `Approve ${selectedBulkIds.size}`}
                       </button>
+                    </div>
                     </div>
                   </div>
                 )}
@@ -1145,6 +1242,20 @@ export default function AdminPage() {
           ) : (
             <>
               {actionError && <p className="text-sm text-rust mb-3">{actionError}</p>}
+              {(() => {
+                const impact = impactFor(t)
+                // A Withdrawal/Loan Release has no bank until one is picked --
+                // nothing meaningful to preview yet.
+                if (impact.kind === "none" && impact.reason === "no_bank" && (needsWithdrawalBank || needsLoanBank)) return null
+                return (
+                  <BankImpactPreview
+                    {...groupImpacts([impact])}
+                    noneReason={impact.kind === "none" ? impact.reason : undefined}
+                    balances={bankBalances}
+                    className="mb-3"
+                  />
+                )
+              })()}
               <div className="flex items-center gap-3">
                 <button
                   type="button"
