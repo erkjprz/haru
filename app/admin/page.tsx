@@ -133,6 +133,7 @@ export default function AdminPage() {
   // (see showSearchFix below), so it isn't one of these.
   const [filter, setFilter] = useState<Filter>("all")
   const [showSearchFix, setShowSearchFix] = useState(false)
+  const [showManage, setShowManage] = useState(false)
 
   // Each row across every group below is a compact summary that opens its
   // full form in a sheet instead of expanding in place -- one row's form
@@ -819,23 +820,27 @@ export default function AdminPage() {
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden relative">
         <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
-                Administration
-              </div>
-              <h1 className="font-display text-3xl font-semibold">
-                {totalCount > 0 ? (
-                  <>
-                    <span className="text-gold">{totalCount}</span> waiting on you
-                  </>
-                ) : (
-                  "All caught up"
-                )}
-              </h1>
-            </div>
+          {/* Page actions share the eyebrow's line, so the title below gets
+              the full width instead of wrapping beside three buttons. */}
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono">Administration</div>
 
             <div className="shrink-0 flex items-center gap-2">
+            {/* Members and Borrowers pages -- always reachable from here,
+                whatever's in the queue below. */}
+            <button
+              onClick={() => setShowManage(true)}
+              className="shrink-0 inline-flex items-center justify-center w-9 h-9 text-ink-soft border border-hairline rounded-full hover:bg-paper-2 hover:text-ink transition-colors"
+              title="Manage members and borrowers"
+              aria-label="Manage members and borrowers"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                <circle cx="9" cy="8" r="3.2" />
+                <path d="M3.5 19c.6-3.1 2.8-5 5.5-5s4.9 1.9 5.5 5" />
+                <path d="M15.5 5.2a3 3 0 0 1 0 5.6M17.5 14.3c1.7.6 2.8 2.2 3 4.7" />
+              </svg>
+            </button>
+
             <MessagesButton />
 
             {/* Page-level action, not scoped to any group -- always exports
@@ -858,6 +863,15 @@ export default function AdminPage() {
             </button>
             </div>
           </div>
+          <h1 className="font-display text-3xl font-semibold">
+            {totalCount > 0 ? (
+              <>
+                <span className="text-gold">{totalCount}</span> waiting on you
+              </>
+            ) : (
+              "All caught up"
+            )}
+          </h1>
           {exportError && (
             <p className="mt-1.5 text-xs text-rust text-right">Couldn&apos;t export: {exportError}</p>
           )}
@@ -1192,39 +1206,6 @@ export default function AdminPage() {
               </section>
             )}
 
-            {/* ---- Manage ---- */}
-            {/* Always here, whatever's in the queue -- these used to sit in
-                the Signups filter's empty state, the only way to reach the
-                Members and Borrowers pages from Admin. */}
-            <section>
-              <span className="text-sm font-semibold">Manage</span>
-              <div className="mt-3 card">
-                <div className="px-5">
-                  <button
-                    type="button"
-                    onClick={() => router.push("/admin/members")}
-                    className="w-full py-3.5 flex items-center justify-between gap-3 text-left border-b border-dashed border-hairline"
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-sm text-ink font-medium">Members</span>
-                      <span className="block text-[11px] text-ink-soft">Add, edit or deactivate members</span>
-                    </span>
-                    <span className="text-ink-soft shrink-0">›</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push("/admin/borrowers")}
-                    className="w-full py-3.5 flex items-center justify-between gap-3 text-left"
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-sm text-ink font-medium">Borrowers</span>
-                      <span className="block text-[11px] text-ink-soft">Approve borrowers and link their loans</span>
-                    </span>
-                    <span className="text-ink-soft shrink-0">›</span>
-                  </button>
-                </div>
-              </div>
-            </section>
           </div>
         </div>
 
@@ -1800,6 +1781,36 @@ export default function AdminPage() {
       )}
 
       {showSearchFix && <SearchFixSheet onClose={() => setShowSearchFix(false)} />}
+      {showManage && (
+        <Sheet title="Manage" onClose={() => setShowManage(false)}>
+          <div className="card">
+            <div className="px-5">
+              <button
+                type="button"
+                onClick={() => router.push("/admin/members")}
+                className="w-full py-3.5 flex items-center justify-between gap-3 text-left border-b border-dashed border-hairline"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm text-ink font-medium">Members</span>
+                  <span className="block text-[11px] text-ink-soft">Add, edit or deactivate members</span>
+                </span>
+                <span className="text-ink-soft shrink-0">›</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/admin/borrowers")}
+                className="w-full py-3.5 flex items-center justify-between gap-3 text-left"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm text-ink font-medium">Borrowers</span>
+                  <span className="block text-[11px] text-ink-soft">Approve borrowers and link their loans</span>
+                </span>
+                <span className="text-ink-soft shrink-0">›</span>
+              </button>
+            </div>
+          </div>
+        </Sheet>
+      )}
       {openReceiptUrl && <ReceiptModal path={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
   )
