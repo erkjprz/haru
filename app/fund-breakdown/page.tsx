@@ -2071,7 +2071,7 @@ function BanksPanel({
               interest is ready to split across members.
             </p>
             <p className="text-[12px] text-ink-soft mt-1.5">
-              Wait until December&apos;s interest and tax are logged for both BDO and Maya before distributing.
+              Before distributing, make sure December&apos;s interest and tax are logged for BDO and Maya.
             </p>
             <div className="mt-2">
               {dueBanks.map((b) => (
