@@ -182,7 +182,17 @@ function FundBreakdownHub() {
               }}
             />
           )}
-          {activeTab === "investments" && <InvestmentsPanel isAdmin={member.role === "admin"} />}
+          {activeTab === "investments" && (
+            <InvestmentsPanel
+              isAdmin={member.role === "admin"}
+              // ?investment= opens straight into that investment -- the
+              // link on a transaction's detail sheet.
+              initialInvestment={searchParams.get("investment")}
+              onInvestmentClosed={() => {
+                if (searchParams.get("investment")) router.replace("/fund-breakdown?tab=investments", { scroll: false })
+              }}
+            />
+          )}
         </div>
       </main>
     </>
@@ -2200,12 +2210,20 @@ type Investment = {
 // Fund-wide list of investments, not scoped to a member.
 const INVESTMENTS_CACHE_KEY = "fund-breakdown:investments"
 
-function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
+function InvestmentsPanel({
+  isAdmin,
+  initialInvestment,
+  onInvestmentClosed
+}: {
+  isAdmin: boolean
+  initialInvestment?: string | null
+  onInvestmentClosed?: () => void
+}) {
   const cachedInvestments = readCache<Investment[]>(INVESTMENTS_CACHE_KEY)
   const [loading, setLoading] = useState(!cachedInvestments)
   const [investments, setInvestments] = useState<Investment[]>(cachedInvestments ?? [])
   const [loadError, setLoadError] = useState("")
-  const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(null)
+  const [selectedInvestmentId, setSelectedInvestmentId] = useState<string | null>(initialInvestment ?? null)
   // Restores the scroll position lost to InvestmentDetailPanel's own
   // scroll-to-top-on-open when the user backs out of it.
   const scrollPosRef = useRef(0)
@@ -2266,7 +2284,10 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
     return (
       <InvestmentDetailPanel
         investmentId={selectedInvestmentId}
-        onBack={() => setSelectedInvestmentId(null)}
+        onBack={() => {
+          setSelectedInvestmentId(null)
+          onInvestmentClosed?.()
+        }}
         onChanged={load}
       />
     )

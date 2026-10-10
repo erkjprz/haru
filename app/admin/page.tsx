@@ -284,15 +284,19 @@ export default function AdminPage() {
     checkAdminAccess()
   }, [authLoading, member, router])
 
-  // ?signup= (the Members page's "Review signup") opens that signup's
-  // review sheet once the queue has loaded, then drops the param.
+  // ?signup= (the Members page's "Review signup") and ?review= (a pending
+  // transaction's "Review in Admin queue") open that item's review sheet
+  // once the queue has loaded, then drop the param in place.
   useEffect(() => {
     if (dataLoading) return
-    const id = new URLSearchParams(window.location.search).get("signup")
-    if (!id) return
-    if (pendingMembers.some((m) => m.member_id === id)) setReviewingSignupId(id)
-    else if (borrowerMembers.some((m) => m.member_id === id && m.status === "pending")) setReviewingBorrowerId(id)
-    router.replace("/admin", { scroll: false })
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get("signup")
+    const txnId = params.get("review")
+    if (!id && !txnId) return
+    if (id && pendingMembers.some((m) => m.member_id === id)) setReviewingSignupId(id)
+    else if (id && borrowerMembers.some((m) => m.member_id === id && m.status === "pending")) setReviewingBorrowerId(id)
+    if (txnId && pendingTransactions.some((t) => t.transaction_id === txnId)) setReviewingTxnId(txnId)
+    window.history.replaceState(null, "", "/admin")
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoading])
 
