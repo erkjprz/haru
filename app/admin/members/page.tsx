@@ -20,6 +20,7 @@ import {
   PersonSheet,
   matchesSearch,
   usePersonParam,
+  useActiveLoansByMember,
   type PersonAction
 } from "@/app/components/admin/People"
 import {
@@ -69,6 +70,8 @@ export default function AdminMembersPage() {
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false)
   const [busy, setBusy] = useState(false)
 
+  const { byMember: activeLoans, reload: reloadLoans } = useActiveLoansByMember()
+
   async function loadMembers() {
     const { data } = await supabase
       .from("members")
@@ -95,7 +98,8 @@ export default function AdminMembersPage() {
     }
 
     loadMembers()
-  }, [authLoading, authMember, router])
+    reloadLoans()
+  }, [authLoading, authMember, router, reloadLoans])
 
   usePersonParam(loaded, openPerson)
 
@@ -353,7 +357,12 @@ export default function AdminMembersPage() {
       )}
 
       {openPersonRow && !editing && !confirmingDeactivate && (
-        <PersonSheet person={openPersonRow} actions={actionsFor(openPersonRow)} onClose={closePerson}>
+        <PersonSheet
+          person={openPersonRow}
+          loans={activeLoans[openPersonRow.member_id] ?? []}
+          actions={actionsFor(openPersonRow)}
+          onClose={closePerson}
+        >
           {error && <p className="mt-4 px-1 text-sm text-rust">{error}</p>}
         </PersonSheet>
       )}

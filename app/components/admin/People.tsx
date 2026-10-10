@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Sheet } from "@/app/components/Sheet"
 import { AdminActionRow } from "@/app/components/breakdown/AdminMenu"
 import { FieldRow, PersonIcon, MailIcon, StatusIcon, rowSelectClass, rowInputClass } from "@/app/components/TransactionFormUI"
 import { updatePerson, type Person } from "@/lib/memberAdmin"
+import { readCache, writeCache } from "@/lib/cache"
 
 // The pieces behind the admin Members page: one row per person, one sheet
 // per person with every action on them, and the edit / confirm sheets those
@@ -141,44 +142,49 @@ export function usePersonParam(ready: boolean, open: (id: string) => void) {
   }, [ready])
 }
 
-type PersonLoan = { loan_id: string; loan: string; outstanding: number }
+export type PersonLoan = { loan_id: string; loan: string; outstanding: number }
 
-// A person's active loans -- on their own account, or on a pre-app loan
-// record already linked to them -- each opening that loan on the Loans page.
-// Requested and closed loans are left out; the Loans page has those.
-function PersonLoans({ memberId }: { memberId: string }) {
-  const router = useRouter()
-  const [loans, setLoans] = useState<PersonLoan[] | null>(null)
+const ACTIVE_LOANS_CACHE_KEY = "admin:active-loans-by-member"
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const { data: record } = await supabase.from("borrowers").select("borrower_id").eq("member_id", memberId)
-      const borrowerIds = (record ?? []).map((r) => r.borrower_id as string)
-      const owner = [`member_id.eq.${memberId}`, ...borrowerIds.map((id) => `borrower_id.eq.${id}`)].join(",")
-      const { data: ids } = await supabase.from("loans").select("loan_id").or(owner)
-      const loanIds = (ids ?? []).map((l) => l.loan_id as string)
-      if (loanIds.length === 0) {
-        if (!cancelled) setLoans([])
-        return
-      }
-      const { data } = await supabase
+// Every person's active loans, keyed by member -- loans on their own
+// account, plus any on a pre-app loan record already linked to them.
+// Loaded once with the page (and cached) so a person's sheet opens with
+// them already in place, instead of fetching on open and shifting the
+// sheet once they arrive. Requested and closed loans are left out; the
+// Loans page has those.
+export function useActiveLoansByMember() {
+  const [byMember, setByMember] = useState<Record<string, PersonLoan[]>>(
+    () => readCache<Record<string, PersonLoan[]>>(ACTIVE_LOANS_CACHE_KEY) ?? {}
+  )
+
+  const reload = useCallback(async () => {
+    const [{ data: loans }, { data: records }, { data: summary }] = await Promise.all([
+      supabase.from("loans").select("loan_id, member_id, borrower_id").eq("status", "active"),
+      supabase.from("borrowers").select("borrower_id, member_id").not("member_id", "is", null),
+      supabase
         .from("v_loan_summary")
         .select("loan_id, loan, outstanding")
-        .in("loan_id", loanIds)
         .eq("status", "active")
         .order("start_date", { ascending: false })
-      if (!cancelled) setLoans((data as PersonLoan[]) ?? [])
+    ])
+    const memberByRecord = new Map((records ?? []).map((r) => [r.borrower_id as string, r.member_id as string]))
+    const ownerByLoan = new Map(
+      (loans ?? []).map((l) => [l.loan_id as string, (l.member_id ?? memberByRecord.get(l.borrower_id)) as string | undefined])
+    )
+    const next: Record<string, PersonLoan[]> = {}
+    for (const l of (summary as PersonLoan[]) ?? []) {
+      const owner = ownerByLoan.get(l.loan_id)
+      if (owner) (next[owner] ??= []).push(l)
     }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [memberId])
+    setByMember(next)
+    writeCache(ACTIVE_LOANS_CACHE_KEY, next)
+  }, [])
 
-  if (loans === null) {
-    return <div className="mt-5 h-14 rounded-md bg-paper-2 animate-pulse" />
-  }
+  return { byMember, reload }
+}
+
+function PersonLoans({ loans }: { loans: PersonLoan[] }) {
+  const router = useRouter()
   if (loans.length === 0) return null
 
   return (
@@ -217,12 +223,15 @@ export type PersonAction = { label: string; hint: string; onClick: () => void; d
 // action an admin can take on them.
 export function PersonSheet({
   person,
+  loans,
   actions,
   onClose,
   footer,
   children
 }: {
   person: Person
+  // From useActiveLoansByMember -- an empty list hides the section.
+  loans: PersonLoan[]
   actions: PersonAction[]
   onClose: () => void
   footer?: ReactNode
@@ -250,7 +259,7 @@ export function PersonSheet({
 
       {children}
 
-      <PersonLoans memberId={person.member_id} />
+      <PersonLoans loans={loans} />
 
       {actions.length > 0 && (
         <div className="card px-4 mt-5">
