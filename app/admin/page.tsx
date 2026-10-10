@@ -301,6 +301,18 @@ export default function AdminPage() {
     checkAdminAccess()
   }, [authLoading, member, router])
 
+  // ?signup= (the Members page's "Review signup") opens that signup's
+  // review sheet once the queue has loaded, then drops the param.
+  useEffect(() => {
+    if (dataLoading) return
+    const id = new URLSearchParams(window.location.search).get("signup")
+    if (!id) return
+    if (pendingMembers.some((m) => m.member_id === id)) setReviewingSignupId(id)
+    else if (borrowerMembers.some((m) => m.member_id === id && m.status === "pending")) setReviewingBorrowerId(id)
+    router.replace("/admin", { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoading])
+
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 

@@ -159,7 +159,18 @@ function FundBreakdownHub() {
             </>
           )}
 
-          {activeTab === "loans" && <LoansPanel myMemberId={member.member_id} isAdmin={member.role === "admin"} />}
+          {activeTab === "loans" && (
+            <LoansPanel
+              myMemberId={member.member_id}
+              isAdmin={member.role === "admin"}
+              // ?loan= opens straight into that loan -- the loan rows on an
+              // admin's person sheet (Members / Borrowers pages).
+              initialLoan={searchParams.get("loan")}
+              onLoanClosed={() => {
+                if (searchParams.get("loan")) router.replace("/fund-breakdown?tab=loans", { scroll: false })
+              }}
+            />
+          )}
           {activeTab === "banks" && (
             <BanksPanel
               isAdmin={member.role === "admin"}
@@ -1464,12 +1475,22 @@ function loanYear(loan: Loan): number {
 // Every loan the fund has released -- fund-wide, not scoped to a member.
 const LOANS_CACHE_KEY = "fund-breakdown:loans"
 
-function LoansPanel({ myMemberId, isAdmin }: { myMemberId: string | null; isAdmin: boolean }) {
+function LoansPanel({
+  myMemberId,
+  isAdmin,
+  initialLoan,
+  onLoanClosed
+}: {
+  myMemberId: string | null
+  isAdmin: boolean
+  initialLoan?: string | null
+  onLoanClosed?: () => void
+}) {
   const cachedLoans = readCache<Loan[]>(LOANS_CACHE_KEY)
   const [loading, setLoading] = useState(!cachedLoans)
   const [loans, setLoans] = useState<Loan[]>(cachedLoans ?? [])
   const [loadError, setLoadError] = useState("")
-  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(initialLoan ?? null)
   const [closedYear, setClosedYear] = useState<number | "all" | null>(null)
   // Bumped by LoanDetailPanel after an admin action so the list (and its
   // Needs action card) is fresh when backing out of the loan.
@@ -1525,7 +1546,10 @@ function LoansPanel({ myMemberId, isAdmin }: { myMemberId: string | null; isAdmi
     return (
       <LoanDetailPanel
         loanId={selectedLoanId}
-        onBack={() => setSelectedLoanId(null)}
+        onBack={() => {
+          setSelectedLoanId(null)
+          onLoanClosed?.()
+        }}
         onChanged={() => setReloadKey((k) => k + 1)}
       />
     )

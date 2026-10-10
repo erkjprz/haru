@@ -7,9 +7,22 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonCardList } from "@/app/components/Skeleton"
 import { approveBorrowerMember, linkBorrowerRecord } from "@/lib/approveBorrower"
+import { deactivatePerson, reactivatePerson, type Person } from "@/lib/memberAdmin"
 import { readCache, writeCache } from "@/lib/cache"
-import { Sheet } from "@/app/components/Sheet"
+import { Toast } from "@/app/components/Toast"
 import { FieldRow, PersonIcon, rowSelectClass } from "@/app/components/TransactionFormUI"
+import {
+  ConfirmSheet,
+  DeactivateBody,
+  EditPersonSheet,
+  FilterChips,
+  PeopleSearch,
+  PersonRow,
+  PersonSheet,
+  matchesSearch,
+  usePersonParam,
+  type PersonAction
+} from "@/app/components/admin/People"
 
 // Same global borrower-approvals queue for any admin -- no per-user
 // scoping needed, so a single fixed cache key covers everyone.
@@ -34,6 +47,10 @@ type BorrowerQueueSnapshot = {
   linkedNameByMemberId: Record<string, string>
 }
 
+type Filter = "all" | "pending" | "active" | "inactive"
+
+const asPerson = (m: BorrowerMember): Person => ({ ...m, role: "borrower", gain_sharing_eligible: false })
+
 export default function AdminBorrowersPage() {
   const router = useRouter()
   const { loading: authLoading, member } = useAuth()
@@ -53,8 +70,13 @@ export default function AdminBorrowersPage() {
   )
   const [linkChoice, setLinkChoice] = useState<Record<string, string>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [message, setMessage] = useState("")
+  const [error, setError] = useState("")
+  const [toast, setToast] = useState("")
   const [openId, setOpenId] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [confirmingDeactivate, setConfirmingDeactivate] = useState(false)
+  const [search, setSearch] = useState("")
+  const [filter, setFilter] = useState<Filter>("all")
 
   async function loadData() {
     // Only show the blocking loader on a true cold start -- if we already
@@ -105,47 +127,85 @@ export default function AdminBorrowersPage() {
     loadData().then(() => setDataLoading(false))
   }, [authLoading, member, router])
 
-  async function approveMember(memberId: string) {
-    setBusyId(memberId)
-    setMessage("")
+  usePersonParam(!checkingAccess, openPerson)
 
+  function openPerson(id: string) {
+    setOpenId(id)
+    setEditing(false)
+    setConfirmingDeactivate(false)
+    setError("")
+  }
+
+  function closePerson() {
+    setOpenId(null)
+    setEditing(false)
+    setConfirmingDeactivate(false)
+  }
+
+  // Runs one write for a borrower, then reports it and refreshes.
+  async function run(memberId: string, write: () => Promise<void>, done: string) {
+    setBusyId(memberId)
+    setError("")
     try {
-      await approveBorrowerMember(memberId, linkChoice[memberId])
+      await write()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Something went wrong.")
+      setError(err instanceof Error ? err.message : "Something went wrong.")
       setBusyId(null)
       return
     }
-
     setBusyId(null)
-    setOpenId(null)
+    closePerson()
+    setToast(done)
     await loadData()
   }
 
-  async function linkOnly(memberId: string) {
-    const chosenBorrowerId = linkChoice[memberId]
-    if (!chosenBorrowerId) return
+  const counts = {
+    all: borrowerMembers.length,
+    pending: borrowerMembers.filter((m) => m.status === "pending").length,
+    active: borrowerMembers.filter((m) => m.status === "approved").length,
+    inactive: borrowerMembers.filter((m) => m.status === "inactive").length
+  }
+  const chips = [
+    { id: "all" as Filter, label: "All", count: counts.all },
+    ...(counts.pending > 0 ? [{ id: "pending" as Filter, label: "Pending", count: counts.pending }] : []),
+    { id: "active" as Filter, label: "Active", count: counts.active },
+    { id: "inactive" as Filter, label: "Inactive", count: counts.inactive }
+  ]
+  const activeFilter: Filter = filter === "pending" && counts.pending === 0 ? "all" : filter
+  const rank = (m: BorrowerMember) => (m.status === "pending" ? 0 : m.status === "inactive" ? 2 : 1)
+  const visible = borrowerMembers
+    .filter((m) => {
+      if (activeFilter === "pending") return m.status === "pending"
+      if (activeFilter === "active") return m.status === "approved"
+      if (activeFilter === "inactive") return m.status === "inactive"
+      return true
+    })
+    .filter((m) => matchesSearch(asPerson(m), search))
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
 
-    setBusyId(memberId)
-    setMessage("")
+  const open = borrowerMembers.find((m) => m.member_id === openId) ?? null
 
-    try {
-      await linkBorrowerRecord(memberId, chosenBorrowerId)
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Something went wrong.")
-      setBusyId(null)
-      return
+  function actionsFor(m: BorrowerMember): PersonAction[] {
+    const actions: PersonAction[] = [
+      { label: "Edit details", hint: "Name, email, role, status", onClick: () => setEditing(true) }
+    ]
+    if (m.status === "approved") {
+      actions.push({ label: "Message", hint: `Open a chat with ${m.name}`, onClick: () => router.push(`/messages?to=${m.member_id}`) })
     }
-
-    setBusyId(null)
-    setOpenId(null)
-    await loadData()
-  }
-
-  const statusColor: Record<string, string> = {
-    approved: "text-sage border-sage",
-    pending: "text-gold border-gold",
-    inactive: "text-rust border-rust"
+    actions.push({ label: "View as", hint: "See the app the way they see it", onClick: () => router.push(`/admin/view-as/${m.member_id}`) })
+    if (m.status === "inactive") {
+      actions.push({
+        label: busyId === m.member_id ? "Reactivating…" : "Reactivate",
+        hint: "Let them sign in again",
+        onClick: () => {
+          if (busyId) return
+          run(m.member_id, () => reactivatePerson(m.member_id, true), `${m.name} reactivated`)
+        }
+      })
+    } else if (m.status === "approved") {
+      actions.push({ label: "Deactivate", hint: "Lock them out of the app", danger: true, onClick: () => setConfirmingDeactivate(true) })
+    }
+    return actions
   }
 
   if (checkingAccess) {
@@ -172,139 +232,150 @@ export default function AdminBorrowersPage() {
           >
             ← Admin
           </button>
-          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">
-            Administration
-          </div>
+          <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono mb-2">Administration</div>
           <h1 className="font-display text-4xl font-semibold">Borrowers</h1>
-          <p className="text-sm text-ink-soft mt-2 max-w-md">
-            Borrower accounts can only see and manage their own loan. Approve a new signup, and if
-            they already have a loan on record from before they had an account, link it here so
-            they can see it.
-          </p>
+          <p className="text-sm text-ink-soft mt-2 max-w-md">Accounts that can only see and repay their own loan.</p>
 
-          {message && <p className="mt-4 text-sm text-rust">{message}</p>}
+          {error && !openId && <p className="mt-4 text-sm text-rust">{error}</p>}
 
-          <div className="mt-8 space-y-3">
-            {borrowerMembers.map((m) => {
+          {borrowerMembers.length > 0 && (
+            <>
+              <div className="mt-6">
+                <PeopleSearch value={search} onChange={setSearch} />
+              </div>
+              <div className="mt-3">
+                <FilterChips chips={chips} active={activeFilter} onChange={setFilter} />
+              </div>
+            </>
+          )}
+
+          <div className="mt-4 space-y-2">
+            {visible.map((m) => {
               const linkedName = linkedNameByMemberId[m.member_id]
-              // Nothing left to do on an approved, already-linked borrower --
-              // no sheet to open, just a static row.
-              const hasAction = m.status === "pending" || !linkedName
-
-              const row = (
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-display text-lg truncate">{m.name}</div>
-                    <div className="text-sm text-ink-soft truncate">{m.email || "No email"}</div>
-                    {linkedName && <p className="mt-1 text-xs text-sage font-mono">Linked to loan record: {linkedName}</p>}
-                  </div>
-                  <div className="shrink-0 flex flex-col items-end gap-1">
-                    <span
-                      className={`text-[10px] uppercase font-mono border rounded-full px-2 py-0.5 ${
-                        statusColor[m.status] ?? "text-ink-soft border-hairline"
-                      }`}
-                    >
-                      {m.status}
-                    </span>
-                    {hasAction && <span className="text-[11px] font-mono text-gold">Review →</span>}
-                  </div>
-                </div>
-              )
-
-              return hasAction ? (
-                <button
+              return (
+                <PersonRow
                   key={m.member_id}
-                  type="button"
-                  onClick={() => setOpenId(m.member_id)}
-                  className="w-full text-left card p-5"
-                >
-                  {row}
-                </button>
-              ) : (
-                <div key={m.member_id} className="card p-5">
-                  {row}
-                </div>
+                  person={asPerson(m)}
+                  hideRole
+                  detail={
+                    m.status === "pending"
+                      ? `${m.email || "No email"} · waiting for approval`
+                      : linkedName
+                        ? `${m.email || "No email"} · linked loan record`
+                        : m.email || "No email"
+                  }
+                  onClick={() => openPerson(m.member_id)}
+                />
               )
             })}
 
-            {borrowerMembers.length === 0 && (
-              <p className="text-sm text-ink-soft">No borrower accounts yet.</p>
+            {borrowerMembers.length === 0 && <p className="text-sm text-ink-soft">No borrower accounts yet.</p>}
+            {borrowerMembers.length > 0 && visible.length === 0 && (
+              <p className="text-sm text-ink-soft px-1 py-2">{search ? `No one matches "${search}".` : "No one here."}</p>
             )}
           </div>
         </div>
       </main>
 
-      {openId && (() => {
-        const m = borrowerMembers.find((row) => row.member_id === openId)
-        if (!m) return null
-        const linkedName = linkedNameByMemberId[m.member_id]
+      {open && !editing && !confirmingDeactivate && (() => {
+        const linkedName = linkedNameByMemberId[open.member_id]
+        const choice = linkChoice[open.member_id] ?? ""
+        const busy = busyId === open.member_id
 
-        const primaryAction =
-          m.status === "pending" ? (
+        // Pending: approve (optionally linking an old loan record in the
+        // same step). Approved but unlinked: link on its own.
+        const footer =
+          open.status === "pending" ? (
             <button
               type="button"
               className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
-              onClick={() => approveMember(m.member_id)}
-              disabled={busyId === m.member_id}
+              onClick={() =>
+                run(open.member_id, () => approveBorrowerMember(open.member_id, linkChoice[open.member_id]), `${open.name} approved`)
+              }
+              disabled={busy}
             >
-              {busyId === m.member_id ? "Approving…" : linkChoice[m.member_id] ? "Approve & Link" : "Approve"}
+              {busy ? "Approving…" : choice ? "Approve & link" : "Approve"}
             </button>
-          ) : (
-            !linkedName &&
-            linkChoice[m.member_id] && (
-              <button
-                type="button"
-                className="w-full border border-hairline text-ink-soft px-6 py-3.5 rounded-full text-base font-semibold disabled:opacity-50"
-                onClick={() => linkOnly(m.member_id)}
-                disabled={busyId === m.member_id}
-              >
-                {busyId === m.member_id ? "Linking…" : "Link"}
-              </button>
-            )
-          )
+          ) : !linkedName && choice ? (
+            <button
+              type="button"
+              className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg disabled:opacity-50 disabled:shadow-none"
+              onClick={() => run(open.member_id, () => linkBorrowerRecord(open.member_id, choice), "Loan record linked")}
+              disabled={busy}
+            >
+              {busy ? "Linking…" : "Link loan record"}
+            </button>
+          ) : undefined
 
         return (
-          <Sheet title="Borrower request" onClose={() => setOpenId(null)} footer={primaryAction}>
-            <div className="card overflow-hidden">
-              <FieldRow icon={<PersonIcon />}>
-                <span className="flex-1 min-w-0 text-sm">
-                  <span className="font-semibold text-ink">{m.name}</span>
-                </span>
-              </FieldRow>
-            </div>
-            <p className="px-1 pt-2 text-xs text-ink-soft">{m.email || "No email"}</p>
-
-            {linkedName ? (
-              <p className="mt-4 text-xs text-sage font-mono px-1">Linked to loan record: {linkedName}</p>
-            ) : (
-              <div className="mt-4">
+          <PersonSheet
+            person={asPerson(open)}
+            note={linkedName ? `Linked to loan record: ${linkedName}` : undefined}
+            actions={actionsFor(open)}
+            onClose={closePerson}
+            footer={footer}
+          >
+            {!linkedName && open.status !== "inactive" && unclaimedBorrowers.length > 0 && (
+              <div className="mt-5">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
-                  Link to an existing loan record (optional)
+                  Had a loan before signing up?
                 </p>
                 <div className="card overflow-hidden">
                   <FieldRow icon={<PersonIcon />}>
                     <select
                       className={rowSelectClass}
-                      value={linkChoice[m.member_id] ?? ""}
-                      onChange={(e) =>
-                        setLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
-                      }
+                      value={choice}
+                      onChange={(e) => setLinkChoice((prev) => ({ ...prev, [open.member_id]: e.target.value }))}
                     >
-                      <option value="">No existing loan record</option>
+                      <option value="">No old loan record</option>
                       {unclaimedBorrowers.map((b) => (
                         <option key={b.borrower_id} value={b.borrower_id}>
                           {b.name}
                         </option>
                       ))}
                     </select>
-                    <span className="text-ink-soft text-xs shrink-0 pointer-events-none">▾</span>
                   </FieldRow>
                 </div>
+                <p className="px-1 pt-2 text-xs text-ink-soft">Linking lets them see that loan&apos;s history.</p>
               </div>
             )}
-          </Sheet>
+            {error && <p className="mt-4 px-1 text-sm text-rust">{error}</p>}
+          </PersonSheet>
         )
       })()}
+
+      {open && editing && (
+        <EditPersonSheet
+          person={asPerson(open)}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            closePerson()
+            setToast("Saved")
+            loadData()
+          }}
+          onError={(msg) => {
+            setEditing(false)
+            setError(msg)
+          }}
+        />
+      )}
+
+      {open && confirmingDeactivate && (
+        <ConfirmSheet
+          title={`Deactivate ${open.name}?`}
+          confirmLabel="Deactivate"
+          busyLabel="Deactivating…"
+          danger
+          busy={busyId === open.member_id}
+          onClose={() => setConfirmingDeactivate(false)}
+          onConfirm={() => run(open.member_id, () => deactivatePerson(open.member_id), `${open.name} deactivated`)}
+        >
+          <DeactivateBody person={asPerson(open)} />
+          {error && <p className="text-rust">{error}</p>}
+        </ConfirmSheet>
+      )}
+
+      {toast && <Toast message={toast} onDone={() => setToast("")} />}
     </>
   )
 }
