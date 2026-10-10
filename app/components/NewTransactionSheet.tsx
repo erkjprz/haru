@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { Sheet } from "@/app/components/Sheet"
@@ -122,6 +122,10 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [qrDragActive, setQrDragActive] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState("")
+  // A Withdrawal flags a missing payout by outlining the "Where should we
+  // send it?" card itself rather than with a footer message.
+  const [payoutMissing, setPayoutMissing] = useState(false)
+  const payoutFieldRef = useRef<HTMLDivElement>(null)
 
   const [interestType, setInterestType] = useState<InterestType>("rate")
   const [interestRate, setInterestRate] = useState("")
@@ -271,6 +275,10 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   // picking who a submission is "for".
   const isAdminFundEntry = isBankInterest || isExpense || isBankTransfer || isInvestment
   const supportsOnBehalfOf = isContribution || selectedType === "withdrawal" || isLoanRequest || isLoanPayment
+  const isWithdrawal = selectedType === "withdrawal"
+  // Both get paid out by an admin after approval, so both ask where the
+  // money should go.
+  const needsPayout = isLoanRequest || isWithdrawal
   const isStepped = isLoanRequest
   const needsReceipt = selectedType !== "withdrawal" && selectedType !== "loan_request"
   const needsBank = isContribution || isLoanPayment || isInvestmentEntry || isBankInterest || isExpense || isBankTransfer
@@ -297,6 +305,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   // longer applies -- clear it right away instead of on the next Continue.
   function clearMissingPayoutMessage() {
     if (message === MISSING_PAYOUT_MESSAGE) setMessage("")
+    setPayoutMissing(false)
   }
 
   function setPayoutQrFile(file: File | null) {
@@ -321,6 +330,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     setDueDay("")
     setPayoutDetails("")
     setPayoutQrFile(null)
+    setPayoutMissing(false)
     setSelectedLoanId("")
     setInvestmentId("")
     setSaveAsDefault(false)
@@ -421,8 +431,13 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       setMessage(MISSING_DUE_DAY_MESSAGE)
       return
     }
-    if (isLoanRequest && !payoutDetails.trim() && !payoutQr) {
-      setMessage(MISSING_PAYOUT_MESSAGE)
+    if (needsPayout && !payoutDetails.trim() && !payoutQr) {
+      if (isWithdrawal) {
+        setPayoutMissing(true)
+        payoutFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+      } else {
+        setMessage(MISSING_PAYOUT_MESSAGE)
+      }
       return
     }
     if (isLoanPayment && !selectedLoanId) {
@@ -454,22 +469,23 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       receiptUrl = fileName
     }
 
-    if (isLoanRequest) {
-      // Named "<member_id>-..." like receipts, so the Receipts bucket's
-      // storage policy still lets the member view their own file.
-      let qrPath: string | null = null
-      if (payoutQr) {
-        qrPath = `${effectiveMemberId}-payout-${Date.now()}-${payoutQr.name}`
-        const { error: uploadError } = await supabase.storage
-          .from("Receipts")
-          .upload(qrPath, payoutQr, { contentType: payoutQr.type })
-        if (uploadError) {
-          setMessage(uploadError.message)
-          setSubmitting(false)
-          return
-        }
+    // Named "<member_id>-..." like receipts, so the Receipts bucket's
+    // storage policy still lets the member view their own file.
+    let qrPath: string | null = null
+    if (needsPayout && payoutQr) {
+      qrPath = `${effectiveMemberId}-payout-${Date.now()}-${payoutQr.name}`
+      const { error: uploadError } = await supabase.storage
+        .from("Receipts")
+        .upload(qrPath, payoutQr, { contentType: payoutQr.type })
+      if (uploadError) {
+        if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
+        setMessage(uploadError.message)
+        setSubmitting(false)
+        return
       }
+    }
 
+    if (isLoanRequest) {
       const { error } = await supabase.rpc("submit_loan_request", {
         p_member_id: effectiveMemberId,
         p_principal: Number(amount),
@@ -626,12 +642,14 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       description,
       receipt_url: receiptUrl,
       status,
-      submitted_by: submittedByForOnBehalf
+      submitted_by: submittedByForOnBehalf,
+      ...(isWithdrawal ? { payout_details: payoutDetails.trim() || null, payout_qr_path: qrPath } : {})
     })
 
     if (error) {
       setSubmitting(false)
       if (receiptUrl) await supabase.storage.from("Receipts").remove([receiptUrl])
+      if (qrPath) await supabase.storage.from("Receipts").remove([qrPath])
       setMessage(error.message)
       return
     }
@@ -675,6 +693,40 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   }
 
   const selectedTypeOption = withFlow(ENTRY_TYPES).find((o) => o.key === selectedType)!
+
+  // Shared by Loan Request (step 1) and Withdrawal -- both are paid out by
+  // an admin after approval, using what the member enters here.
+  const payoutField = (
+    <>
+      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
+        Where should we send it?
+        <RequiredMark />
+      </p>
+      <div
+        ref={payoutFieldRef}
+        className={`card p-4 space-y-3 transition-colors ${payoutMissing ? "!border-rust" : ""}`}
+      >
+        <textarea
+          rows={2}
+          className="block w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft resize-none"
+          placeholder={"Bank or e-wallet, account name & number\ne.g. GCash · Juan Dela Cruz · 0917 123 4567"}
+          value={payoutDetails}
+          onChange={(e) => {
+            setPayoutDetails(e.target.value)
+            if (e.target.value.trim()) clearMissingPayoutMessage()
+          }}
+        />
+        <ReceiptField
+          receipt={payoutQr}
+          receiptPreview={payoutQrPreview}
+          dragActive={qrDragActive}
+          setDragActive={setQrDragActive}
+          onFileChange={setPayoutQrFile}
+          emptyLabel="Or upload QR code"
+        />
+      </div>
+    </>
+  )
 
   // First row of the Details card, matching budget-tracker's own Category
   // row -- same "Label: value" shape, same colored flow-tone badge instead
@@ -935,6 +987,8 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                     />
                   </div>
                 )}
+
+                {isWithdrawal && <div>{payoutField}</div>}
               </>
             )}
 
@@ -990,31 +1044,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                       />
                     </div>
 
-                    <div className="mt-4">
-                      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
-                        Where should we send it?
-                      </p>
-                      <div className="card p-4 space-y-3">
-                        <textarea
-                          rows={2}
-                          className="block w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft resize-none"
-                          placeholder={"Bank or e-wallet, account name & number\ne.g. GCash · Juan Dela Cruz · 0917 123 4567"}
-                          value={payoutDetails}
-                          onChange={(e) => {
-                            setPayoutDetails(e.target.value)
-                            if (e.target.value.trim()) clearMissingPayoutMessage()
-                          }}
-                        />
-                        <ReceiptField
-                          receipt={payoutQr}
-                          receiptPreview={payoutQrPreview}
-                          dragActive={qrDragActive}
-                          setDragActive={setQrDragActive}
-                          onFileChange={setPayoutQrFile}
-                          emptyLabel="Or upload QR code"
-                        />
-                      </div>
-                    </div>
+                    <div className="mt-4">{payoutField}</div>
                   </>
                 )}
 
