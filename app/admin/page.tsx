@@ -1016,12 +1016,6 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                <button
-                  onClick={() => router.push("/transactions")}
-                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
-                >
-                  View all transactions
-                </button>
               </section>
             )}
 
@@ -1034,12 +1028,6 @@ export default function AdminPage() {
               <section>
                 <span className="text-sm font-semibold">Transactions</span>
                 <p className="mt-1.5 text-xs text-ink-soft">Nothing pending right now.</p>
-                <button
-                  onClick={() => router.push("/transactions")}
-                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
-                >
-                  View all transactions
-                </button>
               </section>
             )}
 
@@ -1094,12 +1082,6 @@ export default function AdminPage() {
                   ₱{fmt(pendingAmountTotal)} pending total
                 </p>
 
-                <button
-                  onClick={() => router.push("/transactions")}
-                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-gold border border-gold/40 rounded-full px-4 py-2 hover:bg-gold/10 transition-colors"
-                >
-                  View all transactions
-                </button>
               </section>
             )}
 
@@ -1222,8 +1204,13 @@ export default function AdminPage() {
         const payoutDetails: string | null = payoutSource?.payout_details ?? null
         const payoutQrPath: string | null = payoutSource?.payout_qr_path ?? null
 
+        // Only money the admin sends out (Withdrawal/Loan Release) needs the
+        // admin's own proof of transfer -- an Investment Return's receipt is
+        // the member's to attach, and approving it uploads nothing anyway.
+        const needsAdminProof = needsWithdrawalBank || needsLoanBank
+
         const canApprove =
-          !!approvalReceipts[t.transaction_id] &&
+          (!needsAdminProof || !!approvalReceipts[t.transaction_id]) &&
           uploadingReceiptId !== t.transaction_id &&
           (!needsWithdrawalBank || !!withdrawalBankSelections[t.transaction_id]) &&
           (!needsLoanBank || !!loanReleaseBankSelections[t.transaction_id])
@@ -1378,6 +1365,7 @@ export default function AdminPage() {
               </div>
             )}
 
+            {needsAdminProof && (
             <div>
               <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Details</p>
               <div className="card divide-y divide-hairline overflow-hidden">
@@ -1452,6 +1440,7 @@ export default function AdminPage() {
                 </p>
               )}
             </div>
+            )}
 
             {(t.description || (!needsLoanBank && !needsWithdrawalBank) || t.receipt_url) && (
               <div className="mt-4 pt-4 border-t border-hairline space-y-2">
