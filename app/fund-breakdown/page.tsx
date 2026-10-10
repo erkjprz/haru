@@ -158,7 +158,7 @@ function FundBreakdownHub() {
             </>
           )}
 
-          {activeTab === "loans" && <LoansPanel myMemberId={member.member_id} />}
+          {activeTab === "loans" && <LoansPanel myMemberId={member.member_id} isAdmin={member.role === "admin"} />}
           {activeTab === "banks" && <BanksPanel isAdmin={member.role === "admin"} />}
           {activeTab === "investments" && <InvestmentsPanel isAdmin={member.role === "admin"} />}
         </div>
@@ -1453,13 +1453,16 @@ function loanYear(loan: Loan): number {
 // Every loan the fund has released -- fund-wide, not scoped to a member.
 const LOANS_CACHE_KEY = "fund-breakdown:loans"
 
-function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
+function LoansPanel({ myMemberId, isAdmin }: { myMemberId: string | null; isAdmin: boolean }) {
   const cachedLoans = readCache<Loan[]>(LOANS_CACHE_KEY)
   const [loading, setLoading] = useState(!cachedLoans)
   const [loans, setLoans] = useState<Loan[]>(cachedLoans ?? [])
   const [loadError, setLoadError] = useState("")
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
   const [closedYear, setClosedYear] = useState<number | "all" | null>(null)
+  // Bumped by LoanDetailPanel after an admin action so the list (and its
+  // Needs action card) is fresh when backing out of the loan.
+  const [reloadKey, setReloadKey] = useState(0)
   // Restores the scroll position lost to LoanDetailPanel's own
   // scroll-to-top-on-open when the user backs out of it.
   const scrollPosRef = useRef(0)
@@ -1498,7 +1501,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
 
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1508,13 +1511,36 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
   }
 
   if (selectedLoanId) {
-    return <LoanDetailPanel loanId={selectedLoanId} onBack={() => setSelectedLoanId(null)} />
+    return (
+      <LoanDetailPanel
+        loanId={selectedLoanId}
+        onBack={() => setSelectedLoanId(null)}
+        onChanged={() => setReloadKey((k) => k + 1)}
+      />
+    )
   }
 
   const openLoans = loans.filter((l) => l.status !== "closed")
   const closedLoans = loans.filter((l) => l.status === "closed")
   const totalInterestEarned = closedLoans.reduce((sum, l) => sum + l.gain, 0)
   const totalOutstanding = openLoans.reduce((sum, l) => sum + l.outstanding, 0)
+
+  // Admin-only to-do list: loans waiting on a release, loans repaid in full
+  // and ready to close, and loans behind on payments. Each row opens the
+  // loan, where its Next Step / ⋯ menu has the matching action.
+  const needsAction = isAdmin
+    ? openLoans.flatMap((l) => {
+        if (l.status === "requested") return [{ loan: l, label: "Awaiting release", tone: "text-ink-soft" }]
+        if (l.status === "active" && l.outstanding <= 0) return [{ loan: l, label: "Ready to close", tone: "text-sage" }]
+        const overdue = paymentOverdueLabel(l.status, l.repayment_frequency, l.start_date, l.last_repayment_date, l.due_day)
+        return overdue ? [{ loan: l, label: overdue, tone: "text-rust" }] : []
+      })
+    : []
+
+  function openLoan(loanId: string) {
+    scrollPosRef.current = window.scrollY
+    setSelectedLoanId(loanId)
+  }
 
   // Newest first. Defaults to the current year when it has closed loans;
   // otherwise falls back to the most recent year that does.
@@ -1559,6 +1585,39 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
         </div>
       )}
 
+      {needsAction.length > 0 && (
+        <div className="card mb-6">
+          <div className="px-5 pt-4 pb-2">
+            <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">Needs action</p>
+            <p className="text-sm text-ink">
+              {needsAction.length} loan{needsAction.length === 1 ? "" : "s"} waiting on an admin.
+            </p>
+            <div className="mt-2">
+              {needsAction.map(({ loan, label, tone }) => (
+                <button
+                  key={loan.loan_id}
+                  onClick={() => openLoan(loan.loan_id)}
+                  className="w-full py-2.5 flex items-center justify-between gap-3 text-left border-t border-dashed border-hairline"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm text-ink font-medium truncate">{loan.loan}</span>
+                    <span className={`block text-[11px] font-mono uppercase tracking-wide ${tone}`}>{label}</span>
+                  </span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-ink">
+                      {loan.status === "active" && loan.outstanding <= 0
+                        ? `+₱${fmt(loan.gain)}`
+                        : `₱${fmt(loan.status === "requested" ? loan.principal : loan.outstanding)}`}
+                    </span>
+                    <span className="text-ink-soft">→</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {loadError && <p className="mb-4 text-sm text-rust">Couldn't load loans: {loadError}</p>}
 
       {!loadError && loans.length === 0 && (
@@ -1576,10 +1635,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
                 meta={loanStatusMeta(loan)}
                 fmt={fmt}
                 isMine={loan.borrower_member_id === myMemberId}
-                onClick={() => {
-                  scrollPosRef.current = window.scrollY
-                  setSelectedLoanId(loan.loan_id)
-                }}
+                onClick={() => openLoan(loan.loan_id)}
               />
             ))}
           </div>
@@ -1624,10 +1680,7 @@ function LoansPanel({ myMemberId }: { myMemberId: string | null }) {
                 meta={loanStatusMeta(loan)}
                 fmt={fmt}
                 isMine={loan.borrower_member_id === myMemberId}
-                onClick={() => {
-                  scrollPosRef.current = window.scrollY
-                  setSelectedLoanId(loan.loan_id)
-                }}
+                onClick={() => openLoan(loan.loan_id)}
               />
             ))}
           </div>

@@ -84,3 +84,45 @@ export async function closeLoanAndDistributeGain(params: CloseLoanParams) {
 
   if (error) throw new Error(error.message)
 }
+
+export interface LoanCloseSharePreview {
+  member_id: string
+  name: string
+  amount: number
+  currentValue: number
+  pctShare: number
+}
+
+/**
+ * Read-only preview of the split closeLoanAndDistributeGain would record if
+ * the loan were closed right now -- same gain/loss, same as-of date, same
+ * computeCurrentValueByMember pool and splitProportionally rounding. Writes
+ * nothing; closeLoanAndDistributeGain still recomputes the split itself at
+ * commit time.
+ */
+export async function previewLoanClose(
+  params: Pick<CloseLoanParams, "principal" | "repaidApproved">
+): Promise<{ gainOrLoss: number; shares: LoanCloseSharePreview[] }> {
+  const gainOrLoss = params.repaidApproved - Number(params.principal)
+  const closingDate = dateOnly(new Date())
+
+  const currentValueByMember = await computeCurrentValueByMember(closingDate)
+  const shares = splitProportionally(currentValueByMember, gainOrLoss)
+
+  const { data: members, error } = await supabase.from("members").select("member_id, name")
+  if (error) throw new Error(error.message)
+  const nameById = new Map((members ?? []).map((m) => [m.member_id, m.name as string]))
+
+  return {
+    gainOrLoss,
+    shares: shares
+      .map((s) => ({
+        member_id: s.member_id,
+        name: nameById.get(s.member_id) ?? "Unknown",
+        amount: s.amount,
+        currentValue: s.currentValue,
+        pctShare: s.pctShare
+      }))
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+  }
+}
