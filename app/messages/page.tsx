@@ -43,7 +43,14 @@ function MessagesInbox() {
   const [dataLoading, setDataLoading] = useState(!cached)
   const [loadError, setLoadError] = useState("")
   const [filter, setFilter] = useState<"open" | "closed">("open")
-  const [composeOpen, setComposeOpen] = useState(false)
+  // + New's compose sheet; keyed so every open is a fresh sheet (its own
+  // slide-in, empty fields), never a reuse of one that's mid-close.
+  const [newCompose, setNewCompose] = useState<number | null>(null)
+  // The admin "?to=" deep link's sheet is closed by remembering it was
+  // dismissed, not by waiting on a navigation to clear the param -- while
+  // that navigation was in flight (slow network, installed app) the closed
+  // sheet stayed mounted invisibly over the page, blocking every tap.
+  const [dismissedTo, setDismissedTo] = useState<string | null>(null)
   const preselectedMemberId = searchParams.get("to")
 
   useEffect(() => {
@@ -73,13 +80,18 @@ function MessagesInbox() {
   }, [authLoading, member, router])
 
   // Admin deep link from the Members page opens the composer pre-filled
-  // with that member; closing it drops the param so a refresh doesn't
-  // reopen it.
-  const composeVisible = composeOpen || (isAdmin && !!preselectedMemberId)
+  // with that member. Closing it also drops the param in place (no
+  // navigation) so a refresh doesn't reopen it.
+  const deepLinkTo = isAdmin && preselectedMemberId && preselectedMemberId !== dismissedTo ? preselectedMemberId : null
+  const compose =
+    newCompose !== null ? { key: `new-${newCompose}`, to: null } : deepLinkTo ? { key: `to-${deepLinkTo}`, to: deepLinkTo } : null
 
   function closeCompose() {
-    setComposeOpen(false)
-    if (preselectedMemberId) router.replace("/messages", { scroll: false })
+    setNewCompose(null)
+    if (preselectedMemberId) {
+      setDismissedTo(preselectedMemberId)
+      window.history.replaceState(null, "", "/messages")
+    }
   }
 
   const Header = member?.role === "borrower" ? BorrowerHeader : Navbar
@@ -137,7 +149,11 @@ function MessagesInbox() {
               </p>
             </div>
             <button
-              onClick={() => setComposeOpen(true)}
+              onClick={() => {
+                // Opening + New also retires a still-pending deep link.
+                if (preselectedMemberId) closeCompose()
+                setNewCompose(Date.now())
+              }}
               className="shrink-0 bg-gold-soft text-ink px-4 py-2.5 rounded-sm text-sm font-semibold"
             >
               + New
@@ -209,11 +225,12 @@ function MessagesInbox() {
         </div>
       </main>
 
-      {composeVisible && (
+      {compose && (
         <ComposeSheet
+          key={compose.key}
           isAdmin={isAdmin}
           selfId={member.member_id}
-          preselectedMemberId={isAdmin ? preselectedMemberId : null}
+          preselectedMemberId={compose.to}
           onClose={closeCompose}
           onStarted={(id) => router.push(`/messages/${id}`)}
         />
