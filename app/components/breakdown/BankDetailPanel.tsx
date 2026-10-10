@@ -9,6 +9,7 @@
 // nothing for the remembered scroll position to race against.
 
 import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
@@ -65,6 +66,7 @@ export function BankDetailPanel({
   onChanged?: () => void
   onRenamed?: (bankName: string) => void
 }) {
+  const router = useRouter()
   const { member } = useAuth()
   const isAdmin = member?.role === "admin"
 
@@ -531,7 +533,15 @@ export function BankDetailPanel({
           ledger. Entries approved from this device in the last 30 minutes
           are marked. */}
       <section className="mt-8">
-        <h2 className="font-display text-lg font-medium text-ink mb-1">Recent Activity</h2>
+        <div className="flex items-baseline justify-between gap-3 mb-1">
+          <h2 className="font-display text-lg font-medium text-ink">Recent Activity</h2>
+          <button
+            onClick={() => router.push(`/transactions?bank=${encodeURIComponent(bank)}`)}
+            className="shrink-0 text-[13px] font-medium text-gold"
+          >
+            View all →
+          </button>
+        </div>
         <p className="text-[13px] text-ink-soft mb-3">The latest entries that changed this balance.</p>
 
         {activity.length > 0 ? (

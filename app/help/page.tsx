@@ -555,7 +555,10 @@ const adminSections: FaqSection[] = [
             it&apos;ll be afterwards — or that it won&apos;t move any bank, if it has no bank set or doesn&apos;t
             affect cash. Afterwards, a confirmation at the top of the queue shows each bank&apos;s new balance; tap{" "}
             <strong>View →</strong> to open that bank, where <strong>Recent Activity</strong> lists the latest
-            entries with the ones you just approved marked.
+            entries with the ones you just approved marked, and <strong>View all →</strong> opens Transactions
+            filtered to that bank. Entries you record yourself (Bank Interest, Expense, Bank Transfer, Investment)
+            show the same before → after line above Submit, and the saved message shows each bank&apos;s new
+            balance.
           </p>
         )
       },

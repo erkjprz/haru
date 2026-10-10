@@ -21,6 +21,7 @@ export function BankImpactPreview({
   noneReason,
   balances,
   compact = false,
+  title = "Bank balance after approving",
   className = ""
 }: {
   banks: BankDelta[]
@@ -30,6 +31,7 @@ export function BankImpactPreview({
   balances: Record<string, number> | null
   // One line per bank, on the dark bulk-approve bar.
   compact?: boolean
+  title?: string
   className?: string
 }) {
   if (banks.length === 0 && unaffected === 0) return null
@@ -62,7 +64,7 @@ export function BankImpactPreview({
 
   return (
     <div className={`rounded-md border border-hairline bg-paper px-3.5 py-2.5 space-y-1.5 ${className}`}>
-      <p className="text-[10px] uppercase tracking-[0.1em] text-ink-soft font-mono">Bank balance after approving</p>
+      <p className="text-[10px] uppercase tracking-[0.1em] text-ink-soft font-mono">{title}</p>
       {banks.map(({ bank, delta }) => {
         const before = balances?.[bank] ?? 0
         const after = Number((before + delta).toFixed(2))
