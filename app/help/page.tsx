@@ -396,9 +396,7 @@ const borrowerSections: FaqSection[] = [
         a: (
           <p>
             Only your own loan — its balance, repayment history, and terms. A borrower account can&apos;t see
-            the fund&apos;s dashboard, other members, or anyone else&apos;s data. If you already had a loan
-            recorded before you had an account, an admin can link it to your new account so you can see it
-            here too.
+            the fund&apos;s dashboard, other members, or anyone else&apos;s data.
           </p>
         )
       },
@@ -530,10 +528,11 @@ const adminSections: FaqSection[] = [
         q: "How do I approve a new member or borrower signup?",
         a: (
           <p>
-            <strong>Members</strong> tab for a member signup, <strong>Borrowers</strong> tab for a borrower
-            signup. If the person is actually one of your existing members signing up again (or already has
-            a loan on record from before they had an account), each row has an optional dropdown to link
-            them to that existing record instead of creating a duplicate.
+            New signups show up in the Admin queue under <strong>New signups</strong> (members) or{" "}
+            <strong>Borrower requests</strong>. Tap one, then <strong>Approve</strong>. If a new member
+            signup is someone the fund already has a record for (added before they had an account), pick
+            them under <strong>Already a member?</strong> and tap <strong>Link &amp; approve</strong> so
+            their history carries over.
           </p>
         )
       },
@@ -616,13 +615,13 @@ const adminSections: FaqSection[] = [
         q: "How do I add a member manually, edit one, or deactivate one?",
         a: (
           <p>
-            Admin → the <strong>Manage</strong> button (people icon, next to Chat and Export) → <strong>Members</strong>{" "}
-            takes you to the full roster, where you can add a member directly, edit their
-            name/email/role, and deactivate or reactivate an account. The same edit form has an{" "}
-            <strong>Eligible for gain sharing</strong> checkbox — uncheck it to exclude someone from future
-            bank interest, loan, and investment distributions without deactivating them entirely.
-            Deactivating a member turns this off automatically, and reactivating restores it unless
-            they&apos;re a borrower (borrowers are never gain-sharing eligible).
+            Admin → the people icon (next to Chat and Export) takes you to <strong>Members</strong>, the
+            full roster of members and borrowers. Tap <strong>+ Add</strong> to add someone, or tap a person to
+            edit their name/email/role, message them, see their loans, or deactivate/reactivate them.
+            The edit form has a <strong>Shares in gains</strong> checkbox — uncheck it to exclude someone
+            from future bank interest, loan, and investment distributions without deactivating them
+            entirely. Deactivating turns this off automatically, and reactivating restores it unless
+            they&apos;re a borrower (borrowers never share in gains).
           </p>
         )
       },
@@ -630,8 +629,8 @@ const adminSections: FaqSection[] = [
         q: "How do I see every borrower account, not just pending ones?",
         a: (
           <p>
-            The &quot;View all borrowers →&quot; link at the bottom of the Admin Borrowers tab opens the full
-            list, including already-approved accounts and their linked loan records.
+            On <strong>Members</strong> (Admin → the people icon), tap the <strong>Borrowers</strong>{" "}
+            filter. Tap one to see their loans, message them, or view the app as them.
           </p>
         )
       }

@@ -75,8 +75,6 @@ type AdminQueueSnapshot = {
   banks: any[]
   pendingTransactions: any[]
   borrowerMembers: any[]
-  unclaimedBorrowers: any[]
-  linkedLoanNameByMemberId: Record<string, string>
 }
 
 type ExportRow = {
@@ -133,7 +131,6 @@ export default function AdminPage() {
   // (see showSearchFix below), so it isn't one of these.
   const [filter, setFilter] = useState<Filter>("all")
   const [showSearchFix, setShowSearchFix] = useState(false)
-  const [showManage, setShowManage] = useState(false)
 
   // Each row across every group below is a compact summary that opens its
   // full form in a sheet instead of expanding in place -- one row's form
@@ -149,6 +146,10 @@ export default function AdminPage() {
   const [reviewingBorrowerId, setReviewingBorrowerId] = useState<string | null>(null)
 
   const [pendingMembers, setPendingMembers] = useState<any[]>(cached?.pendingMembers ?? [])
+  // Pre-app member records nobody has claimed yet (no email) -- a signup
+  // from one of those people gets linked to their record instead of
+  // starting fresh. Empty once they've all been claimed, which hides the
+  // option entirely.
   const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>(cached?.unclaimedMembers ?? [])
   const [memberLinkChoice, setMemberLinkChoice] = useState<Record<string, string>>({})
   const [memberBusyId, setMemberBusyId] = useState<string | null>(null)
@@ -170,11 +171,6 @@ export default function AdminPage() {
   const [savingEditId, setSavingEditId] = useState<string | null>(null)
 
   const [borrowerMembers, setBorrowerMembers] = useState<any[]>(cached?.borrowerMembers ?? [])
-  const [unclaimedBorrowers, setUnclaimedBorrowers] = useState<any[]>(cached?.unclaimedBorrowers ?? [])
-  const [linkedLoanNameByMemberId, setLinkedLoanNameByMemberId] = useState<Record<string, string>>(
-    cached?.linkedLoanNameByMemberId ?? {}
-  )
-  const [borrowerLinkChoice, setBorrowerLinkChoice] = useState<Record<string, string>>({})
   const [borrowerBusyId, setBorrowerBusyId] = useState<string | null>(null)
 
   const [loadError, setLoadError] = useState("")
@@ -209,15 +205,11 @@ export default function AdminPage() {
       unclaimedMembersRes,
       banksRes,
       pendingTxnsRes,
-      borrowerMembersRes,
-      unclaimedBorrowersRes,
-      linkedBorrowersRes
+      borrowerMembersRes
     ] = await Promise.all([
       // role='borrower' pending signups are handled entirely by the
-      // Borrowers group (which offers borrower-record linking the generic
-      // Members group doesn't) -- excluded here so a pending borrower isn't
-      // double-counted across both groups' totals, or approved through the
-      // wrong group and skip the chance to link their loan history.
+      // Borrower requests group -- excluded here so a pending borrower isn't
+      // double-counted across both groups' totals.
       supabase
         .from("members")
         .select("*")
@@ -244,9 +236,7 @@ export default function AdminPage() {
         .from("members")
         .select("member_id, name, email, status, created_at")
         .eq("role", "borrower")
-        .order("created_at", { ascending: false }),
-      supabase.from("borrowers").select("borrower_id, name").is("member_id", null).order("name"),
-      supabase.from("borrowers").select("name, member_id").not("member_id", "is", null)
+        .order("created_at", { ascending: false })
     ])
 
     // Separate from the Promise.all above so a failure here only loses the
@@ -263,20 +253,13 @@ export default function AdminPage() {
     setPendingTransactions(pendingTxnsRes.error ? [] : pendingTxnsRes.data ?? [])
 
     setBorrowerMembers(borrowerMembersRes.data ?? [])
-    setUnclaimedBorrowers(unclaimedBorrowersRes.data ?? [])
-    const nextLinkedLoanNameByMemberId = Object.fromEntries(
-      (linkedBorrowersRes.data ?? []).map((b: any) => [b.member_id as string, b.name as string])
-    )
-    setLinkedLoanNameByMemberId(nextLinkedLoanNameByMemberId)
 
     writeCache<AdminQueueSnapshot>(ADMIN_QUEUE_CACHE_KEY, {
       pendingMembers: pendingMembersRes.data ?? [],
       unclaimedMembers: unclaimedMembersRes.data ?? [],
       banks: banksRes.data ?? [],
       pendingTransactions: pendingTxnsRes.error ? [] : pendingTxnsRes.data ?? [],
-      borrowerMembers: borrowerMembersRes.data ?? [],
-      unclaimedBorrowers: unclaimedBorrowersRes.data ?? [],
-      linkedLoanNameByMemberId: nextLinkedLoanNameByMemberId
+      borrowerMembers: borrowerMembersRes.data ?? []
     })
   }
 
@@ -301,6 +284,18 @@ export default function AdminPage() {
     checkAdminAccess()
   }, [authLoading, member, router])
 
+  // ?signup= (the Members page's "Review signup") opens that signup's
+  // review sheet once the queue has loaded, then drops the param.
+  useEffect(() => {
+    if (dataLoading) return
+    const id = new URLSearchParams(window.location.search).get("signup")
+    if (!id) return
+    if (pendingMembers.some((m) => m.member_id === id)) setReviewingSignupId(id)
+    else if (borrowerMembers.some((m) => m.member_id === id && m.status === "pending")) setReviewingBorrowerId(id)
+    router.replace("/admin", { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoading])
+
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -320,6 +315,8 @@ export default function AdminPage() {
     loadData()
   }
 
+  // Moves the signup's email onto the existing record (approving it) and
+  // removes the duplicate signup row, so their history carries over.
   async function linkMember(pendingId: string) {
     const targetId = memberLinkChoice[pendingId]
     if (!targetId) return
@@ -337,6 +334,7 @@ export default function AdminPage() {
       return
     }
 
+    setReviewingSignupId(null)
     loadData()
   }
 
@@ -654,7 +652,7 @@ export default function AdminPage() {
     setActionError("")
 
     try {
-      await approveBorrowerMember(memberId, borrowerLinkChoice[memberId])
+      await approveBorrowerMember(memberId)
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Something went wrong.")
       setBorrowerBusyId(null)
@@ -826,13 +824,13 @@ export default function AdminPage() {
             <div className="text-[11px] tracking-[0.18em] uppercase text-gold font-mono">Administration</div>
 
             <div className="shrink-0 flex items-center gap-2">
-            {/* Members and Borrowers pages -- always reachable from here,
-                whatever's in the queue below. */}
+            {/* Members page (members and borrowers) -- always reachable from
+                here, whatever's in the queue below. */}
             <button
-              onClick={() => setShowManage(true)}
+              onClick={() => router.push("/admin/members")}
               className="shrink-0 inline-flex items-center justify-center w-9 h-9 text-ink-soft border border-hairline rounded-full hover:bg-paper-2 hover:text-ink transition-colors"
-              title="Manage members and borrowers"
-              aria-label="Manage members and borrowers"
+              title="Members and borrowers"
+              aria-label="Members and borrowers"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                 <circle cx="9" cy="8" r="3.2" />
@@ -1182,26 +1180,22 @@ export default function AdminPage() {
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  {pendingBorrowers.map((m) => {
-                    const linkedName = linkedLoanNameByMemberId[m.member_id]
-                    return (
-                      <button
-                        key={m.member_id}
-                        type="button"
-                        onClick={() => setReviewingBorrowerId(m.member_id)}
-                        className="w-full card flex items-center gap-3 px-4 py-3 text-left"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="font-display font-medium truncate text-sm">{m.name}</p>
-                          <p className="text-xs text-ink-soft truncate">
-                            {m.email || "No email"} · {timeAgo(m.created_at)}
-                            {linkedName && ` · linked to ${linkedName}`}
-                          </p>
-                        </div>
-                        <span className="shrink-0 text-[11px] font-mono text-gold">Review →</span>
-                      </button>
-                    )
-                  })}
+                  {pendingBorrowers.map((m) => (
+                    <button
+                      key={m.member_id}
+                      type="button"
+                      onClick={() => setReviewingBorrowerId(m.member_id)}
+                      className="w-full card flex items-center gap-3 px-4 py-3 text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-display font-medium truncate text-sm">{m.name}</p>
+                        <p className="text-xs text-ink-soft truncate">
+                          {m.email || "No email"} · {timeAgo(m.created_at)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-[11px] font-mono text-gold">Review →</span>
+                    </button>
+                  ))}
                 </div>
               </section>
             )}
@@ -1620,26 +1614,29 @@ export default function AdminPage() {
           title="New signup"
           onClose={() => setReviewingSignupId(null)}
           footer={
-            <div className="flex items-center gap-3">
-              {memberLinkChoice[reviewingSignup.member_id] && (
-                <button
-                  type="button"
-                  className="shrink-0 border border-hairline text-ink-soft px-5 py-3.5 rounded-full text-base font-semibold disabled:opacity-50"
-                  onClick={() => linkMember(reviewingSignup.member_id)}
-                  disabled={memberBusyId === reviewingSignup.member_id}
-                >
-                  {memberBusyId === reviewingSignup.member_id ? "Linking…" : "Link & approve"}
-                </button>
-              )}
+            memberLinkChoice[reviewingSignup.member_id] ? (
               <button
                 type="button"
-                className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
+                className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
+                onClick={() => linkMember(reviewingSignup.member_id)}
+                disabled={memberBusyId === reviewingSignup.member_id}
+              >
+                {memberBusyId === reviewingSignup.member_id ? "Linking…" : "Link & approve"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
                 onClick={() => approveMember(reviewingSignup.member_id)}
                 disabled={memberBusyId === reviewingSignup.member_id}
               >
-                {memberBusyId === reviewingSignup.member_id ? "Approving…" : "Approve as new"}
+                {memberBusyId === reviewingSignup.member_id
+                  ? "Approving…"
+                  : unclaimedMembers.length > 0
+                    ? "Approve as new member"
+                    : "Approve"}
               </button>
-            </div>
+            )
           }
         >
           <div className="card overflow-hidden">
@@ -1654,13 +1651,9 @@ export default function AdminPage() {
           </p>
 
           {unclaimedMembers.length > 0 && (
-            <div className="mt-4">
+            <div className="mt-5">
               <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
-                Link to existing member
-              </p>
-              <p className="text-sm text-ink-soft mb-2 px-1">
-                If this signup is actually one of the fund&apos;s existing members, link it to their
-                record so their contributions, loans and investments carry over.
+                Already a member?
               </p>
               <div className="card overflow-hidden">
                 <FieldRow icon={<PersonIcon />}>
@@ -1671,15 +1664,19 @@ export default function AdminPage() {
                       setMemberLinkChoice((prev) => ({ ...prev, [reviewingSignup.member_id]: e.target.value }))
                     }
                   >
-                    <option value="">Select a member</option>
+                    <option value="">No, they&apos;re new</option>
                     {unclaimedMembers.map((um: any) => (
                       <option key={um.member_id} value={um.member_id}>
-                        {um.name}
+                        Yes, link to {um.name}
                       </option>
                     ))}
                   </select>
                 </FieldRow>
               </div>
+              <p className="px-1 pt-2 text-xs text-ink-soft">
+                Linking moves this login onto their existing record, so their contributions, loans and
+                investments carry over.
+              </p>
             </div>
           )}
         </Sheet>
@@ -1687,7 +1684,6 @@ export default function AdminPage() {
 
       {reviewingBorrower && (() => {
         const m = reviewingBorrower
-        const linkedName = linkedLoanNameByMemberId[m.member_id]
 
         return (
           <Sheet
@@ -1700,11 +1696,7 @@ export default function AdminPage() {
                 onClick={() => approveBorrower(m.member_id)}
                 disabled={borrowerBusyId === m.member_id}
               >
-                {borrowerBusyId === m.member_id
-                  ? "Approving…"
-                  : borrowerLinkChoice[m.member_id]
-                  ? "Approve & link"
-                  : "Approve"}
+                {borrowerBusyId === m.member_id ? "Approving…" : "Approve"}
               </button>
             }
           >
@@ -1718,34 +1710,6 @@ export default function AdminPage() {
             <p className="px-1 pt-2 text-xs text-ink-soft">
               {m.email || "No email"} · requests borrower access · {timeAgo(m.created_at)}
             </p>
-
-            {linkedName ? (
-              <p className="mt-4 text-xs text-sage font-mono px-1">Linked to loan record: {linkedName}</p>
-            ) : (
-              <div className="mt-4">
-                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
-                  Link to an existing loan record (optional)
-                </p>
-                <div className="card overflow-hidden">
-                  <FieldRow icon={<PersonIcon />}>
-                    <select
-                      className={rowSelectClass}
-                      value={borrowerLinkChoice[m.member_id] ?? ""}
-                      onChange={(e) =>
-                        setBorrowerLinkChoice((prev) => ({ ...prev, [m.member_id]: e.target.value }))
-                      }
-                    >
-                      <option value="">No existing loan record</option>
-                      {unclaimedBorrowers.map((b: any) => (
-                        <option key={b.borrower_id} value={b.borrower_id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </FieldRow>
-                </div>
-              </div>
-            )}
           </Sheet>
         )
       })()}
@@ -1781,36 +1745,6 @@ export default function AdminPage() {
       )}
 
       {showSearchFix && <SearchFixSheet onClose={() => setShowSearchFix(false)} />}
-      {showManage && (
-        <Sheet title="Manage" onClose={() => setShowManage(false)}>
-          <div className="card">
-            <div className="px-5">
-              <button
-                type="button"
-                onClick={() => router.push("/admin/members")}
-                className="w-full py-3.5 flex items-center justify-between gap-3 text-left border-b border-dashed border-hairline"
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm text-ink font-medium">Members</span>
-                  <span className="block text-[11px] text-ink-soft">Add, edit or deactivate members</span>
-                </span>
-                <span className="text-ink-soft shrink-0">›</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push("/admin/borrowers")}
-                className="w-full py-3.5 flex items-center justify-between gap-3 text-left"
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm text-ink font-medium">Borrowers</span>
-                  <span className="block text-[11px] text-ink-soft">Approve borrowers and link their loans</span>
-                </span>
-                <span className="text-ink-soft shrink-0">›</span>
-              </button>
-            </div>
-          </div>
-        </Sheet>
-      )}
       {openReceiptUrl && <ReceiptModal path={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
   )
