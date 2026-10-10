@@ -23,6 +23,22 @@ export function isBankInterestDistributionDue(year: number, now: Date = new Date
   return y > year || (y === year && now.getMonth() === 11 && now.getDate() >= 25)
 }
 
+/**
+ * The date a group's distribution is recorded and split as of. A year's
+ * interest is normally distributed in January, once December's interest
+ * (credited on the 1st) is logged -- so once the year is over, it's dated
+ * Dec 31 of that year rather than the day it happens to be run: the payout
+ * lands in that year on the Banks page and in members' yearly breakdowns,
+ * like every earlier year (all dated year-end), and the split uses
+ * balances as of that year-end, not ones that already include the new
+ * year's contributions and withdrawals. Run within the year itself (from
+ * Dec 25), it's dated that day.
+ */
+export function bankInterestDistributionDate(year: number, now: Date = new Date()): string {
+  const today = dateOnly(now)
+  return Number(today.slice(0, 4)) > year ? `${year}-12-31` : today
+}
+
 export interface PendingBankInterestGroup {
   year: number
   bank: string
@@ -135,13 +151,12 @@ export async function getPendingBankInterestGroups(): Promise<PendingBankInteres
  * Rounding residual is absorbed by the largest-share member so the
  * allocated total ties to the group's exact combined amount, to the peso.
  *
- * The historical rows are dated at that year's actual year-end crediting
- * (Dec 30); a manually-triggered distribution instead uses the date it's
- * actually run, since there's no fixed crediting date to anchor to until
- * the fund owner decides to close out the year.
+ * Dated per bankInterestDistributionDate: Dec 31 of the group's year once
+ * that year is over (the historical rows are dated Dec 30), otherwise the
+ * day it's run.
  */
 export async function distributeBankInterestGroup(group: PendingBankInterestGroup) {
-  const distributionDate = dateOnly(new Date())
+  const distributionDate = bankInterestDistributionDate(group.year)
   const interestAmount = group.totalAmount
 
   const currentValueByMember = await computeCurrentValueByMember(distributionDate)
@@ -198,15 +213,15 @@ export interface BankInterestSharePreview {
 
 /**
  * Read-only preview of how distributeBankInterestGroup would split a group
- * if it ran right now -- same pool (computeCurrentValueByMember as of
- * today) and same splitProportionally rounding, so what the admin reviews
+ * if it ran right now -- same pool (computeCurrentValueByMember as of the
+ * same distribution date) and same splitProportionally rounding, so what the admin reviews
  * matches what Distribute credits. Writes nothing; distributeBankInterestGroup
  * still recomputes the split itself at commit time.
  */
 export async function previewBankInterestGroup(
   group: PendingBankInterestGroup
 ): Promise<BankInterestSharePreview[]> {
-  const distributionDate = dateOnly(new Date())
+  const distributionDate = bankInterestDistributionDate(group.year)
   const currentValueByMember = await computeCurrentValueByMember(distributionDate)
   const shares = splitProportionally(currentValueByMember, group.totalAmount)
 
