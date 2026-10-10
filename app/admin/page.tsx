@@ -1121,6 +1121,9 @@ export default function AdminPage() {
         const t = reviewingTxn
         const needsWithdrawalBank = t.classification === "Member Withdrawal"
         const needsLoanBank = t.classification === "Loan Release"
+        const payoutSource = needsLoanBank ? t.loans : needsWithdrawalBank ? t : null
+        const payoutDetails: string | null = payoutSource?.payout_details ?? null
+        const payoutQrPath: string | null = payoutSource?.payout_qr_path ?? null
 
         const canApprove =
           !!approvalReceipts[t.transaction_id] &&
@@ -1243,18 +1246,18 @@ export default function AdminPage() {
             </button>
 
             {/* Where the member or borrower asked for the money to go -- set on
-                their loan request. */}
-            {needsLoanBank && (t.loans?.payout_details || t.loans?.payout_qr_path) && (
+                their loan request, or on the withdrawal itself. */}
+            {(payoutDetails || payoutQrPath) && (
               <div className="mb-4">
                 <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Send to</p>
                 <div className="card px-4 py-3.5 space-y-3">
-                  {t.loans?.payout_details && (
-                    <p className="text-sm text-ink whitespace-pre-line break-words">{t.loans.payout_details}</p>
+                  {payoutDetails && (
+                    <p className="text-sm text-ink whitespace-pre-line break-words">{payoutDetails}</p>
                   )}
-                  {t.loans?.payout_qr_path && (
+                  {payoutQrPath && (
                     <button
                       type="button"
-                      onClick={() => setOpenReceiptUrl(t.loans.payout_qr_path)}
+                      onClick={() => setOpenReceiptUrl(payoutQrPath)}
                       className="inline-flex items-center gap-1.5 text-xs font-mono text-gold border border-gold rounded-full px-3 py-1.5 hover:bg-gold/10 transition-colors"
                     >
                       View QR code
