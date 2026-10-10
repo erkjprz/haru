@@ -1107,7 +1107,7 @@ export default function AdminPage() {
         <button
           onClick={() => setShowSearchFix(true)}
           aria-label="Search & Fix"
-          className="fixed right-4 w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center shadow-lg shadow-gold/30 ring-1 ring-gold/40 z-40"
+          className="fixed right-4 w-14 h-14 rounded-full bg-ink text-paper flex items-center justify-center shadow-lg z-40"
           style={{ bottom: "calc(var(--dock-h) + 0.75rem)" }}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
