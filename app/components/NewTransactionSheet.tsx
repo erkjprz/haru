@@ -316,6 +316,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       },
       accountFor(bankId)
     )
+    // Bank is required to submit, so before one's picked there's nothing
+    // useful to preview -- no "no bank set" note.
+    if (impact.kind === "none" && impact.reason === "no_bank") return null
     return { ...groupImpacts([impact]), noneReason: impact.kind === "none" ? impact.reason : undefined }
   })()
 
@@ -848,7 +851,14 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
   const toBankField = isBankTransfer && (
     <FieldRow icon={<BankIcon />}>
-      <select className={rowSelectClass} value={toBankId} onChange={(e) => setToBankId(e.target.value)}>
+      <select
+        className={rowSelectClass}
+        value={toBankId}
+        onChange={(e) => {
+          setToBankId(e.target.value)
+          if (message === "Select the destination bank.") setMessage("")
+        }}
+      >
         <option value="">To which bank</option>
         {banks.map((bank) => (
           <option key={bank.id} value={bank.id}>
@@ -856,6 +866,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
           </option>
         ))}
       </select>
+      {!toBankId && <RequiredMark />}
     </FieldRow>
   )
 
@@ -950,7 +961,14 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
 
                     {needsBank && (
                       <FieldRow icon={<BankIcon />}>
-                        <select className={rowSelectClass} value={bankId} onChange={(e) => setBankId(e.target.value)}>
+                        <select
+                          className={rowSelectClass}
+                          value={bankId}
+                          onChange={(e) => {
+                            setBankId(e.target.value)
+                            if (message === "Select a bank.") setMessage("")
+                          }}
+                        >
                           <option value="">{isBankTransfer ? "From which bank" : "Select a bank"}</option>
                           {banks.map((bank) => (
                             <option key={bank.id} value={bank.id}>
@@ -958,6 +976,9 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                             </option>
                           ))}
                         </select>
+                        {/* Required to submit (see handleSubmit) -- marked the
+                            same way as the Receipt label while still empty. */}
+                        {!bankId && <RequiredMark />}
                       </FieldRow>
                     )}
 

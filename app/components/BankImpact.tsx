@@ -38,21 +38,25 @@ export function BankImpactPreview({
 
   if (compact) {
     return (
-      <div className={`space-y-1 ${className}`}>
+      <div className={`space-y-1.5 ${className}`}>
         {banks.map(({ bank, delta }) => {
           const before = balances?.[bank] ?? 0
           const after = Number((before + delta).toFixed(2))
           return (
-            <p key={bank} className="text-[12px] truncate">
-              {bank} <span className="font-mono">{signed(delta)}</span>{" "}
-              <span
-                className={`font-mono [font-variant-numeric:tabular-nums] ${
+            // Two short lines rather than one long one, so before → after
+            // fits on a phone without running under the search button.
+            <div key={bank} className="text-[12px] leading-snug">
+              <p className="truncate">
+                {bank} <span className="font-mono">{signed(delta)}</span>
+              </p>
+              <p
+                className={`font-mono [font-variant-numeric:tabular-nums] truncate ${
                   balances !== null && after < 0 ? "text-rust" : "opacity-70"
                 }`}
               >
-                {balances === null ? "…" : `→ ${money(after)}`}
-              </span>
-            </p>
+                {balances === null ? "Loading balance…" : `${money(before)} → ${money(after)}`}
+              </p>
+            </div>
           )
         })}
         {unaffected > 0 && (
