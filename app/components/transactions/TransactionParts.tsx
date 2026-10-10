@@ -190,32 +190,6 @@ export function formatSigned(amount: number, direction: 1 | -1 | 0): string {
   return `${sign}₱${fmt(Math.abs(amount))}`
 }
 
-// Money in and out across a set of rows -- approved entries only, leaving
-// out moves between the fund's own banks (they net to zero) and
-// distributed shares (a split of gains already counted where they came in).
-export function moneyTotals(rows: Txn[]): { in: number; out: number } {
-  let inSum = 0
-  let outSum = 0
-  for (const t of rows) {
-    if (t.status !== "approved" || t.classification === "Internal Transfer" || t.classification === "Gain Allocation") continue
-    const a = Number(t.amount)
-    if (a > 0) inSum += a
-    else outSum += -a
-  }
-  return { in: inSum, out: outSum }
-}
-
-export function TotalsLine({ totals, className = "" }: { totals: { in: number; out: number }; className?: string }) {
-  if (totals.in === 0 && totals.out === 0) return null
-  return (
-    <span className={`font-mono [font-variant-numeric:tabular-nums] whitespace-nowrap ${className}`}>
-      {totals.in > 0 && <span className="text-sage">+₱{fmt(totals.in)}</span>}
-      {totals.in > 0 && totals.out > 0 && <span className="text-ink-soft"> · </span>}
-      {totals.out > 0 && <span className="text-ink">−₱{fmt(totals.out)}</span>}
-    </span>
-  )
-}
-
 const statusTone: Record<string, string> = {
   pending: "text-gold border-gold",
   rejected: "text-rust border-rust"
