@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Navbar from "@/app/components/Navbar"
 import BorrowerHeader from "@/app/components/BorrowerHeader"
 import { supabase } from "@/lib/supabase"
+import { Toast } from "@/app/components/Toast"
 import { useAuth } from "@/app/auth-context"
 
 export default function AccountPage() {
@@ -24,6 +25,7 @@ export default function AccountPage() {
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [passwordMessage, setPasswordMessage] = useState("")
+  const [toast, setToast] = useState<string | null>(null)
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -116,7 +118,7 @@ export default function AccountPage() {
       return
     }
 
-    setPasswordMessage("Password updated.")
+    setToast("Password updated")
     setNewPassword("")
     setConfirmPassword("")
   }
@@ -171,7 +173,7 @@ export default function AccountPage() {
               />
 
               {nameMessage && (
-                <p className="text-sm text-ink-soft">
+                <p className="text-sm text-rust">
                   {nameMessage}
                 </p>
               )}
@@ -263,7 +265,7 @@ export default function AccountPage() {
               />
 
               {passwordMessage && (
-                <p className="text-sm text-ink-soft">
+                <p className="text-sm text-rust">
                   {passwordMessage}
                 </p>
               )}
@@ -281,6 +283,8 @@ export default function AccountPage() {
 
         </div>
       </main>
+
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </>
   )
 }

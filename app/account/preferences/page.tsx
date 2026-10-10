@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { SkeletonPanel } from "@/app/components/Skeleton"
 import { readCache, writeCache } from "@/lib/cache"
+import { Toast } from "@/app/components/Toast"
 
 function isValidNonNegativeNumber(value: string): boolean {
   if (!value.trim()) return true // empty clears the preference
@@ -91,7 +92,7 @@ function AmountField({
           </div>
         </div>
 
-        {message && <p className="text-sm text-ink-soft">{message}</p>}
+        {message && <p className="text-sm text-rust">{message}</p>}
 
         <button
           onClick={onSave}
@@ -131,6 +132,7 @@ export default function PreferencesPage() {
   const [contributionMessage, setContributionMessage] = useState("")
   const [savingLoanPayment, setSavingLoanPayment] = useState(false)
   const [loanPaymentMessage, setLoanPaymentMessage] = useState("")
+  const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
     if (authLoading) return
@@ -232,8 +234,11 @@ export default function PreferencesPage() {
     ])
 
     setSavingContribution(false)
-    if (!error && !bankError) updateCache({ contributionAmount, contributionBankId })
-    setContributionMessage(error?.message || bankError?.message || "Saved.")
+    if (!error && !bankError) {
+      updateCache({ contributionAmount, contributionBankId })
+      setToast("Default contribution saved")
+    }
+    setContributionMessage(error?.message || bankError?.message || "")
   }
 
   async function saveLoanPayment() {
@@ -249,8 +254,11 @@ export default function PreferencesPage() {
     ])
 
     setSavingLoanPayment(false)
-    if (!error && !bankError) updateCache({ loanPaymentAmount, loanPaymentBankId })
-    setLoanPaymentMessage(error?.message || bankError?.message || "Saved.")
+    if (!error && !bankError) {
+      updateCache({ loanPaymentAmount, loanPaymentBankId })
+      setToast("Default loan payment saved")
+    }
+    setLoanPaymentMessage(error?.message || bankError?.message || "")
   }
 
   const Header = isBorrower ? BorrowerHeader : Navbar
@@ -329,6 +337,8 @@ export default function PreferencesPage() {
 
         </div>
       </main>
+
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </>
   )
 }
