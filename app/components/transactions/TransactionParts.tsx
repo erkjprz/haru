@@ -212,9 +212,21 @@ function PaperclipIcon() {
   )
 }
 
+// Kinds of entry that bring money into the fund. Only these show their
+// amount in green -- the sign itself always follows the stored amount (it's
+// what the bank balances are built from), but a positive Tax or a negative
+// Bank Interest adjustment shouldn't read as income.
+const MONEY_IN = new Set(["Member Contribution", "Loan Repayment", "Bank Interest", "Investment Return", "Opening Balance"])
+
+function amountToneFor(t: Txn, v: TxnView): string {
+  if (v.direction === 0) return "text-ink-soft"
+  const isGainShare = t.classification === "Gain Allocation"
+  return v.direction === 1 && (MONEY_IN.has(t.classification) || isGainShare) ? "text-sage" : "text-ink"
+}
+
 export function TransactionRow({ t, onOpen }: { t: Txn; onOpen: () => void }) {
   const v = describeTransaction(t)
-  const amountTone = v.direction === 1 ? "text-sage" : v.direction === -1 ? "text-ink" : "text-ink-soft"
+  const amountTone = amountToneFor(t, v)
   return (
     <button type="button" onClick={onOpen} className="w-full card px-4 py-3 text-left flex flex-col gap-0.5">
       <span className="flex items-baseline justify-between gap-3">
@@ -272,7 +284,7 @@ export function TransactionDetailSheet({
   const canEdit = canEditTransaction(t, memberId, isAdmin)
   const isTransfer = t.classification === "Internal Transfer"
   const bankKey = !isTransfer ? ledgerBankKeys(t)[0] ?? null : null
-  const amountTone = v.direction === 1 ? "text-sage" : v.direction === -1 ? "text-ink" : "text-ink-soft"
+  const amountTone = amountToneFor(t, v)
   const reviewInQueue = isAdmin && t.status === "pending" && !canEdit
 
   const links: { label: string; hint: string; onClick: () => void }[] = []
