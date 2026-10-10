@@ -809,7 +809,7 @@ export default function AdminPage() {
       <>
         <Navbar />
         <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden">
-          <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
+          <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
             <SkeletonCardList rows={3} />
           </div>
         </main>
@@ -821,7 +821,7 @@ export default function AdminPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-paper text-ink font-sans overflow-x-hidden relative">
-        <div className="max-w-3xl mx-auto px-5 pt-10 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 pt-8 pb-[calc(6rem+var(--dock-h)+env(safe-area-inset-bottom))]">
           {/* Page actions share the eyebrow's line, so the title below gets
               the full width instead of wrapping beside three buttons. */}
           <div className="flex items-center justify-between gap-3 mb-2">
