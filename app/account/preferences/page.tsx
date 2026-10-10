@@ -155,7 +155,7 @@ export default function PreferencesPage() {
       // of flashing back to a spinner on every navigation.
       if (!readCache(`preferences:${member.member_id}`)) setDataLoading(true)
 
-      const [{ data }, { data: bankList }] = await Promise.all([
+      const [{ data, error }, { data: bankList }] = await Promise.all([
         supabase
           .from("members")
           .select(
@@ -169,26 +169,26 @@ export default function PreferencesPage() {
       const nextBanks = bankList ?? []
       setBanks(nextBanks)
 
-      let nextContributionAmount = contributionAmount
-      if (data?.default_contribution_amount != null) {
-        nextContributionAmount = String(data.default_contribution_amount)
-        setContributionAmount(nextContributionAmount)
-      }
-      let nextContributionBankId = contributionBankId
-      if (data?.default_contribution_bank_id) {
-        nextContributionBankId = data.default_contribution_bank_id
-        setContributionBankId(nextContributionBankId)
-      }
-      let nextLoanPaymentAmount = loanPaymentAmount
-      if (data?.default_loan_payment_amount != null) {
-        nextLoanPaymentAmount = String(data.default_loan_payment_amount)
-        setLoanPaymentAmount(nextLoanPaymentAmount)
-      }
-      let nextLoanPaymentBankId = loanPaymentBankId
-      if (data?.default_loan_payment_bank_id) {
-        nextLoanPaymentBankId = data.default_loan_payment_bank_id
-        setLoanPaymentBankId(nextLoanPaymentBankId)
-      }
+      // A cleared default comes back as null, which has to overwrite the
+      // cached value too -- otherwise a removed preference keeps showing
+      // up from the cache on every relaunch. Only a failed query keeps
+      // whatever was already on screen.
+      const nextContributionAmount = error
+        ? contributionAmount
+        : data?.default_contribution_amount != null
+          ? String(data.default_contribution_amount)
+          : ""
+      const nextContributionBankId = error ? contributionBankId : (data?.default_contribution_bank_id ?? "")
+      const nextLoanPaymentAmount = error
+        ? loanPaymentAmount
+        : data?.default_loan_payment_amount != null
+          ? String(data.default_loan_payment_amount)
+          : ""
+      const nextLoanPaymentBankId = error ? loanPaymentBankId : (data?.default_loan_payment_bank_id ?? "")
+      setContributionAmount(nextContributionAmount)
+      setContributionBankId(nextContributionBankId)
+      setLoanPaymentAmount(nextLoanPaymentAmount)
+      setLoanPaymentBankId(nextLoanPaymentBankId)
       setDataLoading(false)
 
       writeCache<PreferencesSnapshot>(`preferences:${member.member_id}`, {
@@ -203,6 +203,22 @@ export default function PreferencesPage() {
     load()
   }, [authLoading, member])
 
+  // Keeps the cached snapshot in step with what was just saved, so a
+  // relaunch paints the saved values instead of the pre-save ones.
+  function updateCache(patch: Partial<PreferencesSnapshot>) {
+    if (!cacheKey) return
+    const prev = readCache<PreferencesSnapshot>(cacheKey)
+    writeCache<PreferencesSnapshot>(cacheKey, {
+      banks,
+      contributionAmount,
+      contributionBankId,
+      loanPaymentAmount,
+      loanPaymentBankId,
+      ...prev,
+      ...patch
+    })
+  }
+
   async function saveContribution() {
     if (savingContribution) return
     setSavingContribution(true)
@@ -216,6 +232,7 @@ export default function PreferencesPage() {
     ])
 
     setSavingContribution(false)
+    if (!error && !bankError) updateCache({ contributionAmount, contributionBankId })
     setContributionMessage(error?.message || bankError?.message || "Saved.")
   }
 
@@ -232,6 +249,7 @@ export default function PreferencesPage() {
     ])
 
     setSavingLoanPayment(false)
+    if (!error && !bankError) updateCache({ loanPaymentAmount, loanPaymentBankId })
     setLoanPaymentMessage(error?.message || bankError?.message || "Saved.")
   }
 
