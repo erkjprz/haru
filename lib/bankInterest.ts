@@ -12,6 +12,17 @@ function dateOnly(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
+/**
+ * A year's bank interest is only flagged as due on the Banks list from
+ * Dec 25 of that year onward (when year-end crediting lands), and stays
+ * flagged until it's distributed. Display-only -- Distribute itself stays
+ * available on the bank's page at any time.
+ */
+export function isBankInterestDistributionDue(year: number, now: Date = new Date()): boolean {
+  const y = now.getFullYear()
+  return y > year || (y === year && now.getMonth() === 11 && now.getDate() >= 25)
+}
+
 export interface PendingBankInterestGroup {
   year: number
   bank: string

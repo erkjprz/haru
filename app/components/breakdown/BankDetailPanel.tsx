@@ -291,52 +291,6 @@ export function BankDetailPanel({
         {accountLabel ?? "Current balance and interest history for this account."}
       </p>
 
-      {/* The one admin action that needs attention gets pinned right under
-          the title instead of sitting between the summary and the history. */}
-      {isAdmin && pendingGroups.length > 0 && (
-        <div className="relative overflow-hidden rounded-md border border-gold/40 bg-paper-2 mb-4">
-          <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
-          <div className="pl-6 pr-5 py-4">
-            <p className="text-[11px] uppercase tracking-wide text-gold font-mono mb-1">Ready to distribute</p>
-            <p className="font-mono [font-variant-numeric:tabular-nums] text-2xl font-bold text-ink">
-              ₱{fmt(undistributed)}
-            </p>
-            <p className="text-[12px] text-ink-soft mt-0.5">
-              Approved interest that hasn&apos;t been split across members yet.
-            </p>
-            <div className="mt-3 flex flex-col gap-2">
-              {pendingGroups.map((group) => (
-                <div
-                  key={group.year}
-                  className="flex items-center justify-between gap-3 pt-2 border-t border-dashed border-hairline"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm text-ink font-medium">
-                      {group.year}
-                      {pendingGroups.length > 1 && (
-                        <span className="font-mono [font-variant-numeric:tabular-nums] text-ink-soft font-normal">
-                          {" "}
-                          · ₱{fmt(group.totalAmount)}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-[11px] text-ink-soft">
-                      {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setReviewGroup(group)}
-                    className="shrink-0 bg-ink text-paper px-3.5 py-2 rounded-sm text-[13px] font-medium"
-                  >
-                    Review &amp; distribute
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="card px-5 pt-4 pb-3.5">
         <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1.5">Current Balance</p>
         <p className="font-mono [font-variant-numeric:tabular-nums] text-3xl font-bold text-ink">₱{fmt(balance)}</p>
@@ -434,6 +388,43 @@ export function BankDetailPanel({
       </div>
 
       {loadError && <p className="mt-4 text-sm text-rust">{loadError}</p>}
+
+      {isAdmin && pendingGroups.length > 0 && (
+        <section className="mt-8">
+          <h2 className="font-display text-lg font-medium text-ink mb-1">Ready to Distribute</h2>
+          <p className="text-[13px] text-ink-soft mb-3">
+            ₱{fmt(undistributed)}{" "}approved interest that hasn&apos;t been split across members yet.
+          </p>
+          <div className="card">
+            <div className="px-5">
+              {pendingGroups.map((group, i) => (
+                <div
+                  key={group.year}
+                  className={`py-3 flex items-center justify-between gap-3 ${
+                    i !== pendingGroups.length - 1 ? "border-b border-dashed border-hairline" : ""
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-ink font-medium">{group.year}</p>
+                    <p className="font-mono [font-variant-numeric:tabular-nums] text-[13px] font-semibold text-ink">
+                      ₱{fmt(group.totalAmount)}
+                    </p>
+                    <p className="text-[11px] text-ink-soft">
+                      {group.transactionCount} transaction{group.transactionCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setReviewGroup(group)}
+                    className="shrink-0 bg-ink text-paper px-3.5 py-2 rounded-sm text-[13px] font-medium"
+                  >
+                    Review &amp; distribute
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="font-display text-lg font-medium text-ink mb-1">Interest by Year</h2>

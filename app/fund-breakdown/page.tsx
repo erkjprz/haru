@@ -8,7 +8,7 @@ import { SkeletonCardList, SkeletonPanel } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import type { InterestType } from "@/lib/loanMath"
 import { formatInterestLabel, durationLabel, paymentOverdueLabel } from "@/lib/loanFormat"
-import { getPendingBankInterestGroups } from "@/lib/bankInterest"
+import { getPendingBankInterestGroups, isBankInterestDistributionDue } from "@/lib/bankInterest"
 import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
 import { BankAccountSheet } from "@/app/components/breakdown/BankAdminSheets"
@@ -1762,6 +1762,9 @@ type Bank = {
   tax: number
   distributed: number
   pending_interest: number
+  // The part of pending_interest from years already due (Dec 25 onward) --
+  // only this drives the admin "Needs distribution" banner.
+  due_interest?: number
 }
 
 
@@ -1879,6 +1882,9 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
         byBank[group.bank] = { bank: group.bank, balance: 0, interest_earned: 0, tax: 0, distributed: 0, pending_interest: 0 }
       }
       byBank[group.bank].pending_interest += group.totalAmount
+      if (isBankInterestDistributionDue(group.year)) {
+        byBank[group.bank].due_interest = (byBank[group.bank].due_interest ?? 0) + group.totalAmount
+      }
     }
 
     const nextBanks = Object.values(byBank).sort((a, b) => b.balance - a.balance)
@@ -1915,8 +1921,8 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
   // tax is stored as a negative amount, so adding it nets it out -- subtracting
   // it would add the withheld amount back instead.
   const totalNetInterest = banks.reduce((sum, b) => sum + (b.interest_earned + b.tax), 0)
-  const pendingBanks = banks.filter((b) => b.pending_interest > 0.01)
-  const totalPending = pendingBanks.reduce((sum, b) => sum + b.pending_interest, 0)
+  const dueBanks = banks.filter((b) => (b.due_interest ?? 0) > 0.01)
+  const totalDue = dueBanks.reduce((sum, b) => sum + (b.due_interest ?? 0), 0)
 
   function openBank(bank: string) {
     bankScrollPosRef.current = window.scrollY
@@ -1946,17 +1952,16 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
         <BankAccountSheet account={null} onClose={() => setShowAddSheet(false)} onSaved={() => load()} />
       )}
 
-      {isAdmin && !loadError && pendingBanks.length > 0 && (
-        <div className="relative overflow-hidden rounded-md border border-gold/40 bg-paper-2 mb-4">
-          <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />
-          <div className="pl-6 pr-5 pt-4 pb-2">
-            <p className="text-[11px] uppercase tracking-wide text-gold font-mono mb-1">Needs distribution</p>
+      {isAdmin && !loadError && dueBanks.length > 0 && (
+        <div className="card mb-4">
+          <div className="px-5 pt-4 pb-2">
+            <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">Needs distribution</p>
             <p className="text-sm text-ink">
-              <span className="font-mono [font-variant-numeric:tabular-nums] font-semibold">₱{fmt(totalPending)}</span>{" "}
+              <span className="font-mono [font-variant-numeric:tabular-nums] font-semibold">₱{fmt(totalDue)}</span>{" "}
               interest is ready to split across members.
             </p>
             <div className="mt-2">
-              {pendingBanks.map((b) => (
+              {dueBanks.map((b) => (
                 <button
                   key={b.bank}
                   onClick={() => openBank(b.bank)}
@@ -1965,7 +1970,7 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
                   <span className="text-sm text-ink font-medium truncate">{b.bank}</span>
                   <span className="flex items-center gap-2 shrink-0">
                     <span className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-gold">
-                      ₱{fmt(b.pending_interest)}
+                      ₱{fmt(b.due_interest ?? 0)}
                     </span>
                     <span className="text-ink-soft">→</span>
                   </span>
@@ -2057,14 +2062,7 @@ function BankCard({
           </p>
           <p className="text-[11px] text-ink-soft">current balance</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {undistributed > 0.01 && (
-            <span className="text-[9px] uppercase tracking-wide font-mono text-gold border border-gold/40 rounded px-1.5 py-0.5">
-              Pending
-            </span>
-          )}
-          <span className="text-ink-soft">→</span>
-        </div>
+        <span className="text-ink-soft shrink-0">→</span>
       </div>
 
       <div className="flex items-baseline justify-between mt-3.5">
