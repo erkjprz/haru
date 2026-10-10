@@ -12,6 +12,7 @@ import { getPendingBankInterestGroups, isBankInterestDistributionDue } from "@/l
 import { LoanDetailPanel } from "@/app/components/breakdown/LoanDetailPanel"
 import { BankDetailPanel } from "@/app/components/breakdown/BankDetailPanel"
 import { BankAccountSheet } from "@/app/components/breakdown/BankAdminSheets"
+import { InvestmentDetailsSheet } from "@/app/components/breakdown/InvestmentAdminSheets"
 import { InvestmentDetailPanel } from "@/app/components/breakdown/InvestmentDetailPanel"
 import { InfoBox, InfoRow, InfoSubRow } from "@/app/components/breakdown/InfoBox"
 import { readCache, writeCache } from "@/lib/cache"
@@ -2167,21 +2168,11 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
     if (selectedInvestmentId === null) restoreScrollY(scrollPosRef.current)
   }, [selectedInvestmentId])
 
-  const [manageMode, setManageMode] = useState(false)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [name, setName] = useState("")
-  const [affectsCash, setAffectsCash] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [formMessage, setFormMessage] = useState("")
-  const editFormRef = useRef<HTMLDivElement | null>(null)
-
-  // Same fix as BanksPanel: scroll the opened form into view the moment it
-  // mounts, once per editingId change (editFormRef is a stable object ref,
-  // only reassigned when the underlying DOM node itself mounts/unmounts).
-  useEffect(() => {
-    if (editingId) editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
-  }, [editingId])
+  const [showAddSheet, setShowAddSheet] = useState(false)
+  // Signed gain/loss already split across members, per investment -- only
+  // fetched for admins, to flag investments with realized money still to
+  // distribute.
+  const [allocatedById, setAllocatedById] = useState<Record<string, number>>({})
 
   async function load() {
     // Only show the blocking loader on a true cold start -- if we already
@@ -2190,7 +2181,21 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
     // spinner.
     if (!readCache(INVESTMENTS_CACHE_KEY)) setLoading(true)
 
-    const { data, error } = await supabase.from("v_investment_summary").select("*").order("investment")
+    const [{ data, error }, allocResult] = await Promise.all([
+      supabase.from("v_investment_summary").select("*").order("investment"),
+      isAdmin
+        ? supabase.from("investment_allocations").select("investment_id, amount, allocation_type")
+        : Promise.resolve({ data: null, error: null })
+    ])
+
+    if (allocResult.data) {
+      const next: Record<string, number> = {}
+      for (const r of allocResult.data as { investment_id: string; amount: number; allocation_type: string }[]) {
+        const signed = r.allocation_type === "Investment Loss" ? -Number(r.amount) : Number(r.amount)
+        next[r.investment_id] = (next[r.investment_id] ?? 0) + signed
+      }
+      setAllocatedById(next)
+    }
 
     if (error) {
       setLoadError(error.message)
@@ -2208,79 +2213,6 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function clearForm() {
-    setShowAddForm(false)
-    setEditingId(null)
-    setName("")
-    setAffectsCash(true)
-    setFormMessage("")
-  }
-
-  function startAdd() {
-    clearForm()
-    setShowAddForm(true)
-  }
-
-  function startEdit(inv: Investment) {
-    clearForm()
-    setEditingId(inv.investment_id)
-    setName(inv.investment ?? "")
-    setAffectsCash(!!inv.affects_cash)
-  }
-
-  async function saveInvestment() {
-    if (!name.trim()) {
-      setFormMessage("Enter an investment name.")
-      return
-    }
-
-    setSaving(true)
-
-    if (editingId) {
-      const { error } = await supabase
-        .from("investments")
-        .update({ name, affects_cash: affectsCash ? 1 : 0 })
-        .eq("investment_id", editingId)
-
-      if (error) {
-        setSaving(false)
-        setFormMessage(error.message)
-        return
-      }
-
-      // v_cash_ledger reads each transaction's own affects_cash, not the
-      // investment's -- without this, flipping the toggle here would leave
-      // every transaction already recorded against this investment still
-      // treated the old way, silently contradicting what the toggle now
-      // says.
-      const { error: syncError } = await supabase
-        .from("transactions")
-        .update({ affects_cash: affectsCash ? 1 : 0 })
-        .eq("investment_id", editingId)
-        .in("classification", ["Investment", "Investment Return"])
-
-      setSaving(false)
-      if (syncError) {
-        setFormMessage(`Investment saved, but couldn't update its existing transactions: ${syncError.message}`)
-        return
-      }
-    } else {
-      const { error } = await supabase.from("investments").insert({
-        name,
-        affects_cash: affectsCash ? 1 : 0
-      })
-
-      setSaving(false)
-      if (error) {
-        setFormMessage(error.message)
-        return
-      }
-    }
-
-    clearForm()
-    load()
-  }
-
   const fmt = (n: number) =>
     Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -2293,6 +2225,7 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
       <InvestmentDetailPanel
         investmentId={selectedInvestmentId}
         onBack={() => setSelectedInvestmentId(null)}
+        onChanged={load}
       />
     )
   }
@@ -2308,92 +2241,77 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
   const losses = closedInvestments.filter((i) => i.gain_loss <= 0).sort((a, b) => a.gain_loss - b.gain_loss)
   const netTotal = investments.reduce((sum, i) => sum + i.gain_loss, 0)
 
-  function renderInvestmentGroup(inv: Investment) {
-    const isEditingThis = isAdmin && manageMode && editingId === inv.investment_id
+  // Same "ready" rule as the investment's own page: an open investment
+  // only counts once its realized gain exceeds what's been split (money
+  // still out isn't a loss yet); a closed one counts if anything's left.
+  const needsDistribution = isAdmin
+    ? investments
+        .map((i) => ({ inv: i, unallocated: Number((i.gain_loss - (allocatedById[i.investment_id] ?? 0)).toFixed(2)) }))
+        .filter(({ inv, unallocated }) => (inv.status === "open" ? unallocated > 0.01 : Math.abs(unallocated) > 0.01))
+    : []
 
-    return (
-      <div key={inv.investment_id} ref={isEditingThis ? editFormRef : undefined}>
-        <InvestmentCard
-          inv={inv}
-          fmt={fmt}
-          onClick={() => {
-            scrollPosRef.current = window.scrollY
-            setSelectedInvestmentId(inv.investment_id)
-          }}
-          showEdit={isAdmin && manageMode}
-          fused={isEditingThis}
-          onEdit={() => startEdit(inv)}
-        />
-        {isEditingThis && (
-          <InvestmentForm
-            title="Edit Investment"
-            name={name}
-            setName={setName}
-            affectsCash={affectsCash}
-            setAffectsCash={setAffectsCash}
-            saving={saving}
-            message={formMessage}
-            onSave={saveInvestment}
-            onCancel={() => setEditingId(null)}
-            saveLabel="Save Changes"
-            fused
-          />
-        )}
-      </div>
-    )
+  function openInvestment(id: string) {
+    scrollPosRef.current = window.scrollY
+    setSelectedInvestmentId(id)
+  }
+
+  function renderInvestmentGroup(inv: Investment) {
+    return <InvestmentCard key={inv.investment_id} inv={inv} fmt={fmt} onClick={() => openInvestment(inv.investment_id)} />
   }
 
   return (
     <div>
-      <p className="text-[13px] text-ink-soft mb-4">Every venture the fund has put money into, and how it turned out.</p>
-
-      {isAdmin && (
-        <div className="flex items-center gap-2 flex-wrap mb-5">
-          {manageMode ? (
-            <button
-              className="bg-ink text-paper px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
-              onClick={() => {
-                setManageMode(false)
-                clearForm()
-              }}
-            >
-              Done
-            </button>
-          ) : (
-            <button
-              className="border border-hairline text-ink-soft px-4 py-2.5 rounded-sm text-sm font-medium shrink-0"
-              onClick={() => {
-                setManageMode(true)
-                clearForm()
-              }}
-            >
-              Manage
-            </button>
-          )}
+      {/* The list itself is read-only -- edit, distribute, close and reopen
+          all live on each investment's own page, behind its ⋯ menu. Only Add,
+          which has no investment to live on yet, stays here. */}
+      <div className="flex items-center justify-between gap-4 mb-5">
+        <p className="text-[13px] text-ink-soft">Every venture the fund has put money into, and how it turned out.</p>
+        {isAdmin && (
           <button
-            className="shrink-0 bg-gold-soft text-ink px-4 py-2.5 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-            onClick={startAdd}
+            className="shrink-0 bg-gold-soft text-ink px-3.5 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            onClick={() => setShowAddSheet(true)}
           >
             <span className="text-lg leading-none">+</span>
             Add Investment
           </button>
-        </div>
+        )}
+      </div>
+
+      {showAddSheet && (
+        <InvestmentDetailsSheet investment={null} onClose={() => setShowAddSheet(false)} onSaved={load} />
       )}
 
-      {showAddForm && (
-        <InvestmentForm
-          title="Add Investment"
-          name={name}
-          setName={setName}
-          affectsCash={affectsCash}
-          setAffectsCash={setAffectsCash}
-          saving={saving}
-          message={formMessage}
-          onSave={saveInvestment}
-          onCancel={clearForm}
-          saveLabel="Add Investment"
-          className="mb-6"
-        />
+      {!loadError && needsDistribution.length > 0 && (
+        <div className="card mb-4">
+          <div className="px-5 pt-4 pb-2">
+            <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-1">Needs distribution</p>
+            <p className="text-sm text-ink">
+              {needsDistribution.length} investment{needsDistribution.length === 1 ? " has" : "s have"} gain or loss
+              not yet split across members.
+            </p>
+            <div className="mt-2">
+              {needsDistribution.map(({ inv, unallocated }) => (
+                <button
+                  key={inv.investment_id}
+                  onClick={() => openInvestment(inv.investment_id)}
+                  className="w-full py-2.5 flex items-center justify-between gap-3 text-left border-t border-dashed border-hairline"
+                >
+                  <span className="text-sm text-ink font-medium truncate">{inv.investment}</span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
+                        unallocated < 0 ? "text-rust" : "text-sage"
+                      }`}
+                    >
+                      {unallocated < 0 ? "-" : "+"}₱{fmt(Math.abs(unallocated))}
+                    </span>
+                    <span className="text-ink-soft">→</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {!loadError && investments.length > 0 && (
@@ -2445,17 +2363,11 @@ function InvestmentsPanel({ isAdmin }: { isAdmin: boolean }) {
 function InvestmentCard({
   inv,
   fmt,
-  onClick,
-  showEdit,
-  fused,
-  onEdit
+  onClick
 }: {
   inv: Investment
   fmt: (n: number) => string
   onClick: () => void
-  showEdit: boolean
-  fused: boolean
-  onEdit: () => void
 }) {
   const isGain = inv.gain_loss > 0
   const isFlat = inv.gain_loss === 0
@@ -2471,45 +2383,17 @@ function InvestmentCard({
           onClick()
         }
       }}
-      className={`w-full text-left bg-paper-2 border border-hairline px-5 py-4 hover:bg-paper transition-colors cursor-pointer ${
-        fused ? "rounded-t-md rounded-b-none border-b-0" : "rounded-md"
-      }`}
+      className="w-full text-left bg-paper-2 border border-hairline rounded-md px-5 py-4 hover:bg-paper transition-colors cursor-pointer"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-display text-[17px] font-semibold text-ink truncate">{inv.investment}</p>
           <p className="text-[12px] text-ink-soft">₱{fmt(inv.invested)} invested</p>
         </div>
-        <div className="shrink-0 flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${isGain ? "bg-sage" : isFlat ? "bg-ink-soft" : "bg-rust"}`} />
-            <span
-              className={`text-[11px] font-mono uppercase tracking-wide ${
-                isGain ? "text-sage" : isFlat ? "text-ink-soft" : "text-rust"
-              }`}
-            >
-              {isGain ? "Gain" : isFlat ? "Flat" : "Loss"}
-            </span>
-          </div>
-          {inv.status === "closed" && (
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-gold border border-gold rounded-full px-2 py-0.5">
-              Closed
-            </span>
-          )}
-          {showEdit ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit()
-              }}
-              className="text-[11px] text-ink-soft border border-hairline rounded-sm px-2.5 py-1.5"
-            >
-              Edit
-            </button>
-          ) : (
-            <span className="text-ink-soft">→</span>
-          )}
-        </div>
+        {/* No status pill -- cards already sit under an Active, Gains or
+            Losses heading, and an active card's figure is labelled "so far"
+            below since it can still move. */}
+        <span className="text-ink-soft shrink-0">→</span>
       </div>
 
       <div className="flex items-baseline justify-between mt-3.5">
@@ -2518,7 +2402,9 @@ function InvestmentCard({
           <p className="font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold text-ink">₱{fmt(inv.returned)}</p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">Gain / Loss</p>
+          <p className="text-[10px] uppercase tracking-wide text-ink-soft font-mono">
+            {inv.status === "open" ? "Gain / Loss So Far" : "Gain / Loss"}
+          </p>
           <p
             className={`font-mono [font-variant-numeric:tabular-nums] text-sm font-semibold ${
               isGain ? "text-sage" : isFlat ? "text-ink" : "text-rust"
@@ -2527,97 +2413,6 @@ function InvestmentCard({
             {inv.gain_loss < 0 ? "-" : "+"}₱{fmt(Math.abs(inv.gain_loss))}
           </p>
         </div>
-      </div>
-    </div>
-  )
-}
-
-function InvestmentForm({
-  title,
-  name,
-  setName,
-  affectsCash,
-  setAffectsCash,
-  saving,
-  message,
-  onSave,
-  onCancel,
-  saveLabel,
-  fused = false,
-  className = ""
-}: {
-  title: string
-  name: string
-  setName: (v: string) => void
-  affectsCash: boolean
-  setAffectsCash: (v: boolean) => void
-  saving: boolean
-  message: string
-  onSave: () => void
-  onCancel: () => void
-  saveLabel: string
-  fused?: boolean
-  className?: string
-}) {
-  return (
-    <div className={`bg-paper-2 border border-hairline relative overflow-hidden ${fused ? "rounded-b-md" : "rounded-md"} ${className}`}>
-      {!fused && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gold" />}
-      <div className={fused ? "px-5 py-5 space-y-4" : "pl-6 pr-5 py-6 space-y-4"}>
-        <p className="font-display text-lg font-medium">{title}</p>
-
-        <div>
-          <label className="block mb-2 text-xs uppercase tracking-wide text-ink-soft font-mono">Investment name</label>
-          <input
-            className="border border-hairline bg-paper text-ink text-sm rounded-sm px-3 py-3 w-full"
-            placeholder="e.g. Farmon - Rice (2026-Q3)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setAffectsCash(!affectsCash)}
-          className="w-full flex items-center justify-between gap-3 border border-hairline bg-paper rounded-sm px-3.5 py-3 text-left"
-        >
-          <span>
-            <span className="block text-sm font-medium text-ink">Affects cash</span>
-            <span className="block text-xs text-ink-soft mt-0.5">
-              {affectsCash ? "Funded through the tracked bank accounts" : "Funded outside the tracked cash trail"}
-            </span>
-          </span>
-          <span
-            className={`shrink-0 relative w-[38px] h-[22px] rounded-full transition-colors ${
-              affectsCash ? "bg-sage" : "bg-hairline"
-            }`}
-          >
-            <span
-              className={`absolute top-[2px] w-[18px] h-[18px] rounded-full bg-paper shadow transition-transform ${
-                affectsCash ? "translate-x-[18px]" : "translate-x-[2px]"
-              }`}
-            />
-          </span>
-        </button>
-
-        <p className="text-xs text-ink-soft">
-          Invested, returned, and gain/loss aren't set here — they're totalled automatically from approved
-          transactions tagged to this investment.
-        </p>
-
-        <div className="flex gap-3">
-          <button
-            className="bg-ink text-paper px-4 py-3 rounded-sm text-sm font-medium flex-1 disabled:opacity-50"
-            onClick={onSave}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : saveLabel}
-          </button>
-          <button className="border border-hairline rounded-sm px-4 py-3 text-sm" onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
-
-        {message && <p className="text-sm text-rust">{message}</p>}
       </div>
     </div>
   )

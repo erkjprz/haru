@@ -96,3 +96,37 @@ export async function getUndistributedInvestmentGain(investmentId: string, asOfD
 
   return Number((returned - invested - alreadyDistributed).toFixed(2))
 }
+
+export interface InvestmentSharePreview {
+  member_id: string
+  name: string
+  amount: number
+  currentValue: number
+  pctShare: number
+}
+
+/**
+ * Read-only preview of the split distributeInvestmentGain /
+ * closeInvestmentAndDistributeGain would record for this signed amount as
+ * of this date -- same computeCurrentValueByMember pool and
+ * splitProportionally rounding. Writes nothing; both still recompute the
+ * split themselves at commit time.
+ */
+export async function previewInvestmentDistribution(amount: number, asOfDate: string): Promise<InvestmentSharePreview[]> {
+  const currentValueByMember = await computeCurrentValueByMember(asOfDate)
+  const shares = splitProportionally(currentValueByMember, amount)
+
+  const { data: members, error } = await supabase.from("members").select("member_id, name")
+  if (error) throw new Error(error.message)
+  const nameById = new Map((members ?? []).map((m) => [m.member_id, m.name as string]))
+
+  return shares
+    .map((s) => ({
+      member_id: s.member_id,
+      name: nameById.get(s.member_id) ?? "Unknown",
+      amount: s.amount,
+      currentValue: s.currentValue,
+      pctShare: s.pctShare
+    }))
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+}
