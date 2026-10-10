@@ -556,7 +556,7 @@ export function LoanDetailPanel({
           {loan.repayment_frequency === "monthly" && loan.due_day != null && (
             <InfoRow label="Due date" value={`${ordinalDay(loan.due_day)} of each month`} />
           )}
-          {isAdmin && loan.notes && <InfoRow label="Notes" value={loan.notes} />}
+          {loan.notes && <InfoRow label="Notes" value={loan.notes} />}
         </InfoBox>
 
         <InfoBox label="Repayment">
