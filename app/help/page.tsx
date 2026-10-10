@@ -274,10 +274,9 @@ const memberSections: FaqSection[] = [
         a: (
           <p>
             Yes, as long as it&apos;s still <strong>Pending</strong>. On the Transactions page, your own
-            pending contributions, withdrawals, and loan payments show a small{" "}
-            <strong>✎ Edit</strong>{" "}
-            button — tap it to change the amount, bank, receipt, or description. Once an admin approves
-            an entry, it can&apos;t be edited anymore.
+            pending and rejected entries are listed at the top — tap one, then <strong>Edit</strong> (or{" "}
+            <strong>Fix &amp; resend</strong> for a rejected one) to change the amount, bank, receipt, or
+            description. Once an admin approves an entry, it can&apos;t be edited anymore.
           </p>
         )
       },
@@ -285,7 +284,8 @@ const memberSections: FaqSection[] = [
         q: "Can I take back something I submitted?",
         a: (
           <p>
-            Yes — open it with <strong>✎ Edit</strong> and tap <strong>Cancel this entry</strong>{" "}
+            Yes — tap it on the Transactions page, then <strong>Edit</strong>, and tap{" "}
+            <strong>Cancel this entry</strong>{" "}
             near the bottom. It&apos;s removed from your list right away. This can&apos;t be undone from
             the app, so make sure before you tap it.
           </p>
@@ -682,8 +682,8 @@ const adminSections: FaqSection[] = [
         q: "Can I edit something after I've recorded it?",
         a: (
           <p>
-            Expense, Bank Interest, and Bank Transfer entries show a <strong>✎ Edit</strong>{" "}
-            button on Transactions any time — but only for whichever admin actually recorded them, not
+            Tap an Expense, Bank Interest, or Bank Transfer entry on Transactions and it has an{" "}
+            <strong>Edit</strong> button any time — but only for whichever admin actually recorded them, not
             any admin, since they&apos;re never in a member&apos;s pending queue to begin with. Need to
             fix one someone else recorded (or an older entry from before this was tracked)? Use{" "}
             <strong>Support</strong>{" "}

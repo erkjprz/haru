@@ -8,58 +8,28 @@ import { SkeletonCardList } from "@/app/components/Skeleton"
 import { useAuth } from "@/app/auth-context"
 import { dateOnly } from "@/lib/currentValue"
 import { TRANSACTION_TYPE_LABELS as typeLabels } from "@/lib/transactionLabels"
-import { DateField } from "@/app/components/TransactionFormUI"
+import { DateField, FieldRow, PersonIcon, BankIcon, StatusIcon, rowSelectClass } from "@/app/components/TransactionFormUI"
+import { Sheet } from "@/app/components/Sheet"
+import {
+  TotalsLine,
+  TransactionDetailSheet,
+  TransactionRow,
+  cardDate,
+  effectiveDate,
+  ledgerBankKeys,
+  moneyTotals,
+  monthLabel
+} from "@/app/components/transactions/TransactionParts"
 import { readCache, writeCache } from "@/lib/cache"
 import { useHydrated } from "@/lib/useHydrated"
 import { TRANSACTIONS_CHANGED_EVENT } from "@/lib/transactionEvents"
 import { fetchTransactionsFields, bankAccountLabel, TRANSACTIONS_CACHE_KEY, type TransactionsSnapshot } from "@/lib/transactionsSnapshot"
+
+// Rows rendered at first, and added each time the end of the list scrolls
+// into view -- the full history is over a thousand entries, too many to
+// lay out at once on a phone.
+const PAGE_SIZE = 60
 import { cacheTransactionRow } from "@/lib/transactionRowCache"
-
-const typeColor: Record<string, string> = {
-  "Member Contribution": "text-sage border-sage",
-  "Member Withdrawal": "text-rust border-rust",
-  "Expense": "text-rust border-rust",
-  "Loan Release": "text-gold border-gold",
-  "Loan Repayment": "text-gold border-gold",
-  "Gain Allocation": "text-slate border-slate",
-  "Bank Interest": "text-sage border-sage",
-  "Investment Return": "text-sage border-sage",
-  "Investment": "text-gold border-gold",
-  "Tax": "text-rust border-rust",
-  "Bank Write-off": "text-rust border-rust"
-}
-
-const statusColor: Record<string, string> = {
-  pending: "text-gold",
-  rejected: "text-rust"
-}
-
-// A transaction's real-world date is txn_date. created_at is a row-insert
-// audit timestamp and only happens to match txn_date for migrated rows
-// because the migration script set it that way -- it's not guaranteed to
-// stay in sync (e.g. manual edits, backfills). Always prefer txn_date,
-// falling back to created_at only for rows that genuinely have no txn_date.
-function effectiveDate(transaction: any): Date {
-  return new Date(transaction.txn_date ?? transaction.created_at)
-}
-
-function monthLabel(transaction: any): string {
-  return effectiveDate(transaction).toLocaleDateString(undefined, {
-    month: "long",
-    year: "numeric"
-  })
-}
-
-// Fixed "05 Jan" shape regardless of locale, instead of a raw
-// toLocaleDateString() that silently flips between D/M/Y and M/D/Y
-// depending on the device's region settings. The month header above each
-// group already carries the year, so day + short month is enough here.
-function cardDate(transaction: any): string {
-  return effectiveDate(transaction).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short"
-  })
-}
 
 // yyyy-mm-dd (as stored in the date-input state) -> "18 Jul" for the pill
 // label. Parsed with an explicit time to avoid the UTC-midnight-rolls-back-
@@ -104,30 +74,13 @@ function buildDatePresets(): DatePreset[] {
   ]
 }
 
-// ~75% of rows have a description that's just the member's name typed back
-// (sometimes via an old alias like "Ekai"/"Ketty"/"Bors" -- member_id is
-// already resolved correctly for those, so the raw text adds nothing once
-// the member's name is the card title). Kept as a fallback safety net even
-// though the four classifications below are hidden unconditionally.
-function isRedundantDescription(description: string | null, memberName: string | null): boolean {
-  if (!description || !memberName) return false
-  return description.trim().toLowerCase() === memberName.trim().toLowerCase()
+function TypeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="w-5 h-5 text-ink-soft shrink-0">
+      <path d="M7 7h10M7 12h10M7 17h6" strokeLinecap="round" />
+    </svg>
+  )
 }
-
-// Tax and Bank Interest rows have no member -- their description ("tax",
-// "interest", "maya interest") was the only way to tell them apart and see
-// which bank they belonged to. Now that the type badge already says
-// TAX / BANK INTEREST and the bank pill already shows BDO / Maya, that
-// description adds nothing. Member Contribution and Member Withdrawal
-// descriptions are, in practice, always just the member's name -- hidden
-// unconditionally too. Loan Release/Repayment and Internal Transfer get
-// their own richer displays below instead of the raw description.
-const CLASSIFICATIONS_WITH_HIDDEN_DESCRIPTION = new Set([
-  "Member Contribution",
-  "Member Withdrawal",
-  "Bank Interest",
-  "Tax"
-])
 
 // Owns the raw keystroke-by-keystroke input state itself and only reports
 // upward once typing pauses -- debouncing the *value* passed up wasn't
@@ -191,17 +144,6 @@ function SearchBox({ onDebouncedChange }: { onDebouncedChange: (value: string) =
   )
 }
 
-// The bank(s) a row moves, keyed exactly as v_cash_ledger keys them --
-// COALESCE(t.bank, account_name, bank_name) for the row's own bank, plus the
-// destination for an Internal Transfer -- so ?bank= lists the same entries
-// that bank's balance is built from.
-type BankRef = { bank_name?: string | null; account_name?: string | null } | null | undefined
-function ledgerBankKeys(t: { bank?: string | null; from_bank_account?: BankRef; to_bank_account?: BankRef }): string[] {
-  const from = t.bank || t.from_bank_account?.account_name || t.from_bank_account?.bank_name || null
-  const to = t.to_bank_account?.account_name || t.to_bank_account?.bank_name || null
-  return [from, to].filter((k): k is string => !!k)
-}
-
 export default function TransactionsPage() {
   return (
     <Suspense fallback={null}>
@@ -249,13 +191,29 @@ function TransactionsPageInner() {
   // rendered the cached *unfiltered* transactions list (everyone's, not
   // just this member's) before narrowing down, a visible flash now that
   // there's cached data to paint immediately instead of a loading skeleton.
+  //
+  // Admins open on everyone's activity instead -- they look after the
+  // whole fund, not just their own entries.
   const defaultMemberAppliedRef = useRef(!!member)
   const [selectedMemberId, setSelectedMemberId] = useState(() =>
-    member && !searchParams.get("loan") && !searchParams.get("investment") && !searchParams.get("bank")
+    member &&
+    member.role !== "admin" &&
+    !searchParams.get("loan") &&
+    !searchParams.get("investment") &&
+    !searchParams.get("bank")
       ? member.member_id
       : ""
   )
   const [selectedType, setSelectedType] = useState("")
+  const [selectedStatus, setSelectedStatus] = useState("")
+  // The row whose detail sheet is open.
+  const [openTxnId, setOpenTxnId] = useState<string | null>(null)
+  // Bumped to remount SearchBox, which owns its own text -- the way "Clear
+  // filters" on an empty result also clears the search.
+  const [searchKey, setSearchKey] = useState(0)
+  // How many rows are rendered for the current filters (see PAGE_SIZE).
+  const [shown, setShown] = useState({ key: "", count: PAGE_SIZE })
+  const sentinelRef = useRef<HTMLDivElement>(null)
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
@@ -335,7 +293,7 @@ function TransactionsPageInner() {
   // the dependency array.
   useEffect(() => {
     if (member && !defaultMemberAppliedRef.current) {
-      if (!loanFilter && !investmentFilter && !bankFilter) {
+      if (!loanFilter && !investmentFilter && !bankFilter && member.role !== "admin") {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedMemberId(member.member_id)
       }
@@ -347,6 +305,7 @@ function TransactionsPageInner() {
   function clearFilters() {
     setSelectedMemberId("")
     setSelectedType("")
+    setSelectedStatus("")
     setDateFrom("")
     setDateTo("")
     setLoanFilter("")
@@ -412,6 +371,7 @@ function TransactionsPageInner() {
     return searchableTransactions.filter((t) => {
       const memberMatch = selectedMemberId ? t.member_id === selectedMemberId : true
       const typeMatch = selectedType ? t.classification === selectedType : true
+      const statusMatch = selectedStatus ? t.status === selectedStatus : true
       const loanMatch = loanFilter ? t.loan_id === loanFilter : true
       const investmentMatch = investmentFilter ? t.investment_id === investmentFilter : true
       const bankMatch = bankFilter ? ledgerBankKeys(t).includes(bankFilter) : true
@@ -427,12 +387,13 @@ function TransactionsPageInner() {
       // substring.
       const searchMatch = searchWords.length === 0 || searchWords.every((word) => t._searchHaystack.includes(word))
 
-      return memberMatch && typeMatch && loanMatch && investmentMatch && bankMatch && fromMatch && toMatch && searchMatch
+      return memberMatch && typeMatch && statusMatch && loanMatch && investmentMatch && bankMatch && fromMatch && toMatch && searchMatch
     })
   }, [
     searchableTransactions,
     selectedMemberId,
     selectedType,
+    selectedStatus,
     loanFilter,
     investmentFilter,
     bankFilter,
@@ -451,12 +412,6 @@ function TransactionsPageInner() {
   const investmentFilterLabel = investmentFilter
     ? transactions.find((t) => t.investment_id === investmentFilter)?.investments?.name || "Investment"
     : ""
-
-  const fmt = (n: number) =>
-    Number(n).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })
 
   const hasDateFilter = Boolean(dateFrom || dateTo)
 
@@ -491,6 +446,11 @@ function TransactionsPageInner() {
       label: typeLabels[selectedType] || selectedType,
       onClear: () => setSelectedType("")
     },
+    selectedStatus && {
+      key: "status",
+      label: selectedStatus === "approved" ? "Approved" : selectedStatus === "pending" ? "Pending" : "Rejected",
+      onClear: () => setSelectedStatus("")
+    },
     hasDateFilter && {
       key: "dates",
       label: dateRangeLabel,
@@ -508,6 +468,72 @@ function TransactionsPageInner() {
   // Same reason: the server always renders the skeleton (it has no cache),
   // so the cached list only takes over once hydration is done.
   const showLoading = dataLoading || !hydrated
+
+  // Your own entries still in play -- rejected ones to fix first, then
+  // pending ones waiting on an admin -- lead the page instead of sitting
+  // somewhere down the list.
+  const attention = filteredTransactions
+    .filter((t) => t.member_id === member?.member_id && (t.status === "rejected" || t.status === "pending"))
+    .sort((a, b) => (a.status === "rejected" ? 0 : 1) - (b.status === "rejected" ? 0 : 1))
+  const attentionIds = new Set(attention.map((t) => t.transaction_id))
+  const listRows = attention.length ? filteredTransactions.filter((t) => !attentionIds.has(t.transaction_id)) : filteredTransactions
+
+  const filterKey = [
+    selectedMemberId,
+    selectedType,
+    selectedStatus,
+    loanFilter,
+    investmentFilter,
+    bankFilter,
+    dateFrom,
+    dateTo,
+    debouncedSearchQuery
+  ].join("|")
+  const limit = shown.key === filterKey ? shown.count : PAGE_SIZE
+  const visibleRows = listRows.slice(0, limit)
+  const hasMore = listRows.length > limit
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) setShown({ key: filterKey, count: limit + PAGE_SIZE })
+      },
+      { rootMargin: "800px" }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, limit, filterKey])
+
+  // Totals for everything matching, and per month -- over the whole
+  // matching list, not just the rows rendered so far.
+  const totals = useMemo(() => moneyTotals(filteredTransactions), [filteredTransactions])
+  const monthTotals = useMemo(() => {
+    const byMonth = new Map<string, typeof listRows>()
+    for (const t of listRows) {
+      const label = monthLabel(t)
+      if (!byMonth.has(label)) byMonth.set(label, [])
+      byMonth.get(label)!.push(t)
+    }
+    return new Map([...byMonth].map(([label, rows]) => [label, moneyTotals(rows)]))
+  }, [listRows])
+
+  const openTxn = openTxnId ? transactions.find((t) => t.transaction_id === openTxnId) ?? null : null
+  const anyFilterActive = activeChips.length > 0 || !!debouncedSearchQuery
+
+  function clearEverything() {
+    clearFilters()
+    setDebouncedSearchQuery("")
+    setSearchKey((k) => k + 1)
+  }
+
+  const statusOptions = [
+    { value: "", label: "Any status" },
+    { value: "approved", label: "Approved" },
+    { value: "pending", label: "Pending" },
+    { value: "rejected", label: "Rejected" }
+  ]
 
   return (
     <>
@@ -534,7 +560,7 @@ function TransactionsPageInner() {
               in the sheet below rather than as a row of always-visible
               dropdowns. */}
           <div className="mt-6 flex items-start gap-2">
-            <SearchBox onDebouncedChange={setDebouncedSearchQuery} />
+            <SearchBox key={searchKey} onDebouncedChange={setDebouncedSearchQuery} />
             <button
               type="button"
               onClick={() => setFilterSheetOpen(true)}
@@ -590,394 +616,198 @@ function TransactionsPageInner() {
           )}
 
           {!showLoading && (
-            <div className="mt-4 text-xs text-ink-soft font-mono [font-variant-numeric:tabular-nums]">
-              Showing {filteredTransactions.length} of {totalCount}
-              {debouncedSearchQuery && ` matching "${debouncedSearchQuery}"`}
+            <div className="mt-4 flex items-baseline justify-between gap-3 text-xs">
+              <span className="text-ink-soft font-mono [font-variant-numeric:tabular-nums] truncate min-w-0">
+                {filteredTransactions.length} of {totalCount}
+                {debouncedSearchQuery && ` matching "${debouncedSearchQuery}"`}
+              </span>
+              <TotalsLine totals={totals} className="text-xs shrink-0" />
             </div>
           )}
 
-          <div className="mt-4">
+          {!showLoading && attention.length > 0 && (
+            <section className="mt-5">
+              <p className="text-[11px] uppercase tracking-wide font-mono mb-2 text-gold">
+                {attention.some((t) => t.status === "rejected") ? "Needs your attention" : "Waiting for approval"}
+              </p>
+              <div className="space-y-2">
+                {attention.map((t) => (
+                  <TransactionRow key={t.transaction_id} t={t} onOpen={() => setOpenTxnId(t.transaction_id)} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          <div className="mt-5">
             {showLoading && <SkeletonCardList rows={5} />}
-            {!showLoading && filteredTransactions.map((transaction, idx) => {
-              const memberName = transaction.members?.name || null
-              const isLoanTxn =
-                transaction.classification === "Loan Release" ||
-                transaction.classification === "Loan Repayment"
-              const isTransferTxn = transaction.classification === "Internal Transfer"
-
-              // "Gain Allocation" covers a member's share of a loan gain, an
-              // investment gain/loss, or bank interest -- one classification
-              // for both directions. The type badge stays one fixed color
-              // (slate) either way -- the sign shows up as a +/- on the
-              // amount instead, so a loss doesn't borrow rust's "money left
-              // the fund" meaning that Withdrawal/Expense/Tax/Write-off use.
-              const isGainAllocationLoss =
-                transaction.classification === "Gain Allocation" && Number(transaction.amount) < 0
-
-              const loanName = transaction.loans?.name || null
-              const borrowerName = transaction.loans?.borrowers?.name || null
-              const transferLabel = isTransferTxn ? transaction._transferLabel ?? null : null
-              const investmentName = transaction.investments?.name || null
-
-              const isGainAllocation = transaction.classification === "Gain Allocation"
-
-              // Bank interest Gain Allocation rows have no relational
-              // bank/year field (legacy data) -- both only exist embedded
-              // in the description, which follows one exact template for
-              // every such row, so it's safe to parse out.
-              const gainAllocationBankMatch =
-                isGainAllocation && !loanName && !investmentName
-                  ? transaction.description?.match(/^Share of (\d{4}) (.+) bank interest$/) ?? null
-                  : null
-
-              // loanName is "{Borrower} · {year-month}" -- pull the
-              // year-month back out so a loan gain share can read
-              // "Loan · {year-month} · {Borrower}", matching the
-              // "Interest · {year} · {bank}" / "Investment · {name}" byline
-              // shape used by the other two gain-allocation sources.
-              const loanDate = loanName?.match(/(\d{4}-\d{2})$/)?.[1] ?? null
-
-              const gainAllocationDetail = !isGainAllocation
-                ? null
-                : loanName
-                ? `Loan · ${loanDate} · ${borrowerName}`
-                : gainAllocationBankMatch
-                ? `Interest · ${gainAllocationBankMatch[1]} · ${gainAllocationBankMatch[2]}`
-                : null
-
-              // Legacy migrated rows carry the bank as plain text in `bank`.
-              // Rows created through the app instead link a real bank
-              // account via bank_account_id, so fall back to that embed's
-              // name when there's no legacy text -- otherwise every
-              // app-submitted Contribution/Loan Payment/Bank
-              // Interest/Expense silently loses its bank badge.
-              const bankBadge = !isTransferTxn
-                ? transaction.bank || bankAccountLabel(transaction.from_bank_account)
-                : null
-
-              // Borrower-only loans (e.g. Joy, who isn't a fund member) have
-              // no member_id, so fall back to the borrower's name as the
-              // card title instead of leaving it as generic "Fund".
-              const displayName = memberName || (isLoanTxn ? borrowerName : null) || "Fund"
-
-              const showDescription =
-                transaction.description &&
-                !isRedundantDescription(transaction.description, memberName) &&
-                !CLASSIFICATIONS_WITH_HIDDEN_DESCRIPTION.has(transaction.classification) &&
-                !isLoanTxn &&
-                !isTransferTxn &&
-                !(isGainAllocation && (gainAllocationDetail || investmentName))
-
-              // Same color the type badge always used, just resolved once
-              // here now that it's rendered beside the name instead of in
-              // the mono byline below.
-              const typeColorClass = isGainAllocation
-                ? isGainAllocationLoss
-                  ? "text-rust"
-                  : "text-sage"
-                : (typeColor[transaction.classification] ?? "text-ink-soft").split(" ")[0]
-
-              const showStatus = transaction.status !== "approved"
-
-              // Member-submitted entries: editable by their owner while
-              // still pending, or after a rejection -- editing a rejected row
-              // resubmits it (flips it back to pending, see the edit page's
-              // handleSave). Loan Release is excluded from self-service
-              // editing -- it's paired with a loans row a member has no
-              // rights to touch, and a rejected Loan Release has already had
-              // its loan record deleted (see rejectTransaction in
-              // /admin), so there's nothing left to resubmit -- but an admin
-              // can edit/cancel it while it's still pending (the loan itself
-              // is still "requested"; once approved, transaction.status flips
-              // to "approved" too, so this stays a reliable proxy without a
-              // separate query). This first branch already covers a member's
-              // own pending/rejected Investment Return too (see
-              // EditTransactionSheet), since it's a generic "row I own"
-              // check, not classification-gated.
-              // Admin entries (Bank Interest/Expense/Bank Transfer/
-              // Investment) are always inserted already-approved with no
-              // owning member, so editing is restricted to whichever admin
-              // actually recorded it (submitted_by) -- older entries from
-              // before this was tracked have no submitted_by on file, so any
-              // admin can still edit those rather than locking everyone out.
-              // Investment Return can't join that static list the same way,
-              // since a member's own pending row also has submitted_by ==
-              // null (per the DB's insert policy) -- without the member_id
-              // guard, this branch would let any admin edit a member's still
-              // -pending submission directly, bypassing the review queue.
-              const canEdit =
-                ((transaction.status === "pending" || transaction.status === "rejected") &&
-                  transaction.member_id === member?.member_id &&
-                  transaction.classification !== "Loan Release") ||
-                (isAdmin &&
-                  ((["Bank Interest", "Expense", "Internal Transfer", "Investment"].includes(
-                    transaction.classification
-                  ) &&
-                    (transaction.submitted_by == null || transaction.submitted_by === member?.member_id)) ||
-                    (transaction.classification === "Investment Return" &&
-                      transaction.member_id == null &&
-                      (transaction.submitted_by == null || transaction.submitted_by === member?.member_id)) ||
-                    (transaction.classification === "Loan Release" && transaction.status === "pending")))
-
-              const label = monthLabel(transaction)
-              const showMonthHeader = idx === 0 || label !== monthLabel(filteredTransactions[idx - 1])
-
-              return (
-                <div key={transaction.transaction_id}>
-                  {showMonthHeader && (
-                    <p
-                      className={`text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 ${
-                        idx === 0 ? "mt-0" : "mt-6"
-                      }`}
-                    >
-                      {label}
-                    </p>
-                  )}
-
-                  {/* Date/bank lead as a quiet byline -- date in full
-                      contrast since it's what people scan a ledger by --
-                      then name + type + amount as the punchline right under
-                      it. The rejection reason sits above the status row
-                      rather than below it so that row -- and its action
-                      button -- stays the last thing in the card regardless
-                      of which optional lines appear above it. */}
-                  <div
-                    className={`flex flex-col gap-1 card px-4 py-3.5 ${
-                      showMonthHeader ? "" : "mt-3"
-                    }`}
-                  >
-                    <div className="text-xs font-mono text-ink-soft truncate">
-                      <span className="font-bold text-ink">{cardDate(transaction)}</span>
-                      {bankBadge && <> · {bankBadge}</>}
-                      {isTransferTxn && transferLabel && <> · {transferLabel}</>}
-                    </div>
-
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="flex items-baseline gap-1.5 min-w-0">
-                        <span className="font-display text-lg font-bold truncate min-w-0">{displayName}</span>
-                        <span className={`font-display text-xs font-bold shrink-0 ${typeColorClass}`}>
-                          {typeLabels[transaction.classification] || transaction.classification}
-                        </span>
-                      </span>
-                      <span className="flex items-center gap-2 shrink-0">
-                        <span className="font-mono [font-variant-numeric:tabular-nums] text-lg font-bold whitespace-nowrap">
-                          ₱{fmt(Math.abs(transaction.amount))}
-                        </span>
-                        {transaction.receipt_url && (
-                          <button
-                            type="button"
-                            onClick={() => setOpenReceiptUrl(transaction.receipt_url)}
-                            aria-label="View receipt"
-                            className="shrink-0 w-7 h-7 rounded-full border border-gold text-gold text-xs flex items-center justify-center"
-                          >
-                            🧾
-                          </button>
-                        )}
-                      </span>
-                    </div>
-
-                    {transaction.submitted_by_member && (
-                      <p className="text-xs text-gold font-mono">
-                        Recorded by {transaction.submitted_by_member.name}
-                      </p>
-                    )}
-                    {isLoanTxn && loanDate && <p className="text-xs text-ink-soft font-mono">{loanDate}</p>}
-                    {gainAllocationDetail && (
-                      <p className="text-xs text-ink-soft font-mono">{gainAllocationDetail}</p>
-                    )}
-                    {investmentName && (
-                      <p className="text-xs text-ink-soft font-mono">Investment · {investmentName}</p>
-                    )}
-                    {showDescription && (
-                      <p className="text-xs text-ink-soft font-mono break-words">{transaction.description}</p>
-                    )}
-                    {transaction.status === "rejected" && transaction.rejection_reason && (
-                      <p className="text-xs text-rust font-mono">{transaction.rejection_reason}</p>
-                    )}
-
-                    {(showStatus || canEdit) && (
-                      <div
-                        className={`flex items-center pt-0.5 ${
-                          canEdit && showStatus ? "justify-between" : "justify-end"
-                        }`}
-                      >
-                        {showStatus && (
-                          <span
-                            className={`text-[10px] uppercase font-mono font-semibold tracking-wide ${
-                              statusColor[transaction.status] ?? "text-ink-soft"
-                            }`}
-                          >
-                            {transaction.status}
-                          </span>
-                        )}
-                        {canEdit && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // Hands the exact row already on screen to
-                              // EditTransactionSheet, so it can render
-                              // instantly instead of re-fetching by ID and
-                              // showing a skeleton over data that hasn't
-                              // gone anywhere.
-                              cacheTransactionRow(transaction)
-                              router.push(`/transactions?editTransaction=${transaction.transaction_id}`, { scroll: false })
-                            }}
-                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-paper bg-gold-soft rounded-full px-3 py-1.5"
-                          >
-                            {transaction.status === "rejected" ? "✎ Fix & resend" : "✎ Edit"}
-                          </button>
-                        )}
+            {!showLoading &&
+              visibleRows.map((t, idx) => {
+                const label = monthLabel(t)
+                const showMonthHeader = idx === 0 || label !== monthLabel(visibleRows[idx - 1])
+                return (
+                  <div key={t.transaction_id}>
+                    {showMonthHeader && (
+                      <div className={`flex items-baseline justify-between gap-3 mb-2 ${idx === 0 ? "mt-0" : "mt-6"}`}>
+                        <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono">{label}</p>
+                        {monthTotals.get(label) && <TotalsLine totals={monthTotals.get(label)!} className="text-[11px]" />}
                       </div>
                     )}
+                    <div className={showMonthHeader ? "" : "mt-2"}>
+                      <TransactionRow t={t} onOpen={() => setOpenTxnId(t.transaction_id)} />
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+
+            {!showLoading && hasMore && (
+              <div ref={sentinelRef} className="py-6 text-center text-xs text-ink-soft font-mono">
+                Loading older entries…
+              </div>
+            )}
 
             {!showLoading && filteredTransactions.length === 0 && !loadError && (
-              <p className="py-8 text-sm text-ink-soft text-center">No transactions found.</p>
+              <div className="py-10 text-center">
+                <p className="text-sm text-ink-soft">
+                  {anyFilterActive ? "Nothing matches these filters." : "No transactions yet."}
+                </p>
+                {anyFilterActive && (
+                  <button
+                    type="button"
+                    onClick={clearEverything}
+                    className="mt-3 border border-hairline rounded-full px-4 py-2 text-sm font-semibold text-ink"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
-
-        {/* Fixed viewport sheet, capped at 85% of the viewport height and
-            scrollable internally. iOS's native date-wheel picker expands
-            inline underneath whichever input is focused, which can make
-            this sheet's natural content height taller than the screen --
-            without a cap the Apply button could get pushed out of reach
-            entirely instead of just requiring a scroll to see it. Every
-            control here applies its filter live (same as the old always-
-            visible dropdowns did) -- "Apply Filters" just closes the sheet
-            rather than batching anything. */}
-        {filterSheetOpen && (
-          <div
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-            onClick={() => setFilterSheetOpen(false)}
-          >
-            <div
-              className="w-full sm:w-96 max-h-[85vh] overflow-y-auto bg-paper-2 border border-hairline rounded-t-xl sm:rounded-xl p-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:pb-5"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-5">
-                <p className="font-display text-lg font-medium text-ink">Filters</p>
-                <button type="button" onClick={clearFilters} className="text-sm font-semibold text-gold">
-                  Reset
-                </button>
-              </div>
-
-              <div className="mb-6">
-                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Who</p>
-                <select
-                  value={selectedMemberId}
-                  onChange={(e) => setSelectedMemberId(e.target.value)}
-                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3.5 text-sm text-ink focus:outline-none focus:border-gold"
-                >
-                  <option value="">Everyone</option>
-                  {members.map((m) => (
-                    <option key={m.member_id} value={m.member_id}>
-                      {m.member_id === member?.member_id ? "You" : m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-6">
-                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Type</p>
-                <select
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3.5 text-sm text-ink focus:outline-none focus:border-gold"
-                >
-                  <option value="">All Types</option>
-                  {typeOptions.map((type) => (
-                    <option key={type} value={type}>
-                      {typeLabels[type] || type}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-6">
-                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Bank</p>
-                <select
-                  value={bankFilter}
-                  onChange={(e) => setBankFilter(e.target.value)}
-                  className="w-full h-11 appearance-none bg-paper border border-hairline rounded-md px-3.5 text-sm text-ink focus:outline-none focus:border-gold"
-                >
-                  <option value="">All Banks</option>
-                  {bankOptions.map((bank) => (
-                    <option key={bank} value={bank}>
-                      {bank}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-2">
-                <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2">Date Range</p>
-
-                {/* Fills both dates in one tap for the common cases; picking
-                    a custom date below just naturally stops matching any
-                    preset's range, so nothing here needs its own "active
-                    preset" state to keep in sync. */}
-                <div className="flex gap-2 overflow-x-auto mb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {buildDatePresets().map((preset) => {
-                    const active = dateFrom === preset.from && dateTo === preset.to
-                    return (
-                      <button
-                        key={preset.key}
-                        type="button"
-                        onClick={() => {
-                          setDateFrom(preset.from)
-                          setDateTo(preset.to)
-                        }}
-                        className={`shrink-0 border rounded-full px-3.5 py-2 text-sm whitespace-nowrap ${
-                          active ? "bg-gold-soft border-gold-soft text-ink font-semibold" : "border-hairline text-ink-soft"
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">From</label>
-                    <DateField
-                      value={dateFrom}
-                      onChange={(v) => {
-                        setDateFrom(v)
-                        // Quietly pre-fill "To" to match "From" -- so
-                        // whenever the user actually taps "To" themselves,
-                        // its picker already starts on that same month/year
-                        // instead of today's -- without popping it open on
-                        // its own right after "From" is picked. The user
-                        // can still change just the day.
-                        if (v) setDateTo(v)
-                      }}
-                      placeholder="Start date"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1">To</label>
-                    <DateField value={dateTo} onChange={setDateTo} placeholder="End date" />
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setFilterSheetOpen(false)}
-                className="w-full mt-5 bg-gold-soft text-ink rounded-md py-3.5 text-sm font-semibold"
-              >
-                Apply Filters
-              </button>
-            </div>
-          </div>
-        )}
       </main>
 
+      {filterSheetOpen && (
+        <Sheet
+          title="Filters"
+          onClose={() => setFilterSheetOpen(false)}
+          footer={
+            <button
+              type="button"
+              onClick={() => setFilterSheetOpen(false)}
+              className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97]"
+            >
+              Show {filteredTransactions.length} {filteredTransactions.length === 1 ? "entry" : "entries"}
+            </button>
+          }
+        >
+          {/* Every control applies live -- the button just closes. */}
+          <div className="card divide-y divide-hairline overflow-hidden">
+            <FieldRow icon={<PersonIcon />}>
+              <select className={rowSelectClass} value={selectedMemberId} onChange={(e) => setSelectedMemberId(e.target.value)}>
+                <option value="">Everyone</option>
+                {members.map((m) => (
+                  <option key={m.member_id} value={m.member_id}>
+                    {m.member_id === member?.member_id ? "You" : m.name}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+            <FieldRow icon={<TypeIcon />}>
+              <select className={rowSelectClass} value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+                <option value="">All types</option>
+                {typeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {typeLabels[type] || type}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+            <FieldRow icon={<BankIcon />}>
+              <select className={rowSelectClass} value={bankFilter} onChange={(e) => setBankFilter(e.target.value)}>
+                <option value="">All banks</option>
+                {bankOptions.map((bank) => (
+                  <option key={bank} value={bank}>
+                    {bank}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+            <FieldRow icon={<StatusIcon />}>
+              <select className={rowSelectClass} value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
+                {statusOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+          </div>
+
+          <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mt-5 mb-2 px-1">Dates</p>
+          {/* Fills both dates in one tap for the common cases; picking a
+              custom date below just stops matching any preset's range. */}
+          <div className="flex gap-2 mb-3 -mx-4 px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {buildDatePresets().map((preset) => {
+              const active = dateFrom === preset.from && dateTo === preset.to
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => {
+                    setDateFrom(preset.from)
+                    setDateTo(preset.to)
+                  }}
+                  className={`shrink-0 border rounded-full px-3 py-1.5 text-[13px] whitespace-nowrap ${
+                    active ? "bg-gold-soft border-gold-soft text-ink font-semibold" : "border-hairline text-ink-soft"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1 px-1">From</label>
+              <DateField
+                value={dateFrom}
+                onChange={(v) => {
+                  setDateFrom(v)
+                  // Pre-fill "To" so its picker opens on the same month.
+                  if (v) setDateTo(v)
+                }}
+                placeholder="Start date"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] uppercase tracking-wide text-ink-soft mb-1 px-1">To</label>
+              <DateField value={dateTo} onChange={setDateTo} placeholder="End date" />
+            </div>
+          </div>
+
+          {activeChips.length > 0 && (
+            <button type="button" onClick={clearFilters} className="mt-5 w-full text-center text-sm font-semibold text-gold">
+              Reset all filters
+            </button>
+          )}
+        </Sheet>
+      )}
+
+      {openTxn && (
+        <TransactionDetailSheet
+          t={openTxn}
+          memberId={member?.member_id}
+          isAdmin={isAdmin}
+          onClose={() => setOpenTxnId(null)}
+          onOpenReceipt={setOpenReceiptUrl}
+          onEdit={() => {
+            setOpenTxnId(null)
+            // Hands the exact row already on screen to EditTransactionSheet,
+            // so it can render instantly instead of re-fetching by ID.
+            cacheTransactionRow(openTxn)
+            router.push(`/transactions?editTransaction=${openTxn.transaction_id}`, { scroll: false })
+          }}
+        />
+      )}
       {openReceiptUrl && <ReceiptModal path={openReceiptUrl} onClose={() => setOpenReceiptUrl(null)} />}
     </>
   )
