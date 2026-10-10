@@ -289,7 +289,7 @@ export default function AdminMembersPage() {
               footer={
                 <button
                   type="button"
-                  className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97]"
+                  className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97]"
                   onClick={addMember}
                 >
                   Add Member
@@ -480,7 +480,7 @@ export default function AdminMembersPage() {
               </button>
               <button
                 type="button"
-                className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97]"
+                className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97]"
                 onClick={() => saveEdit(editingId)}
               >
                 Save

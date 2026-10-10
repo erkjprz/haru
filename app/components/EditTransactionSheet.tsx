@@ -802,7 +802,7 @@ export function EditTransactionSheet({ transactionId, onClose }: { transactionId
             )}
             <button
               type="button"
-              className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:ring-0"
+              className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
               onClick={isLoanRelease && formStep === 1 ? handleContinueToReview : handleSave}
               disabled={saving || cancelling}
             >

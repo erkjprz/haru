@@ -103,7 +103,7 @@ function Benefit({ icon, children, last }: { icon: React.ReactNode; children: Re
 }
 
 const primaryButton =
-  "w-full min-h-[52px] bg-ink text-paper rounded-full text-base font-bold shadow-lg shadow-gold/30 ring-1 ring-gold/40 motion-safe:transition-transform motion-safe:active:scale-[0.97]"
+  "w-full min-h-[52px] bg-ink text-paper rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97]"
 
 export function InstallGate() {
   const { loading, user } = useAuth()
