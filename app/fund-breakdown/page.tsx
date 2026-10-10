@@ -1860,7 +1860,8 @@ type Bank = {
   tax: number
   distributed: number
   pending_interest: number
-  // The part of pending_interest from years already due (Dec 25 onward) --
+  // The part of pending_interest from years already due (from Jan 1 of the
+  // next year) --
   // only this drives the admin "Needs distribution" banner.
   due_interest?: number
 }
@@ -2068,6 +2069,9 @@ function BanksPanel({
             <p className="text-sm text-ink">
               <span className="font-mono [font-variant-numeric:tabular-nums] font-semibold">₱{fmt(totalDue)}</span>{" "}
               interest is ready to split across members.
+            </p>
+            <p className="text-[12px] text-ink-soft mt-1.5">
+              Before distributing, make sure December&apos;s interest and tax are logged for BDO and Maya.
             </p>
             <div className="mt-2">
               {dueBanks.map((b) => (
