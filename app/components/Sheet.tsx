@@ -236,8 +236,11 @@ export function Sheet({
           layout stays correct but the paint doesn't. bg-black/80 is opaque
           enough on its own. */}
       <div
+        // pointer-events-none once closing: if the parent is slow to
+        // unmount this sheet after onClose, an invisible backdrop must not
+        // keep swallowing every tap on the page underneath.
         className={`fixed inset-0 z-50 bg-black/80 transition-opacity duration-200 ${
-          open ? "opacity-100" : "opacity-0"
+          open ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onPointerDown={handleBackdropPointerDown}
         onPointerUp={handleBackdropPointerUp}
