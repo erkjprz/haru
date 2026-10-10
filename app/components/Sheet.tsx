@@ -155,6 +155,53 @@ export function Sheet({
     }
   }, [])
 
+  // Keeps whichever field was just tapped visible above the keyboard,
+  // instead of making the user scroll down to find it. When the keyboard
+  // opens, the panel above lifts and shrinks (viewportMetrics), which
+  // leaves a lower field like Notes hidden under the footer's Submit
+  // button. Scrolls only this sheet's own content div, by hand, rather
+  // than calling scrollIntoView -- that also scrolls every ancestor,
+  // including the locked page behind the sheet, which is exactly the
+  // iOS scroll-on-focus glitch the body-lock comment below describes.
+  // Reveals the field's wrapper when it's small (so a helper line under
+  // an input stays in view too), else just the field itself.
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  function revealFocusedField() {
+    const container = scrollRef.current
+    const field = document.activeElement
+    if (!container || !(field instanceof HTMLElement) || !container.contains(field)) return
+    if (!field.matches("input, textarea, select, [contenteditable='true']")) return
+
+    const box = container.getBoundingClientRect()
+    const wrapper = field.parentElement
+    const target =
+      wrapper && wrapper !== container && wrapper.getBoundingClientRect().height < box.height / 2 ? wrapper : field
+    const rect = target.getBoundingClientRect()
+    const margin = 16
+
+    let delta = 0
+    if (rect.bottom > box.bottom - margin) delta = rect.bottom - box.bottom + margin
+    else if (rect.top < box.top + margin) delta = rect.top - box.top - margin
+    if (delta !== 0) container.scrollBy({ top: delta, behavior: "smooth" })
+  }
+
+  // Re-run once the keyboard has actually finished resizing the panel --
+  // on the first tap the field's focus lands before visualViewport
+  // shrinks, so measuring at focus time alone would see a panel that
+  // still has room. The double rAF lets the new bottom/maxHeight commit
+  // and lay out first.
+  useEffect(() => {
+    let inner = 0
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(revealFocusedField)
+    })
+    return () => {
+      cancelAnimationFrame(outer)
+      cancelAnimationFrame(inner)
+    }
+  }, [viewportMetrics])
+
   function handleClose() {
     setOpen(false)
     setTimeout(onClose, 200)
@@ -234,7 +281,13 @@ export function Sheet({
             the footer below out from under `overflow-hidden` on the
             panel, clipping the Submit/Save button even though the
             numbers on paper say everything should fit. */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pb-4">{children}</div>
+        <div
+          ref={scrollRef}
+          onFocus={() => requestAnimationFrame(revealFocusedField)}
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pb-4"
+        >
+          {children}
+        </div>
         {footer && (
           <div
             className="px-4 pt-3 flex-shrink-0 border-t border-hairline"
