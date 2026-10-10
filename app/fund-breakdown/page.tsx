@@ -1931,22 +1931,22 @@ function BanksPanel({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div>
-      <p className="text-[13px] text-ink-soft mb-4">Where the fund's cash sits, and the interest each account has earned.</p>
-
       {/* The list itself is read-only -- every per-bank admin action (edit,
           QR, distribute) lives on that bank's own page, behind its ⋯ menu.
-          Only Add Bank, which has no bank to live on yet, stays here. */}
-      {isAdmin && (
-        <div className="flex justify-end mb-5">
+          Only Add Bank, which has no bank to live on yet, stays here, on the
+          same row as the intro so it doesn't sit alone on a line of its own. */}
+      <div className="flex items-center justify-between gap-4 mb-5">
+        <p className="text-[13px] text-ink-soft">Where the fund's cash sits, and the interest each account has earned.</p>
+        {isAdmin && (
           <button
-            className="shrink-0 bg-gold-soft text-ink px-4 py-2.5 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            className="shrink-0 bg-gold-soft text-ink px-3.5 py-2 rounded-sm text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
             onClick={() => setShowAddSheet(true)}
           >
             <span className="text-lg leading-none">+</span>
             Add Bank
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {showAddSheet && (
         <BankAccountSheet account={null} onClose={() => setShowAddSheet(false)} onSaved={() => load()} />
