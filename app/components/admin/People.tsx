@@ -141,10 +141,11 @@ export function usePersonParam(ready: boolean, open: (id: string) => void) {
   }, [ready])
 }
 
-type PersonLoan = { loan_id: string; loan: string; status: string; outstanding: number; principal: number }
+type PersonLoan = { loan_id: string; loan: string; outstanding: number }
 
-// A person's loans -- on their own account, or on a pre-app loan record
-// already linked to them -- each opening that loan on the Loans page.
+// A person's active loans -- on their own account, or on a pre-app loan
+// record already linked to them -- each opening that loan on the Loans page.
+// Requested and closed loans are left out; the Loans page has those.
 function PersonLoans({ memberId }: { memberId: string }) {
   const router = useRouter()
   const [loans, setLoans] = useState<PersonLoan[] | null>(null)
@@ -163,8 +164,9 @@ function PersonLoans({ memberId }: { memberId: string }) {
       }
       const { data } = await supabase
         .from("v_loan_summary")
-        .select("loan_id, loan, status, outstanding, principal")
+        .select("loan_id, loan, outstanding")
         .in("loan_id", loanIds)
+        .eq("status", "active")
         .order("start_date", { ascending: false })
       if (!cancelled) setLoans((data as PersonLoan[]) ?? [])
     }
@@ -179,11 +181,9 @@ function PersonLoans({ memberId }: { memberId: string }) {
   }
   if (loans.length === 0) return null
 
-  const statusLabel: Record<string, string> = { requested: "Requested", active: "Active", closed: "Closed" }
-
   return (
     <div className="mt-5">
-      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Loans</p>
+      <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">Active loans</p>
       <div className="card px-4">
         {loans.map((l, i) => (
           <button
@@ -195,16 +195,11 @@ function PersonLoans({ memberId }: { memberId: string }) {
           >
             <span className="min-w-0">
               <span className="block text-sm text-ink font-medium truncate">{l.loan}</span>
-              <span className="block text-[11px] text-ink-soft">{statusLabel[l.status] ?? l.status}</span>
             </span>
             <span className="flex items-center gap-2 shrink-0">
               <span className="text-right">
-                <span className="block font-mono [font-variant-numeric:tabular-nums] text-sm">
-                  ₱{fmt(l.status === "requested" ? l.principal : l.outstanding)}
-                </span>
-                <span className="block text-[11px] text-ink-soft">
-                  {l.status === "requested" ? "requested" : l.status === "closed" ? "paid off" : "outstanding"}
-                </span>
+                <span className="block font-mono [font-variant-numeric:tabular-nums] text-sm">₱{fmt(l.outstanding)}</span>
+                <span className="block text-[11px] text-ink-soft">outstanding</span>
               </span>
               <span className="text-ink-soft">›</span>
             </span>
