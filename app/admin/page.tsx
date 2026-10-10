@@ -71,6 +71,7 @@ const ADMIN_QUEUE_CACHE_KEY = "admin:queue"
 
 type AdminQueueSnapshot = {
   pendingMembers: any[]
+  unclaimedMembers: any[]
   banks: any[]
   pendingTransactions: any[]
   borrowerMembers: any[]
@@ -146,6 +147,12 @@ export default function AdminPage() {
   const [reviewingBorrowerId, setReviewingBorrowerId] = useState<string | null>(null)
 
   const [pendingMembers, setPendingMembers] = useState<any[]>(cached?.pendingMembers ?? [])
+  // Pre-app member records nobody has claimed yet (no email) -- a signup
+  // from one of those people gets linked to their record instead of
+  // starting fresh. Empty once they've all been claimed, which hides the
+  // option entirely.
+  const [unclaimedMembers, setUnclaimedMembers] = useState<any[]>(cached?.unclaimedMembers ?? [])
+  const [memberLinkChoice, setMemberLinkChoice] = useState<Record<string, string>>({})
   const [memberBusyId, setMemberBusyId] = useState<string | null>(null)
 
   const [pendingTransactions, setPendingTransactions] = useState<any[]>(cached?.pendingTransactions ?? [])
@@ -196,6 +203,7 @@ export default function AdminPage() {
 
     const [
       pendingMembersRes,
+      unclaimedMembersRes,
       banksRes,
       pendingTxnsRes,
       borrowerMembersRes
@@ -209,6 +217,7 @@ export default function AdminPage() {
         .eq("status", "pending")
         .neq("role", "borrower")
         .order("created_at", { ascending: false }),
+      supabase.rpc("list_unclaimed_members"),
       supabase.from("bank_accounts").select("id, bank_name, account_name").order("bank_name"),
       supabase
         .from("transactions")
@@ -238,6 +247,7 @@ export default function AdminPage() {
       .catch(() => setBankBalances(null))
 
     setPendingMembers(pendingMembersRes.data ?? [])
+    setUnclaimedMembers(unclaimedMembersRes.data ?? [])
     setBanks(banksRes.data ?? [])
 
     setLoadError(pendingTxnsRes.error?.message || "")
@@ -247,6 +257,7 @@ export default function AdminPage() {
 
     writeCache<AdminQueueSnapshot>(ADMIN_QUEUE_CACHE_KEY, {
       pendingMembers: pendingMembersRes.data ?? [],
+      unclaimedMembers: unclaimedMembersRes.data ?? [],
       banks: banksRes.data ?? [],
       pendingTransactions: pendingTxnsRes.error ? [] : pendingTxnsRes.data ?? [],
       borrowerMembers: borrowerMembersRes.data ?? []
@@ -302,6 +313,29 @@ export default function AdminPage() {
       return
     }
 
+    loadData()
+  }
+
+  // Moves the signup's email onto the existing record (approving it) and
+  // removes the duplicate signup row, so their history carries over.
+  async function linkMember(pendingId: string) {
+    const targetId = memberLinkChoice[pendingId]
+    if (!targetId) return
+
+    setMemberBusyId(pendingId)
+    setActionError("")
+    const { error } = await supabase.rpc("admin_link_member", {
+      p_pending_member_id: pendingId,
+      p_target_member_id: targetId
+    })
+    setMemberBusyId(null)
+
+    if (error) {
+      setActionError(error.message)
+      return
+    }
+
+    setReviewingSignupId(null)
     loadData()
   }
 
@@ -1581,16 +1615,29 @@ export default function AdminPage() {
           title="New signup"
           onClose={() => setReviewingSignupId(null)}
           footer={
-            <div className="flex items-center gap-3">
+            memberLinkChoice[reviewingSignup.member_id] ? (
               <button
                 type="button"
-                className="flex-1 bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
+                className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
+                onClick={() => linkMember(reviewingSignup.member_id)}
+                disabled={memberBusyId === reviewingSignup.member_id}
+              >
+                {memberBusyId === reviewingSignup.member_id ? "Linking…" : "Link & approve"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="w-full bg-ink text-paper px-6 py-3.5 rounded-full text-base font-bold shadow-lg motion-safe:transition-transform motion-safe:active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
                 onClick={() => approveMember(reviewingSignup.member_id)}
                 disabled={memberBusyId === reviewingSignup.member_id}
               >
-                {memberBusyId === reviewingSignup.member_id ? "Approving…" : "Approve"}
+                {memberBusyId === reviewingSignup.member_id
+                  ? "Approving…"
+                  : unclaimedMembers.length > 0
+                    ? "Approve as new member"
+                    : "Approve"}
               </button>
-            </div>
+            )
           }
         >
           <div className="card overflow-hidden">
@@ -1603,6 +1650,36 @@ export default function AdminPage() {
           <p className="px-1 pt-2 text-xs text-ink-soft">
             {reviewingSignup.email} · {timeAgo(reviewingSignup.created_at)}
           </p>
+
+          {unclaimedMembers.length > 0 && (
+            <div className="mt-5">
+              <p className="text-[11px] uppercase tracking-wide text-ink-soft font-mono mb-2 px-1">
+                Already a member?
+              </p>
+              <div className="card overflow-hidden">
+                <FieldRow icon={<PersonIcon />}>
+                  <select
+                    className={rowSelectClass}
+                    value={memberLinkChoice[reviewingSignup.member_id] || ""}
+                    onChange={(e) =>
+                      setMemberLinkChoice((prev) => ({ ...prev, [reviewingSignup.member_id]: e.target.value }))
+                    }
+                  >
+                    <option value="">No, they&apos;re new</option>
+                    {unclaimedMembers.map((um: any) => (
+                      <option key={um.member_id} value={um.member_id}>
+                        Yes, link to {um.name}
+                      </option>
+                    ))}
+                  </select>
+                </FieldRow>
+              </div>
+              <p className="px-1 pt-2 text-xs text-ink-soft">
+                Linking moves this login onto their existing record, so their contributions, loans and
+                investments carry over.
+              </p>
+            </div>
+          )}
         </Sheet>
       )}
 

@@ -529,7 +529,10 @@ const adminSections: FaqSection[] = [
         a: (
           <p>
             New signups show up in the Admin queue under <strong>New signups</strong> (members) or{" "}
-            <strong>Borrower requests</strong>. Tap one, then <strong>Approve</strong>.
+            <strong>Borrower requests</strong>. Tap one, then <strong>Approve</strong>. If a new member
+            signup is someone the fund already has a record for (added before they had an account), pick
+            them under <strong>Already a member?</strong> and tap <strong>Link &amp; approve</strong> so
+            their history carries over.
           </p>
         )
       },

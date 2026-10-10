@@ -185,7 +185,7 @@ export default function AdminMembersPage() {
             }
           : {
               label: "Review signup",
-              hint: "Approve them in the Admin queue",
+              hint: "Approve them, or link them to an existing record, in the Admin queue",
               onClick: () => router.push(`/admin?signup=${p.member_id}`)
             }
       )
