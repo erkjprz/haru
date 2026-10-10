@@ -883,17 +883,39 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
                     })()}
 
                   {showSaveAsDefault && isValidPositiveNumber(amount) && (
-                    <label className="flex items-start gap-2.5 text-sm text-ink-soft px-1 pt-3">
+                    <label
+                      className={`card mt-3 flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors ${
+                        saveAsDefault ? "!border-sage" : ""
+                      }`}
+                    >
                       <input
                         type="checkbox"
                         checked={saveAsDefault}
                         onChange={(e) => setSaveAsDefault(e.target.checked)}
-                        className="w-4 h-4 mt-0.5 shrink-0"
+                        className="peer sr-only"
                       />
-                      Save ₱{fmt(Number(amount))}
-                      {bankId ? ` and ${bankLabel(bankId)}` : ""} as{" "}
-                      {onBehalfOfId ? `${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}'s` : "my"} default{" "}
-                      {isContribution ? "contribution" : "loan payment"} {bankId ? "amount and bank" : "amount"}
+                      <span
+                        aria-hidden
+                        className={`flex items-center justify-center w-6 h-6 shrink-0 rounded-md border-2 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-sage/50 ${
+                          saveAsDefault ? "bg-sage border-sage text-white" : "border-ink-soft/60"
+                        }`}
+                      >
+                        {saveAsDefault && (
+                          <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                            <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[15px] font-semibold text-ink">Remember for next time</span>
+                        <span className="block text-sm text-ink-soft mt-0.5">
+                          Save ₱{fmt(Number(amount))}
+                          {bankId ? ` and ${bankLabel(bankId)}` : ""} as{" "}
+                          {onBehalfOfId ? `${allMembers.find((m) => m.member_id === onBehalfOfId)?.name}'s` : "my"}{" "}
+                          default {isContribution ? "contribution" : "loan payment"}{" "}
+                          {bankId ? "amount and bank" : "amount"}
+                        </span>
+                      </span>
                     </label>
                   )}
                 </div>
