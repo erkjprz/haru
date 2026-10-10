@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/app/auth-context"
 import { Sheet } from "@/app/components/Sheet"
@@ -122,6 +122,10 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   const [qrDragActive, setQrDragActive] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState("")
+  // A Withdrawal flags a missing payout by outlining the "Where should we
+  // send it?" card itself rather than with a footer message.
+  const [payoutMissing, setPayoutMissing] = useState(false)
+  const payoutFieldRef = useRef<HTMLDivElement>(null)
 
   const [interestType, setInterestType] = useState<InterestType>("rate")
   const [interestRate, setInterestRate] = useState("")
@@ -301,6 +305,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
   // longer applies -- clear it right away instead of on the next Continue.
   function clearMissingPayoutMessage() {
     if (message === MISSING_PAYOUT_MESSAGE) setMessage("")
+    setPayoutMissing(false)
   }
 
   function setPayoutQrFile(file: File | null) {
@@ -325,6 +330,7 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
     setDueDay("")
     setPayoutDetails("")
     setPayoutQrFile(null)
+    setPayoutMissing(false)
     setSelectedLoanId("")
     setInvestmentId("")
     setSaveAsDefault(false)
@@ -426,7 +432,12 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
       return
     }
     if (needsPayout && !payoutDetails.trim() && !payoutQr) {
-      setMessage(MISSING_PAYOUT_MESSAGE)
+      if (isWithdrawal) {
+        setPayoutMissing(true)
+        payoutFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+      } else {
+        setMessage(MISSING_PAYOUT_MESSAGE)
+      }
       return
     }
     if (isLoanPayment && !selectedLoanId) {
@@ -691,7 +702,10 @@ export function NewTransactionSheet({ onClose, onSaved }: { onClose: () => void;
         Where should we send it?
         <RequiredMark />
       </p>
-      <div className="card p-4 space-y-3">
+      <div
+        ref={payoutFieldRef}
+        className={`card p-4 space-y-3 transition-colors ${payoutMissing ? "!border-rust" : ""}`}
+      >
         <textarea
           rows={2}
           className="block w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-soft resize-none"
